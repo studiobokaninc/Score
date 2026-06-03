@@ -19,3 +19,8 @@ app/data/score_mock_state.yaml
 # noise files
 =2.8.0
 =*
+
+# DB files (runtime state)
+*.db
+*.sqlite
+*.sqlite3
