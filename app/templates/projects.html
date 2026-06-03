@@ -1,0 +1,225 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Projects — Score</title>
+  <script src="https://cdn.tailwindcss.com"></script>
+</head>
+<body class="h-screen bg-gradient-to-br from-[#E0F2FE] via-[#F3E8FF] to-[#FCE7F3] flex overflow-hidden">
+{% if demo_mode %}
+<div style="background:#f39c12;color:#fff;text-align:center;padding:6px 12px;font-size:12px;font-weight:bold;position:fixed;top:0;left:0;right:0;z-index:9999;letter-spacing:0.05em;">
+  ⚠️ DEMO DATA — 本番データではありません
+</div>
+{% endif %}
+  {% include '_sidemenu.html' %}
+  <main class="flex-1 ml-24 flex flex-col p-8 overflow-y-auto">
+    <nav class="text-xs text-slate-500 mb-4">
+      <span class="text-indigo-600 font-bold">プロジェクト一覧</span>
+    </nav>
+    <h1 class="text-2xl font-black text-slate-800 mb-6">🎞️ My Projects</h1>
+    {# Template-side fallback palette (works even if server-side attach_project_palettes did not run, e.g. before uvicorn restart) #}
+    {% set _FALLBACK_PALETTES = [
+      {'key':'indigo',  'card_bg':'bg-indigo-50',  'card_border':'border-indigo-200',  'title':'text-indigo-900',  'badge_bg':'bg-indigo-100',  'badge_text':'text-indigo-700',  'button_bg':'bg-indigo-600',  'button_hover':'hover:bg-indigo-700',  'side_bar':'bg-indigo-400'},
+      {'key':'emerald', 'card_bg':'bg-emerald-50', 'card_border':'border-emerald-200', 'title':'text-emerald-900', 'badge_bg':'bg-emerald-100', 'badge_text':'text-emerald-700', 'button_bg':'bg-emerald-600', 'button_hover':'hover:bg-emerald-700', 'side_bar':'bg-emerald-400'},
+      {'key':'amber',   'card_bg':'bg-amber-50',   'card_border':'border-amber-200',   'title':'text-amber-900',   'badge_bg':'bg-amber-100',   'badge_text':'text-amber-700',   'button_bg':'bg-amber-600',   'button_hover':'hover:bg-amber-700',   'side_bar':'bg-amber-400'},
+      {'key':'rose',    'card_bg':'bg-rose-50',    'card_border':'border-rose-200',    'title':'text-rose-900',    'badge_bg':'bg-rose-100',    'badge_text':'text-rose-700',    'button_bg':'bg-rose-600',    'button_hover':'hover:bg-rose-700',    'side_bar':'bg-rose-400'},
+      {'key':'cyan',    'card_bg':'bg-cyan-50',    'card_border':'border-cyan-200',    'title':'text-cyan-900',    'badge_bg':'bg-cyan-100',    'badge_text':'text-cyan-700',    'button_bg':'bg-cyan-600',    'button_hover':'hover:bg-cyan-700',    'side_bar':'bg-cyan-400'},
+      {'key':'violet',  'card_bg':'bg-violet-50',  'card_border':'border-violet-200',  'title':'text-violet-900',  'badge_bg':'bg-violet-100',  'badge_text':'text-violet-700',  'button_bg':'bg-violet-600',  'button_hover':'hover:bg-violet-700',  'side_bar':'bg-violet-400'},
+      {'key':'teal',    'card_bg':'bg-teal-50',    'card_border':'border-teal-200',    'title':'text-teal-900',    'badge_bg':'bg-teal-100',    'badge_text':'text-teal-700',    'button_bg':'bg-teal-600',    'button_hover':'hover:bg-teal-700',    'side_bar':'bg-teal-400'},
+      {'key':'orange',  'card_bg':'bg-orange-50',  'card_border':'border-orange-200',  'title':'text-orange-900',  'badge_bg':'bg-orange-100',  'badge_text':'text-orange-700',  'button_bg':'bg-orange-600',  'button_hover':'hover:bg-orange-700',  'side_bar':'bg-orange-400'},
+      {'key':'sky',     'card_bg':'bg-sky-50',     'card_border':'border-sky-200',     'title':'text-sky-900',     'badge_bg':'bg-sky-100',     'badge_text':'text-sky-700',     'button_bg':'bg-sky-600',     'button_hover':'hover:bg-sky-700',     'side_bar':'bg-sky-400'},
+      {'key':'lime',    'card_bg':'bg-lime-50',    'card_border':'border-lime-200',    'title':'text-lime-900',    'badge_bg':'bg-lime-100',    'badge_text':'text-lime-700',    'button_bg':'bg-lime-600',    'button_hover':'hover:bg-lime-700',    'side_bar':'bg-lime-400'},
+      {'key':'pink',    'card_bg':'bg-pink-50',    'card_border':'border-pink-200',    'title':'text-pink-900',    'badge_bg':'bg-pink-100',    'badge_text':'text-pink-700',    'button_bg':'bg-pink-600',    'button_hover':'hover:bg-pink-700',    'side_bar':'bg-pink-400'},
+      {'key':'fuchsia', 'card_bg':'bg-fuchsia-50', 'card_border':'border-fuchsia-200', 'title':'text-fuchsia-900', 'badge_bg':'bg-fuchsia-100', 'badge_text':'text-fuchsia-700', 'button_bg':'bg-fuchsia-600', 'button_hover':'hover:bg-fuchsia-700', 'side_bar':'bg-fuchsia-400'},
+    ] %}
+    {% if projects %}
+      <div class="grid grid-cols-1 gap-4">
+        {% for p in projects %}
+        {% set _pid = p.get('id') %}
+        {% set _meetings = (project_meetings or {}).get(_pid, []) %}
+        {# Prefer server-side attached palette; fall back to template-computed (id % 12) #}
+        {% set _pal_idx = (_pid | int) % (_FALLBACK_PALETTES | length) if _pid is not none and _pid != '' else loop.index0 % (_FALLBACK_PALETTES | length) %}
+        {% set _pal = p.get('palette') or _FALLBACK_PALETTES[_pal_idx] %}
+        <div class="{{ _pal.card_bg or 'bg-white/60' }} border-2 {{ _pal.card_border or 'border-white/60' }} rounded-2xl shadow-sm relative overflow-hidden" data-project-card>
+          <span class="absolute left-0 top-0 bottom-0 w-1.5 {{ _pal.side_bar or 'bg-indigo-400' }}" aria-hidden="true"></span>
+
+          <!-- Header (always visible, clickable to toggle) -->
+          <button type="button"
+            class="w-full flex items-center justify-between gap-4 pl-6 pr-4 py-4 text-left"
+            onclick="toggleProjectCard(this)"
+            aria-expanded="false">
+            <div class="flex-1 min-w-0">
+              <h2 class="text-lg font-black {{ _pal.title or 'text-slate-800' }}" translate="no">{{ p.get('name', '-') }}</h2>
+              <p class="text-slate-600 text-sm mt-1">
+                <span class="inline-block px-2 py-0.5 rounded-full text-[11px] font-bold {{ _pal.badge_bg or 'bg-slate-100' }} {{ _pal.badge_text or 'text-slate-700' }}">{{ p.get('status', '-') }}</span>
+                / role: <span translate="no">{{ p.get('role', '-') }}</span>
+                {% if _meetings %}<span class="ml-2 text-[11px] text-amber-700 font-bold">📋 議事録 {{ _meetings|length }}件</span>{% endif %}
+              </p>
+            </div>
+            <span class="shrink-0 text-slate-500 text-xl transition-transform" data-project-arrow>▶</span>
+          </button>
+
+          <!-- Body (collapsible) -->
+          <div class="hidden px-6 pb-5 pt-0" data-project-body>
+            <div class="flex flex-wrap gap-2 mb-4">
+              <a href="/project_detail/{{ _pid }}" class="{{ _pal.button_bg or 'bg-indigo-600' }} text-white rounded-2xl px-4 py-2 text-sm font-black {{ _pal.button_hover or 'hover:bg-indigo-700' }} transition-colors">
+                詳細を見る →
+              </a>
+            </div>
+            {% if p.get('description') %}
+            <p class="text-xs text-slate-600 leading-relaxed mb-4">{{ p.get('description') }}</p>
+            {% endif %}
+
+            {# 議事録ダイジェストリスト — クリックで詳細モーダル #}
+            {% if _meetings %}
+            <div class="bg-amber-50/60 border border-amber-100 rounded-2xl p-3">
+              <p class="text-xs font-black text-amber-700 mb-2">📋 議事録 ({{ _meetings|length }} 件) — クリックで詳細</p>
+              <ul class="space-y-2">
+                {% for m in _meetings %}
+                <li>
+                  <button type="button" onclick="openMeetingModal({{ m.id or 0 }})"
+                    class="w-full text-left bg-white/70 hover:bg-white border border-amber-100 hover:border-amber-300 rounded-xl px-3 py-2 transition-colors">
+                    <div class="flex items-center justify-between gap-2 mb-1">
+                      <p class="text-sm font-bold text-slate-800">{{ m.title or '(無題)' }}</p>
+                      <span class="text-[10px] text-slate-400 shrink-0">{{ (m.date or '')[:10] }}</span>
+                    </div>
+                    <div class="flex flex-wrap gap-2 text-[10px]">
+                      {% if m.decisions %}<span class="text-slate-600">✅ 決定 {{ m.decisions|length }}</span>{% endif %}
+                      {% if m.tasks %}<span class="text-emerald-700">📌 タスク {{ m.tasks|length }}</span>{% endif %}
+                      {% if m.discussion_points %}<span class="text-indigo-700">💬 議題 {{ m.discussion_points|length }}</span>{% endif %}
+                      {% if m.deadlines %}<span class="text-rose-700">⏰ 期限 {{ m.deadlines|length }}</span>{% endif %}
+                    </div>
+                  </button>
+                </li>
+                {% endfor %}
+              </ul>
+            </div>
+            {% else %}
+            <p class="text-xs text-slate-400">📋 議事録: なし</p>
+            {% endif %}
+          </div>
+        </div>
+        {% endfor %}
+      </div>
+
+      {# Per-meeting detail modals (rendered once, project-loop independent) #}
+      {% for p in projects %}
+      {% set _meetings = (project_meetings or {}).get(p.get('id'), []) %}
+      {% for m in _meetings %}
+      <div id="meeting-modal-{{ m.id or 0 }}"
+        class="hidden fixed inset-0 z-50 bg-black/40 backdrop-blur-sm flex items-center justify-center p-4"
+        onclick="closeMeetingModal({{ m.id or 0 }})">
+        <div class="bg-white rounded-3xl shadow-2xl max-w-3xl w-full max-h-[85vh] flex flex-col"
+          onclick="event.stopPropagation()">
+          <div class="flex items-start justify-between px-6 py-4 border-b border-slate-200">
+            <div class="min-w-0 pr-4">
+              <p class="text-[10px] uppercase tracking-widest text-amber-700 font-bold mb-1">📋 議事録 / <span translate="no">{{ p.get('name', '-') }}</span></p>
+              <h3 class="text-lg font-black text-slate-800">{{ m.title or '(無題)' }}</h3>
+              <p class="text-xs text-slate-500 mt-1">
+                {{ m.date or '-' }}
+                {% if m.status %}<span class="ml-2 px-2 py-0.5 bg-slate-100 rounded-full text-[10px]">{{ m.status }}</span>{% endif %}
+              </p>
+            </div>
+            <button type="button" onclick="closeMeetingModal({{ m.id or 0 }})"
+              class="shrink-0 w-8 h-8 rounded-full bg-slate-100 hover:bg-slate-200 text-slate-600 font-bold">✕</button>
+          </div>
+          <div class="overflow-y-auto px-6 py-5 space-y-5 flex-1 text-sm text-slate-700 leading-relaxed">
+
+            {% if m.decisions %}
+            <section>
+              <h4 class="text-xs font-black text-emerald-700 uppercase tracking-widest mb-2">✅ 決定事項 ({{ m.decisions|length }})</h4>
+              <ul class="space-y-1.5 pl-1">
+                {% for d in m.decisions %}<li class="bg-emerald-50 border border-emerald-100 rounded-xl px-3 py-2">{{ d }}</li>{% endfor %}
+              </ul>
+            </section>
+            {% endif %}
+
+            {% if m.tasks %}
+            <section>
+              <h4 class="text-xs font-black text-indigo-700 uppercase tracking-widest mb-2">📌 抽出タスク ({{ m.tasks|length }})</h4>
+              <ul class="space-y-1.5 pl-1">
+                {% for tk in m.tasks %}<li class="bg-indigo-50 border border-indigo-100 rounded-xl px-3 py-2">{{ tk }}</li>{% endfor %}
+              </ul>
+            </section>
+            {% endif %}
+
+            {% if m.discussion_points %}
+            <section>
+              <h4 class="text-xs font-black text-violet-700 uppercase tracking-widest mb-2">💬 討議ポイント ({{ m.discussion_points|length }})</h4>
+              <ul class="space-y-1.5 pl-1">
+                {% for dp in m.discussion_points %}<li class="bg-violet-50 border border-violet-100 rounded-xl px-3 py-2">{{ dp }}</li>{% endfor %}
+              </ul>
+            </section>
+            {% endif %}
+
+            {% if m.deadlines %}
+            <section>
+              <h4 class="text-xs font-black text-rose-700 uppercase tracking-widest mb-2">⏰ 期限 ({{ m.deadlines|length }})</h4>
+              <ul class="space-y-1.5 pl-1">
+                {% for dl in m.deadlines %}<li class="bg-rose-50 border border-rose-100 rounded-xl px-3 py-2">{{ dl }}</li>{% endfor %}
+              </ul>
+            </section>
+            {% endif %}
+
+            {% if m.transcript %}
+            <section>
+              <h4 class="text-xs font-black text-slate-500 uppercase tracking-widest mb-2">📝 トランスクリプト</h4>
+              <div class="bg-slate-50 border border-slate-200 rounded-2xl px-4 py-3 whitespace-pre-wrap text-[13px] leading-relaxed">{{ m.transcript }}</div>
+            </section>
+            {% endif %}
+
+            {% if m.summary %}
+            <section>
+              <h4 class="text-xs font-black text-slate-500 uppercase tracking-widest mb-2">📄 サマリ</h4>
+              <p class="bg-slate-50 border border-slate-200 rounded-2xl px-4 py-3">{{ m.summary }}</p>
+            </section>
+            {% endif %}
+
+            {% if not (m.decisions or m.tasks or m.discussion_points or m.deadlines or m.transcript or m.summary) %}
+            <p class="text-sm text-slate-400 italic text-center py-8">この議事録には詳細情報がありません</p>
+            {% endif %}
+          </div>
+        </div>
+      </div>
+      {% endfor %}
+      {% endfor %}
+
+    {% else %}
+      <p class="text-slate-500">プロジェクトはありません</p>
+    {% endif %}
+  </main>
+
+  <script>
+    function toggleProjectCard(btn) {
+      const card = btn.closest('[data-project-card]');
+      if (!card) return;
+      const body = card.querySelector('[data-project-body]');
+      const arrow = card.querySelector('[data-project-arrow]');
+      const expanded = btn.getAttribute('aria-expanded') === 'true';
+      if (expanded) {
+        body.classList.add('hidden');
+        btn.setAttribute('aria-expanded', 'false');
+        if (arrow) arrow.style.transform = 'rotate(0deg)';
+      } else {
+        body.classList.remove('hidden');
+        btn.setAttribute('aria-expanded', 'true');
+        if (arrow) arrow.style.transform = 'rotate(90deg)';
+      }
+    }
+    function openMeetingModal(mid) {
+      const m = document.getElementById('meeting-modal-' + mid);
+      if (m) m.classList.remove('hidden');
+    }
+    function closeMeetingModal(mid) {
+      const m = document.getElementById('meeting-modal-' + mid);
+      if (m) m.classList.add('hidden');
+    }
+    document.addEventListener('keydown', (e) => {
+      if (e.key === 'Escape') {
+        document.querySelectorAll('[id^="meeting-modal-"]').forEach(el => el.classList.add('hidden'));
+      }
+    });
+  </script>
+</body>
+</html>

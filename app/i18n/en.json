@@ -1,0 +1,23 @@
+{
+  "dashboard.title": "Dashboard",
+  "dashboard.greeting": "Good morning, {name}",
+  "dashboard.greeting.morning": "Good morning, {name}",
+  "dashboard.greeting.afternoon": "Good afternoon, {name}",
+  "dashboard.greeting.evening": "Good evening, {name}",
+  "dashboard.subtitle": "Please check the task section below for today's SHOT list",
+  "shot.list": "Today's Tasks",
+  "shot.detail.title": "SHOT Detail",
+  "routine.title": "Routine",
+  "messages.title": "Messages",
+  "goodbye.title": "Good Work Today",
+  "exit_report.title": "Exit Report",
+  "nav.dashboard": "Dashboard",
+  "nav.shot_detail": "SHOT Detail",
+  "nav.routine": "Routine",
+  "nav.messages": "Messages",
+  "nav.exit_report": "Exit",
+  "nav.notifications": "Notifications",
+  "lang.ja": "日本語",
+  "lang.en": "English",
+  "lang.select": "Select Language"
+}

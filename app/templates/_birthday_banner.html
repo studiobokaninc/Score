@@ -1,0 +1,82 @@
+<!-- birthday banner (本人/他人 両方対応・localStorage 経由) -->
+<div id="birthday-banner" class="hidden mt-3 bg-gradient-to-r from-pink-100 via-rose-100 to-amber-100 border border-rose-200 rounded-2xl px-5 py-4 shadow-md">
+  <p class="text-lg font-black text-rose-700">🎉🎂 <span id="birthday-headline"></span> 🎁</p>
+  <p id="birthday-msg" class="text-sm text-slate-700 mt-1 leading-relaxed"></p>
+  <p class="text-[10px] text-slate-400 mt-2">— from Studio Bokan 一同 ✨</p>
+</div>
+<!-- 他人の誕生日通知 (本人以外の today birthday があれば表示) -->
+<div id="birthday-other-banner" class="hidden mt-3 bg-gradient-to-r from-sky-50 to-indigo-50 border border-indigo-200 rounded-2xl px-5 py-3 shadow-sm">
+  <p class="text-sm font-bold text-indigo-700">🎂 本日 お誕生日のメンバー</p>
+  <ul id="birthday-other-list" class="mt-2 space-y-1 text-sm text-slate-700"></ul>
+  <p class="text-[10px] text-slate-400 mt-2">お祝いのメッセージを thread に送ってみては? ✨</p>
+</div>
+<script>
+(async function checkBirthday(){
+  const userIdSelf = "{{ user.user_id if user else 0 }}";
+  const today = new Date();
+  const tMonth = today.getMonth() + 1;
+  const tDay = today.getDate();
+  // 本人の誕生日 check
+  const myBday = localStorage.getItem(`score_profile_${userIdSelf}_birthday`);
+  if (myBday) {
+    const [by, m, d] = myBday.split('-').map(Number);
+    if (tMonth === m && tDay === d) {
+      const banner = document.getElementById('birthday-banner');
+      if (banner) {
+        banner.classList.remove('hidden');
+        const name = "{{ user.name if user else 'あなた' }}";
+        const headlines = [
+          `${name} さん、お誕生日おめでとうございます!`,
+          `Happy Birthday, ${name} さん!`,
+          `${name} さんの素敵な一日になりますように!`,
+        ];
+        const messages = [
+          `心よりお祝い申し上げます。日頃の制作お疲れさまです — 今日は少しだけ手を緩めて、自分のための時間をお過ごしください。次の一年も、${name} さんの作品が studio を彩りますよう祈っております。`,
+          `お誕生日、おめでとうございます。チームを支えてくださっている ${name} さんへ — 今年もまた素敵な作品をご一緒できることを楽しみにしております。今日は良き一日を!`,
+          `お誕生日、おめでとうございます🥂 制作の手を一旦止めて、ご自身のための時間を大切にされてください。${name} さんの一年が、素敵な瞬間に満ちますように。`,
+        ];
+        const hash = name.split('').reduce((a, c) => a + c.charCodeAt(0), 0);
+        const headEl = document.getElementById('birthday-headline');
+        const msgEl = document.getElementById('birthday-msg');
+        if (headEl) headEl.textContent = headlines[hash % headlines.length];
+        if (msgEl) msgEl.textContent = messages[hash % messages.length];
+      }
+    }
+  }
+  // 他人の誕生日 check — まず Calendar /api/users/birthdays_today 経由
+  // (失敗時は localStorage registry に fallback)
+  let othersFromAPI = [];
+  try {
+    const resp = await fetch('/api/bff/birthdays_today', { credentials: 'include' });
+    if (resp.ok) {
+      const data = await resp.json();
+      othersFromAPI = (data.users || []).filter(u => String(u.user_id) !== String(userIdSelf));
+    }
+  } catch(e) {}
+
+  let others = othersFromAPI;
+  if (others.length === 0) {
+    // fallback: localStorage registry (Calendar 接続不可時)
+    let registry = {};
+    try { registry = JSON.parse(localStorage.getItem('score_birthdays_registry') || '{}'); } catch(e) {}
+    for (const [uid, info] of Object.entries(registry)) {
+      if (String(uid) === String(userIdSelf)) continue;
+      if (!info.birthday) continue;
+      const [, m, d] = info.birthday.split('-').map(Number);
+      if (tMonth === m && tDay === d) {
+        others.push({ user_id: uid, name: info.name });
+      }
+    }
+  }
+  if (others.length > 0) {
+    const ob = document.getElementById('birthday-other-banner');
+    const ol = document.getElementById('birthday-other-list');
+    if (ob) ob.classList.remove('hidden');
+    if (ol) {
+      ol.innerHTML = others.map(o =>
+        `<li>🎁 <strong translate="no">${o.name}</strong> さん <a href="/messages?thread=dm_user_${o.user_id}" class="text-indigo-600 hover:underline ml-2 text-xs">DM でお祝い →</a></li>`
+      ).join('');
+    }
+  }
+})();
+</script>

@@ -1,0 +1,903 @@
+{% extends "base.html" %}
+
+{% block title %}{{ shot.shot_code if shot and shot.shot_code else 'SHOT_' + ('%03d' % shot_id) }} — Score{% endblock %}
+
+{% block content %}
+{% if demo_mode %}
+<div style="background:#f39c12;color:#fff;text-align:center;padding:6px 12px;font-size:12px;font-weight:bold;position:sticky;top:0;z-index:9999;letter-spacing:0.05em;">
+  ⚠️ DEMO DATA — 本番データではありません
+</div>
+{% endif %}
+<style>
+  body { background: linear-gradient(135deg, #E0F2FE 0%, #F3E8FF 50%, #FCE7F3 100%); color: rgb(30, 41, 59); }
+  .chat-panel { transition: transform 0.3s ease; }
+  .chat-panel.open { transform: translateX(0); }
+  .chat-panel.closed { transform: translateX(100%); }
+  .toast { transition: opacity 0.4s ease, transform 0.4s ease; }
+</style>
+
+{% include '_sidemenu.html' %}
+
+<!-- メインコンテンツ（サイドバー分オフセット） lang=ja -->
+<div class="ml-24 h-screen overflow-y-auto flex flex-col" lang="ja">
+
+  <!-- パンくずリスト + ヘッダー -->
+  <header class="sticky top-0 z-20 bg-white/40 backdrop-blur-xl border-b border-white/60 px-8 py-4">
+    <nav class="flex items-center gap-2 text-sm text-slate-500 mb-2">
+      <a href="/projects" class="hover:text-indigo-600 transition-colors">プロジェクト一覧</a>
+      <span class="text-slate-300">›</span>
+      <a href="/project_detail/{{ project_id or 33 }}" class="hover:text-indigo-600 transition-colors"><span translate="no">{{ project_name or '-' }}</span></a>
+      <span class="text-slate-300">›</span>
+      <a href="/project_detail/{{ project_id or 33 }}" class="hover:text-indigo-600 transition-colors"><span translate="no">{{ seq_code or 'SEQ01' }}</span></a>
+      <span class="text-slate-300">›</span>
+      {% if isolated_task %}
+      <a href="/shot/{{ shot_id }}" class="hover:text-indigo-600 transition-colors" translate="no">{{ shot.shot_code if shot and shot.shot_code else 'SHOT_' + ('%03d' % shot_id) }}</a>
+      <span class="text-slate-300">›</span>
+      <span class="font-semibold text-indigo-600 bg-indigo-50 px-2 py-0.5 rounded-lg" translate="no">{{ task_name }}</span>
+      {% else %}
+      <span class="font-semibold text-indigo-600 bg-indigo-50 px-2 py-0.5 rounded-lg" translate="no">{{ shot.shot_code if shot and shot.shot_code else 'SHOT_' + ('%03d' % shot_id) }}</span>
+      {% endif %}
+    </nav>
+    <div class="flex items-center justify-between">
+      <h1 class="text-2xl font-bold text-slate-800">{{ shot.shot_code if shot and shot.shot_code else 'SHOT_' + ('%03d' % shot_id) }} — 作業詳細{% if isolated_task %}(<span translate="no">{{ task_name }}</span>){% endif %}</h1>
+      {% set _shot_code = shot.shot_code if shot and shot.shot_code else 'SHOT_' + ('%03d' % shot_id) %}
+      {% if isolated_task and task_id %}
+        {# task page: task 専用 thread に遷移 #}
+        {% set _thread_key = 'task' ~ task_id %}
+        {% set _thread_label = _shot_code ~ ' ' ~ task_name ~ ' task thread' %}
+        {% set _thread_desc = 'この task に関連する人だけの thread (' ~ task_name ~ ' 担当 + 関連 Lead)' %}
+      {% else %}
+        {# shot page: SHOT 関係者全員 thread #}
+        {% set _thread_key = _shot_code.lower().replace('_', '') %}
+        {% set _thread_label = _shot_code ~ ' 関係者 thread' %}
+        {% set _thread_desc = 'この SHOT の関係者全員が話せる thread (PM/Director/Lead/全 task assignee)' %}
+      {% endif %}
+      <a
+        href="/messages?thread={{ _thread_key }}"
+        class="flex items-center gap-2 bg-white/40 backdrop-blur-sm border border-white/60 rounded-2xl px-4 py-2 text-slate-600 hover:text-indigo-500 hover:bg-white/40 transition-all shadow"
+        title="{{ _thread_desc }}"
+      >
+        <span class="text-xl">💬</span>
+        <span class="text-sm font-medium">{{ _thread_label }}</span>
+      </a>
+    </div>
+  </header>
+
+  {# isolated_task (= /task/{id}) 専用: task 詳細 + upload UI (殿御命 2026-06-01) #}
+  {% if isolated_task and tasks and tasks[0] %}
+  {% set _t = tasks[0] %}
+  {% set _assignee_id = _t.assignee_id %}
+  {% set _assignee_name = user_name_map.get(_assignee_id, ('user_' ~ _assignee_id if _assignee_id else '未割当')) %}
+  {% set _prio = (_t.priority or 'MEDIUM') | upper %}
+  {% set _prio_cls = ('bg-rose-100 text-rose-700' if _prio == 'HIGH' else ('bg-amber-100 text-amber-800' if _prio == 'MEDIUM' else 'bg-sky-100 text-sky-700')) %}
+  <section class="mx-8 mt-2 mb-4 bg-white/60 backdrop-blur-xl border border-white/60 rounded-3xl shadow-xl p-6">
+    <div class="grid grid-cols-1 md:grid-cols-3 gap-6">
+      <!-- 左: タスク基本 -->
+      <div>
+        <h3 class="text-xs font-black text-slate-500 uppercase tracking-widest mb-3">📋 タスク情報</h3>
+        <dl class="space-y-2 text-sm">
+          <div class="flex justify-between items-center">
+            <dt class="text-slate-500">ステータス</dt>
+            <dd class="font-bold flex items-center gap-2" translate="no">
+              <span id="task-status-label">{{ _t.status or '—' }}</span>
+              {# 殿御命 2026-06-03: todo 時 in-progress 化ボタン (表示も in-progress) #}
+              {% if (_t.status or '')|lower == 'todo' %}
+              <button type="button" onclick="changeTaskStatus({{ _t.task_id }}, 'in-progress')" class="text-[10px] bg-indigo-600 hover:bg-indigo-700 text-white font-bold rounded px-2 py-0.5">→ in-progress</button>
+              {% endif %}
+            </dd>
+          </div>
+          <div class="flex justify-between"><dt class="text-slate-500">担当者</dt><dd class="font-bold text-slate-800" translate="no">{{ _assignee_name }}</dd></div>
+          <div class="flex justify-between"><dt class="text-slate-500">優先度</dt><dd><span class="text-xs font-black rounded-full px-2 py-0.5 {{ _prio_cls }}" translate="no">{{ _prio }}</span></dd></div>
+          <div class="flex justify-between"><dt class="text-slate-500">コスト</dt><dd class="font-bold text-slate-800">{% if _t.cost is not none %}{{ _t.cost }}h{% else %}—{% endif %}</dd></div>
+          {# 殿御命 2026-06-03: 進捗 スライダー編集対応 #}
+          <div>
+            <div class="flex justify-between mb-1"><dt class="text-slate-500">進捗</dt><dd class="font-bold text-slate-800"><span id="task-progress-label">{{ _t.progress if _t.progress is not none else 0 }}</span>%</dd></div>
+            <input type="range" id="task-progress-slider" min="0" max="100" step="5" value="{{ _t.progress if _t.progress is not none else 0 }}"
+                   oninput="document.getElementById('task-progress-label').textContent = this.value;"
+                   onchange="updateTaskProgress({{ _t.task_id }}, parseInt(this.value))"
+                   class="w-full accent-indigo-600">
+          </div>
+        </dl>
+      </div>
+      <!-- 中: スケジュール + dependsOn -->
+      <div>
+        <h3 class="text-xs font-black text-slate-500 uppercase tracking-widest mb-3">📅 スケジュール</h3>
+        <dl class="space-y-2 text-sm">
+          <div class="flex justify-between"><dt class="text-slate-500">開始</dt><dd class="font-mono text-slate-800">{{ (_t.start_date or '')[:10] or '—' }}</dd></div>
+          <div class="flex justify-between"><dt class="text-slate-500">期日</dt><dd class="font-mono text-slate-800">{{ (_t.due_date or '')[:10] or '—' }}</dd></div>
+          {% if _t.depends_on and _t.depends_on|length > 0 %}
+          <div class="pt-2 border-t border-slate-200">
+            <dt class="text-slate-500 mb-1">依存タスク</dt>
+            <dd class="flex flex-wrap gap-1">
+              {% for dep in _t.depends_on %}
+              <a href="/task/{{ dep }}" class="text-[10px] font-mono bg-slate-100 hover:bg-indigo-100 text-slate-600 hover:text-indigo-700 rounded px-1.5 py-0.5">#{{ dep }}</a>
+              {% endfor %}
+            </dd>
+          </div>
+          {% endif %}
+        </dl>
+      </div>
+      <!-- 右: QC/review upload area -->
+      <div>
+        <h3 class="text-xs font-black text-slate-500 uppercase tracking-widest mb-3">📤 QC/レビューデータ提出</h3>
+        <form id="asset-upload-form" class="space-y-2">
+          <label class="block">
+            <input type="file" id="asset-file-input" class="hidden">
+            <span id="asset-file-label" class="block cursor-pointer w-full text-center py-3 px-3 bg-indigo-50 hover:bg-indigo-100 border-2 border-dashed border-indigo-300 text-indigo-700 rounded-xl text-sm font-bold transition-all">
+              📁 ファイル選択 or ドロップ
+            </span>
+          </label>
+          {# 殿御命 2026-06-03: 新 file 名 = {project}_{seq}_{shot}_{task}_{version}_{memo}.{ext} #}
+          <div class="flex gap-1">
+            <span class="bg-indigo-100 border border-indigo-300 rounded-lg px-2 py-1.5 text-xs font-mono font-bold text-indigo-700 shrink-0">{{ next_version or 'v001' }}</span>
+            <input type="hidden" id="asset-version" value="{{ next_version or 'v001' }}">
+            <input type="hidden" id="asset-project" value="{{ project_name or '' }}">
+            <input type="hidden" id="asset-seq" value="{{ seq_code or '' }}">
+            <input type="hidden" id="asset-shot" value="{{ shot_code or ('SHOT_' + ('%03d' % shot_id)) }}">
+            <input type="hidden" id="asset-task" value="{{ task_name or '' }}">
+            <input type="text" id="asset-name-memo" placeholder="追加メモ (任意・例 director_check)" class="flex-1 text-xs bg-white border border-slate-300 rounded-lg px-2 py-1.5">
+          </div>
+          <p class="text-[10px] text-slate-400 break-all">新名: <span translate="no" class="font-mono">{{ (project_name or 'proj') }}_{{ seq_code or 'seq' }}_{{ shot_code or 'shot' }}_{{ task_name or 'task' }}_{{ next_version or 'v001' }}_<メモ>.<ext></span></p>
+          {# 殿御命 2026-06-03: 提出種別 (QC/Review) 選択 + mention #}
+          <div class="flex gap-1 text-[11px]">
+            <label class="flex-1 flex items-center gap-1 bg-white border border-slate-300 rounded-lg px-2 py-1.5 cursor-pointer hover:bg-indigo-50">
+              <input type="radio" name="submission_type" value="qc" checked class="accent-indigo-600">
+              <span>📋 QC <span class="text-slate-400">(Dir+PM 自動)</span></span>
+            </label>
+            <label class="flex-1 flex items-center gap-1 bg-white border border-slate-300 rounded-lg px-2 py-1.5 cursor-pointer hover:bg-indigo-50">
+              <input type="radio" name="submission_type" value="review" class="accent-indigo-600">
+              <span>👀 Review <span class="text-slate-400">(PM 自動)</span></span>
+            </label>
+          </div>
+          <div id="dir-preview" class="text-xs text-indigo-600 mt-1 flex items-center gap-1">
+            <span>📌</span>
+            <span>QC 提出: プロジェクト Director + PM を自動通知します</span>
+          </div>
+          {# 殿御命 2026-06-03: メンションは Review 時のみ表示 (QC は Dir+PM 自動) #}
+          <div id="asset-mentions-block" class="hidden">
+            <select id="asset-mentions" multiple size="3" class="w-full text-xs bg-white border border-slate-300 rounded-lg px-2 py-1.5">
+              {% if project_members %}
+                {% for m in project_members %}
+                  <option value="{{ m.user_id }}">{{ m.name }}{% if m.role %} ({{ m.role }}){% endif %}</option>
+                {% endfor %}
+              {% else %}
+                <option disabled>(プロジェクト担当者 0 件)</option>
+              {% endif %}
+            </select>
+            <p class="text-[10px] text-slate-400">Ctrl/Cmd+クリックで複数選択 — Review 担当者</p>
+          </div>
+          <button type="button" id="asset-upload-btn" onclick="uploadAsset()" disabled
+                  class="w-full py-2 bg-slate-800 hover:bg-slate-900 disabled:bg-slate-300 disabled:cursor-not-allowed text-white font-bold rounded-xl text-sm transition-all">
+            アップロード
+          </button>
+          <div id="asset-upload-status" class="text-[11px] text-slate-500"></div>
+        </form>
+        {# 殿御命 2026-06-03: 提出済 asset 一覧 (nibu 仕様 /api/me/shots/{id}.asset_list 経由) #}
+        {% if asset_list %}
+        <div class="mt-4 border-t border-slate-200 pt-3">
+          <h4 class="text-[10px] font-black text-slate-500 uppercase tracking-widest mb-2">📦 提出済成果物 ({{ asset_list|length }}件)</h4>
+          <ul class="space-y-1 max-h-48 overflow-y-auto">
+            {% for a in asset_list %}
+            {# 殿御命 2026-06-03: filename strip — 元ファイル名のみ表示 #}
+            {% set _bn = (a.file_path or '').split('/')[-1] %}
+            {% set _prefix = 'shot_' ~ (a.shot_id|string) ~ '_task_' ~ (a.task_id|string) ~ '_' ~ (a.version or '') ~ '_' %}
+            {% set _display = _bn[_prefix|length:] if _bn.startswith(_prefix) else _bn %}
+            <li class="flex items-center justify-between gap-2 text-[11px] bg-slate-50 rounded-lg px-2 py-1.5">
+              <span class="font-mono font-bold text-indigo-600">{{ a.version if a.version else '?' }}</span>
+              <span class="text-slate-600 truncate flex-1" title="{{ _bn }}">{{ _display }}</span>
+              <span class="text-slate-400 text-[10px]" title="created_by uid={{ a.created_by }}">{{ (a.created_at or '')[:16] }}</span>
+            </li>
+            {% endfor %}
+          </ul>
+        </div>
+        {% else %}
+        <div class="mt-3 text-[10px] text-slate-400 text-center py-2 border-t border-slate-200">提出済成果物なし</div>
+        {% endif %}
+      </div>
+    </div>
+  </section>
+  {% endif %}
+
+  <!-- 3カラムレイアウト -->
+  <div class="flex flex-1 gap-6 p-8 pr-6">
+
+    <!-- 左カラム w-72 -->
+    <aside class="w-72 shrink-0 flex flex-col gap-6">
+
+      <!-- メタデータカード -->
+      <div class="bg-white/40 backdrop-blur-xl border border-white/60 rounded-3xl shadow-xl p-6">
+        <div class="aspect-video rounded-2xl mb-6 bg-gradient-to-br from-amber-200 via-rose-300 to-orange-400 relative overflow-hidden flex items-end p-4">
+          <div class="flex items-center gap-3">
+            <span class="text-white text-lg font-black bg-black/30 rounded-xl px-4 py-2" translate="no">{{ shot.shot_code if shot and shot.shot_code else 'SHOT_' + ('%03d' % shot_id) }}</span>
+            {% set _ss = (shot.status | lower) if shot else 'in_review' %}
+            <span class="text-white text-xs font-black rounded-full px-3 py-1
+              {% if _ss == 'retake' %}bg-rose-500/80
+              {% elif _ss == 'approved' %}bg-emerald-500/80
+              {% elif _ss == 'in_progress' %}bg-blue-500/80
+              {% else %}bg-amber-400/80{% endif %}" translate="no">
+              {% if _ss == 'retake' %}🔴 Retake
+              {% elif _ss == 'approved' %}✅ Approved
+              {% elif _ss == 'in_progress' %}🔧 In Progress
+              {% else %}⚠️ Reviewing{% endif %}
+            </span>
+          </div>
+        </div>
+        <h2 class="text-xs font-bold text-slate-500 uppercase tracking-widest mb-4">ショット情報</h2>
+        <dl class="space-y-3 text-sm">
+          <div class="flex justify-between">
+            <dt class="text-slate-500">SHOT名</dt>
+            <dd class="font-semibold" translate="no">{{ shot.shot_code if shot and shot.shot_code else 'SHOT_' + ('%03d' % shot_id) }}</dd>
+          </div>
+          <div class="flex justify-between">
+            <dt class="text-slate-500">プロジェクト</dt>
+            <dd class="font-semibold" translate="no">{{ project_name or '-' }}</dd>
+          </div>
+          <div class="flex justify-between">
+            <dt class="text-slate-500">〆切</dt>
+            <dd class="font-semibold">2026-05-15</dd>
+          </div>
+          <div class="flex justify-between">
+            <dt class="text-slate-500">フレーム数</dt>
+            <dd class="font-semibold">240F (10sec @ 24fps)</dd>
+          </div>
+          <div class="flex justify-between items-center pt-2 border-t border-white/60">
+            <dt class="text-slate-500">ステータス</dt>
+            <dd>
+              {% set _ss2 = (shot.status | lower) if shot else 'in_review' %}
+              {% if _ss2 == 'retake' %}
+              <span class="inline-flex items-center gap-1.5 bg-rose-100 text-rose-600 text-xs font-bold px-3 py-1 rounded-full">🔴 <span translate="no">Retake</span></span>
+              {% elif _ss2 == 'approved' %}
+              <span class="inline-flex items-center gap-1.5 bg-emerald-100 text-emerald-600 text-xs font-bold px-3 py-1 rounded-full">✅ <span translate="no">Approved</span></span>
+              {% elif _ss2 == 'in_progress' %}
+              <span class="inline-flex items-center gap-1.5 bg-blue-100 text-blue-600 text-xs font-bold px-3 py-1 rounded-full">🔧 <span translate="no">In Progress</span></span>
+              {% elif _ss2 == 'in_review' %}
+              <span class="inline-flex items-center gap-1.5 bg-amber-100 text-amber-600 text-xs font-bold px-3 py-1 rounded-full">⚠️ <span translate="no">In Review</span></span>
+              {% else %}
+              <span class="inline-flex items-center gap-1.5 bg-slate-100 text-slate-600 text-xs font-bold px-3 py-1 rounded-full"><span translate="no">{{ _ss2 | capitalize }}</span></span>
+              {% endif %}
+            </dd>
+          </div>
+        </dl>
+      </div>
+
+      <!-- アップストリーム可視化カード (全工程・context 保持) -->
+      <div class="bg-white/40 backdrop-blur-xl border border-white/60 rounded-3xl shadow-xl p-6">
+        <h2 class="text-sm font-bold text-slate-800 mb-4">⬆️ アップストリーム工程</h2>
+        <div class="flex flex-col gap-2">
+          {% for task in (upstream_tasks or tasks) %}
+          {% set _tp = task.palette if task.palette is defined else None %}
+          <a href="/task/{{ task.task_id }}" class="flex items-center gap-3 p-3 rounded-2xl {{ (_tp.card_bg if _tp else 'bg-white/40') }} hover:brightness-105 transition-all border-l-4 {{ (_tp.border_accent if _tp else 'border-slate-200') }}
+            {% if task.status == 'retake' %} ring-2 ring-rose-300
+            {% elif task.status == 'reviewing' %} ring-2 ring-amber-300
+            {% endif %}">
+            <span class="text-lg">
+              {% if task.status == 'approved' %}✅
+              {% elif task.status == 'reviewing' %}⚠️
+              {% elif task.status == 'retake' %}🔄
+              {% elif task.status == 'open' %}⏳
+              {% else %}🔄
+              {% endif %}
+            </span>
+            <div class="flex-1 min-w-0">
+              <div class="text-sm font-semibold truncate {{ (_tp.label if _tp else 'text-slate-700') }}" translate="no">{{ task.name or task.type }}</div>
+              <div class="text-xs">
+                <span class="inline-block px-1.5 py-0.5 rounded-full text-[10px] font-bold {{ (_tp.type_badge_bg if _tp else 'bg-slate-100') }} {{ (_tp.type_badge_text if _tp else 'text-slate-500') }}" translate="no">{{ task.type }}</span>
+              </div>
+              <div class="text-xs font-medium
+                {% if task.status in ('approved','completed','done') %}text-emerald-600
+                {% elif task.status == 'reviewing' %}text-amber-600
+                {% elif task.status in ('retake',) %}text-rose-600
+                {% else %}text-slate-500
+                {% endif %}" translate="no">{{ task.status | capitalize }}</div>
+            </div>
+          </a>
+          {% if not loop.last %}
+          <div class="flex justify-center text-slate-300 text-lg leading-none
+            {% if task.status == 'reviewing' or task.status == 'retake' %}text-amber-600{% endif %}">↓</div>
+          {% endif %}
+          {% endfor %}
+        </div>
+      </div>
+
+    </aside>
+
+    <!-- 中央カラム flex-1 -->
+    <main class="flex-1 flex flex-col gap-6">
+
+      <!-- ヘッダー行 -->
+      <div class="flex items-center justify-between">
+        <h2 class="text-lg font-bold text-slate-800">🎬 アセット履歴 ({{ asset_list|length if asset_list else 0 }} 件)</h2>
+      </div>
+
+      {# 殿御命 2026-06-03: アセット履歴 = 実 asset (asset_list) で表示・mock task card は廃止 #}
+      {% if asset_list %}
+      <div class="grid grid-cols-2 gap-4">
+        {% set _names = {28:'Ryoji Bokan',52:'田中 太郎 (PM)',53:'山田 博 (Director)',54:'加藤 健司 (Lighting Lead)',55:'佐藤 花子 (Compositor)',56:'鈴木 一郎 (Compositor)',100:'Score Service'} %}
+        {% for a in asset_list %}
+        {% set _basename = (a.file_path or '').split('/')[-1] %}
+        {% set _ext = _basename.lower().split('.')[-1] if '.' in _basename else '' %}
+        {% set _is_img = _ext in ('png','jpg','jpeg','webp','gif') %}
+        {% set _is_vid = _ext in ('mp4','mov','webm','m4v') %}
+        {# 殿御命 2026-06-03: サムネ表示 — Calendar /static/assets/<basename> 経由 #}
+        {% set _img_url = 'http://192.168.44.253:8001/static/assets/' ~ _basename %}
+        {# 殿御命 2026-06-03: card クリックで /qc/{shot_id} プレイヤー画面遷移 (旧仕様復帰) #}
+        <a href="/qc/{{ shot_id }}?task_id={{ a.task_id }}&asset_id={{ a.id }}" class="relative block bg-white/60 backdrop-blur-xl border-2 border-white/60 rounded-2xl shadow-lg p-4 hover:shadow-xl hover:scale-[1.02] transition-all">
+          <div class="aspect-video rounded-xl mb-3 bg-gradient-to-br from-indigo-200 via-purple-300 to-rose-300 flex items-center justify-center overflow-hidden relative">
+            {% if _is_img %}
+              <img src="{{ _img_url }}" alt="{{ _basename }}" class="w-full h-full object-cover" loading="lazy"
+                   onerror="this.style.display='none';this.nextElementSibling.style.display='flex';">
+              <div class="absolute inset-0 hidden items-center justify-center bg-gradient-to-br from-indigo-200 via-purple-300 to-rose-300">
+                <span class="text-white text-xl font-black bg-black/30 rounded-lg px-3 py-1" translate="no">{{ a.version or '?' }}</span>
+              </div>
+            {% elif _is_vid %}
+              <video src="{{ _img_url }}" class="w-full h-full object-cover" muted preload="metadata"
+                     onerror="this.style.display='none';this.nextElementSibling.style.display='flex';"></video>
+              <div class="absolute inset-0 hidden items-center justify-center">
+                <span class="text-white text-3xl">🎥</span>
+              </div>
+              <div class="absolute bottom-1 right-1 bg-black/60 text-white text-[10px] font-bold rounded px-1.5 py-0.5">▶ {{ _ext|upper }}</div>
+            {% else %}
+              <div class="text-center">
+                <div class="text-4xl mb-1">{% if _ext == 'exr' %}🎞️{% elif _ext in ('psd','ai') %}🎨{% elif _ext == 'pdf' %}📄{% elif _ext in ('zip','tar','gz','tgz') %}🗜️{% else %}📦{% endif %}</div>
+                <span class="text-white text-xs font-black bg-black/30 rounded-lg px-2 py-0.5 uppercase" translate="no">{{ _ext or 'file' }}</span>
+              </div>
+              <span class="absolute top-1 right-1 text-white text-xs font-black bg-black/40 rounded-lg px-2 py-0.5" translate="no">{{ a.version or '?' }}</span>
+            {% endif %}
+          </div>
+          <div class="px-1">
+            <div class="flex items-center justify-between mb-1">
+              <span class="font-mono font-bold text-indigo-700 text-sm">{{ a.version or '?' }}</span>
+              <span class="text-xs bg-emerald-100 text-emerald-700 font-bold px-2 py-0.5 rounded-full">✓ 提出済</span>
+            </div>
+            {# 殿御命 2026-06-03: file 名から shot_X_task_X_vXXX_ プレフィックス除去 — 元ファイル名のみ表示 #}
+            {% set _bn = (a.file_path or '').split('/')[-1] %}
+            {% set _prefix = 'shot_' ~ (a.shot_id|string) ~ '_task_' ~ (a.task_id|string) ~ '_' ~ (a.version or '') ~ '_' %}
+            {% set _display = _bn[_prefix|length:] if _bn.startswith(_prefix) else _bn %}
+            <p class="text-xs text-slate-600 truncate font-mono" title="{{ _bn }}">{{ _display }}</p>
+            <p class="text-[11px] text-slate-500 mt-1">
+              by <span translate="no" class="font-bold">{{ _names.get(a.created_by, 'user_' + (a.created_by|string)) }}</span>
+              <span class="text-slate-400 mx-1">|</span>
+              <span class="font-mono">{{ (a.created_at or '')[:16] }}</span>
+            </p>
+            <p class="text-[10px] text-indigo-500 font-bold mt-1">▶ クリックで再生画面へ</p>
+          </div>
+          {# 殿御命 2026-06-03: 削除ボタン (card 内側 absolute・本人 or admin) #}
+          <span role="button" tabindex="0"
+                onclick="event.stopPropagation();event.preventDefault();deleteAsset({{ a.id }}, '{{ a.version or '?' }}');"
+                class="absolute top-2 right-2 bg-rose-500/90 hover:bg-rose-600 text-white text-[10px] font-bold rounded-lg px-2 py-1 shadow z-10 cursor-pointer">
+            🗑️ 削除
+          </span>
+        </a>
+        {% endfor %}
+      </div>
+      {% else %}
+      <div class="bg-white/40 border border-white/60 rounded-2xl py-12 text-center">
+        <p class="text-3xl mb-2">📭</p>
+        <p class="text-sm font-bold text-slate-600">この task の提出物 なし</p>
+        <p class="text-xs text-slate-400 mt-1">上の「📤 QC/レビューデータ提出」から upload してください</p>
+      </div>
+      {% endif %}
+
+      {# 旧 mock task card 構造 (Tasks 工程別表示) は将来 cmd で integrate・現状非表示 #}
+      <div class="grid grid-cols-2 gap-6 hidden">
+
+        {% for task in tasks %}
+        {% set _t = task.type %}
+        {% set _s = task.status | lower %}
+        {% set _is_retake = (_s == 'retake') %}
+        {% set _is_reviewing = (_s == 'reviewing') %}
+        {% set _is_approved = (_s == 'approved') %}
+        {% set _is_open = (_s == 'open') %}
+        {% set _tp = task.palette if task.palette is defined else None %}
+        <a href="/qc/{{ shot_id }}?task_id={{ task.task_id }}" class="block {{ (_tp.card_bg if _tp else 'bg-white/40') }} backdrop-blur-xl border-2 {{ (_tp.card_border if _tp else 'border-white/60') }} rounded-3xl shadow-xl overflow-hidden hover:shadow-2xl hover:scale-[1.01] transition-all
+          {% if _is_reviewing %}ring-2 ring-amber-400/40{% endif %}">
+          <div class="aspect-video rounded-2xl mb-3
+            {% if _is_retake %}bg-gradient-to-br from-amber-200 via-rose-300 to-orange-400 border-2 border-red-400
+            {% elif _is_reviewing %}bg-gradient-to-br from-amber-200 via-rose-300 to-orange-400
+            {% elif _is_approved %}bg-gradient-to-br from-blue-200 to-amber-200
+            {% else %}bg-gradient-to-br from-slate-200 to-slate-300
+            {% endif %} relative overflow-hidden flex items-end p-2">
+            {# 殿御命 2026-06-01: _v04.exr hardcode 撤廃・deliverables 連結 #}
+            {% set _deliv = task.deliverables if task.deliverables else None %}
+            {% if _deliv %}
+            <span class="text-white text-xs font-bold bg-black/30 rounded px-2 py-0.5" translate="no">{{ _deliv }}</span>
+            {% else %}
+            <span class="text-white text-xs font-bold bg-black/30 rounded px-2 py-0.5 italic opacity-70">提出物未登録</span>
+            {% endif %}
+          </div>
+          <div class="px-5 pb-5">
+            <div class="flex items-center justify-between mb-2">
+              <span class="font-bold {{ (_tp.label if _tp else 'text-slate-800') }}" translate="no">{% if _deliv %}{{ _deliv }}{% else %}{{ _t }} (提出物未登録){% endif %}</span>
+              {% if _is_approved %}
+              <span class="inline-flex items-center gap-1 bg-emerald-100 text-emerald-600 text-xs font-bold px-3 py-1 rounded-full">✅ <span translate="no">Approved</span></span>
+              {% elif _is_reviewing %}
+              <span class="inline-flex items-center gap-1 bg-amber-100 text-amber-600 text-xs font-bold px-3 py-1 rounded-full">⚠️ <span translate="no">Reviewing</span></span>
+              {% elif _is_retake %}
+              <span class="inline-flex items-center gap-1 bg-rose-100 text-rose-600 text-xs font-bold px-3 py-1 rounded-full">🔴 <span translate="no">Retake</span></span>
+              {% else %}
+              <span class="inline-flex items-center gap-1 bg-slate-100 text-slate-600 text-xs font-bold px-3 py-1 rounded-full">⏳ <span translate="no">Open</span></span>
+              {% endif %}
+            </div>
+            {% set _names = {1:'Tanaka',10:'Yamada',20:'Kato',30:'Sato',40:'Suzuki',99:'Ryoji'} %}
+            <p class="text-xs text-slate-500">by <span translate="no">{{ _names.get(task.assignee_id, 'user_' + (task.assignee_id|string)) }}</span> | 2026-05-10</p>
+            {% if _is_retake %}
+            <div class="mt-3 bg-rose-50 border-l-4 border-rose-400 rounded-r-2xl p-3 text-sm text-rose-600">
+              「空気感をもっと夕方に。光量を落として、夕焼けの黄金色を強めに。」
+              <p class="text-xs text-rose-600/70 mt-1">— <span translate="no">Director Yamada</span></p>
+            </div>
+            <div class="mt-2">
+              <a href="/reference/{{ shot_id }}?task_id={{ task.task_id }}"
+                 class="flex items-center gap-1.5 bg-indigo-100 border border-indigo-300 rounded-xl px-3 py-2 text-xs font-bold text-indigo-600 hover:bg-indigo-200 transition-all">
+                📎 参考資料 8件を閲覧 →
+              </a>
+            </div>
+            {% endif %}
+          </div>
+        </a>
+        {% endfor %}
+
+      </div>
+
+      <!-- 変更申請ボタン -->
+      <div class="flex justify-end mt-2">
+        <button
+          onclick="openModal()"
+          class="bg-white/40 backdrop-blur-sm border border-white/60 text-slate-800 font-semibold px-6 py-2.5 rounded-2xl shadow hover:bg-white/40 hover:text-indigo-500 transition-all"
+        >
+          📝 変更申請
+        </button>
+      </div>
+
+
+      <!-- 配布モーダル (Look 配布等の task action) -->
+      <div id="distributeModal" class="hidden fixed inset-0 bg-black/40 backdrop-blur-sm flex items-center justify-center z-50" onclick="closeDistributeModal(event)">
+        <div class="bg-white/95 backdrop-blur-xl rounded-3xl shadow-2xl p-6 w-[28rem] max-w-full" onclick="event.stopPropagation()">
+          <div class="flex items-start justify-between mb-4">
+            <h3 class="text-lg font-black text-slate-800">📦 配布 — 関係者へ通知</h3>
+            <button onclick="closeDistributeModal()" class="text-slate-400 hover:text-slate-600 text-xl leading-none">×</button>
+          </div>
+          <p class="text-xs text-slate-500 mb-4">配布物(Look/LUT/参考資料等)を関係者全員のメッセージ受信箱へ通知します。</p>
+          <form onsubmit="submitDistribute(event)" class="space-y-3">
+            <div>
+              <label class="text-xs font-bold text-slate-600 mb-1 block">配布物 タイプ</label>
+              <select name="dist_type" class="w-full bg-white border border-slate-300 rounded-xl px-3 py-2 text-sm">
+                <option value="look_lut">Look / LUT (Lighting 配布)</option>
+                <option value="reference">参考資料</option>
+                <option value="comp_template">Comp テンプレ・素材</option>
+                <option value="other">その他</option>
+              </select>
+            </div>
+            <div>
+              <label class="text-xs font-bold text-slate-600 mb-1 block">バージョン名</label>
+              <input type="text" name="version" placeholder="例: Look_v05" value="Look_v05"
+                class="w-full bg-white border border-slate-300 rounded-xl px-3 py-2 text-sm">
+            </div>
+            <div>
+              <label class="text-xs font-bold text-slate-600 mb-1 block">配布範囲 (関係者全員 / カスタム)</label>
+              <select name="recipients" class="w-full bg-white border border-slate-300 rounded-xl px-3 py-2 text-sm">
+                <option value="all_stakeholders">関係者全員(Director/PM/後輩/関連工程担当)</option>
+                <option value="project_members">プロジェクト全メンバー</option>
+                <option value="downstream_only">後工程担当のみ(Compositor 等)</option>
+              </select>
+            </div>
+            <div>
+              <label class="text-xs font-bold text-slate-600 mb-1 block">配布メッセージ</label>
+              <textarea name="message" rows="3" placeholder="例: Look_v05 公開しました。Composite 工程は v05 LUT を適用してください。"
+                class="w-full bg-white border border-slate-300 rounded-xl px-3 py-2 text-sm">Look_v05 を公開しました。各工程は本バージョンに切替てください。</textarea>
+            </div>
+            <div class="flex justify-end gap-2 pt-2">
+              <button type="button" onclick="closeDistributeModal()" class="px-4 py-2 text-sm text-slate-600 hover:text-slate-800">キャンセル</button>
+              <button type="submit" class="bg-emerald-600 hover:bg-emerald-700 text-white text-sm font-bold rounded-xl px-5 py-2">🚀 配布実行</button>
+            </div>
+          </form>
+        </div>
+      </div>
+
+      <script>
+      function showDistributeModal() { document.getElementById('distributeModal').classList.remove('hidden'); }
+      function closeDistributeModal(ev) {
+        if (ev && ev.target.id !== 'distributeModal') return;
+        document.getElementById('distributeModal').classList.add('hidden');
+      }
+      async function submitDistribute(ev) {
+        ev.preventDefault();
+        const fd = new FormData(ev.target);
+        const body = {
+          shot_id: {{ shot_id or 1 }},
+          {% if task_id %}task_id: {{ task_id }},{% endif %}
+          dist_type: fd.get('dist_type'),
+          version: fd.get('version'),
+          recipients_scope: fd.get('recipients'),
+          message: fd.get('message') || '',
+          submitted_at: new Date().toISOString(),
+        };
+        try {
+          const resp = await fetch('/api/bff/look_distributions', {
+            method: 'POST',
+            credentials: 'include',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify(body),
+          });
+          if (!resp.ok) throw new Error('HTTP ' + resp.status);
+          const data = await resp.json();
+          alert(`✅ 配布を実行しました (DB 永続化済: id=${data.id})\n配布物: ${body.version} (${body.dist_type})\n配布範囲: ${body.recipients_scope}\n\n関係者のメッセージ受信箱へ通知済`);
+          closeDistributeModal();
+        } catch (e) {
+          alert('❌ 配布失敗: ' + e.message);
+        }
+      }
+      </script>
+
+      <!-- レビュー依頼モーダル -->
+      <div id="reviewRequestModal" class="hidden fixed inset-0 bg-black/40 backdrop-blur-sm flex items-center justify-center z-50" onclick="closeReviewRequestModal(event)">
+        <div class="bg-white/95 backdrop-blur-xl rounded-3xl shadow-2xl p-6 w-96 max-w-full" onclick="event.stopPropagation()">
+          <div class="flex items-start justify-between mb-4">
+            <h3 class="text-lg font-black text-slate-800">👁 レビュー依頼</h3>
+            <button onclick="closeReviewRequestModal()" class="text-slate-400 hover:text-slate-600 text-xl leading-none">×</button>
+          </div>
+          <p class="text-xs text-slate-500 mb-4">本 task のレビュー依頼を上位レビュアへ送信します。</p>
+          <form onsubmit="submitReviewRequest(event)" class="space-y-3">
+            <div>
+              <label class="text-xs font-bold text-slate-600 mb-1 block">依頼先</label>
+              <select name="reviewer" class="w-full bg-white border border-slate-300 rounded-xl px-3 py-2 text-sm">
+                <option value="director">Director Yamada（最終 Approve 権限）</option>
+                <option value="lead_kato">Lighting Lead Kato（部内 LookDev 観点）</option>
+                <option value="pm_tanaka">PM Tanaka（進捗確認のみ）</option>
+              </select>
+            </div>
+            <div>
+              <label class="text-xs font-bold text-slate-600 mb-1 block">レビュー観点</label>
+              <select name="focus" class="w-full bg-white border border-slate-300 rounded-xl px-3 py-2 text-sm">
+                <option>仕上がり全体の確認</option>
+                <option>色味・LookDev</option>
+                <option>動きの自然さ・タイミング</option>
+                <option>テクニカル品質</option>
+              </select>
+            </div>
+            <div>
+              <label class="text-xs font-bold text-slate-600 mb-1 block">伝言メッセージ (任意)</label>
+              <textarea name="message" rows="3" placeholder="例: 夕方ライティング調整しました。確認お願いします。"
+                class="w-full bg-white border border-slate-300 rounded-xl px-3 py-2 text-sm"></textarea>
+            </div>
+            <div class="flex justify-end gap-2 pt-2">
+              <button type="button" onclick="closeReviewRequestModal()" class="px-4 py-2 text-sm text-slate-600 hover:text-slate-800">キャンセル</button>
+              <button type="submit" class="bg-indigo-600 hover:bg-indigo-700 text-white text-sm font-bold rounded-xl px-5 py-2">🚀 送信</button>
+            </div>
+          </form>
+        </div>
+      </div>
+
+      <script>
+      function showReviewRequestModal() { document.getElementById('reviewRequestModal').classList.remove('hidden'); }
+      function closeReviewRequestModal(ev) {
+        if (ev && ev.target.id !== 'reviewRequestModal') return;
+        document.getElementById('reviewRequestModal').classList.add('hidden');
+      }
+      async function submitReviewRequest(ev) {
+        ev.preventDefault();
+        const fd = new FormData(ev.target);
+        const reviewer = fd.get('reviewer');
+        const focus = fd.get('focus');
+        const message = fd.get('message') || '';
+        // /api/bff/messages 経由でレビュー依頼を送信 (type:review_request の metadata 付与)
+        const body = {
+          type: 'review_request',
+          shot_id: {{ shot_id or 1 }},
+          {% if task_id %}task_id: {{ task_id }},{% endif %}
+          recipient: reviewer,
+          focus: focus,
+          body: `📋 レビュー依頼\n依頼先: ${reviewer}\nレビュー観点: ${focus}\n\n${message || '(伝言なし)'}`,
+          submitted_at: new Date().toISOString(),
+        };
+        try {
+          const resp = await fetch('/api/bff/messages', {
+            method: 'POST',
+            credentials: 'include',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify(body),
+          });
+          if (!resp.ok) throw new Error('HTTP ' + resp.status);
+          const data = await resp.json();
+          alert(`✅ レビュー依頼を送信しました (DB 永続化済: id=${data.id})\n依頼先: ${reviewer}\n観点: ${focus}`);
+          closeReviewRequestModal();
+        } catch (e) {
+          alert('❌ 送信失敗: ' + e.message);
+        }
+      }
+      </script>
+
+
+    </main>
+
+  </div><!-- /3カラム -->
+
+</div><!-- /メインコンテンツ -->
+
+<!-- スライドインチャット撤去 — /messages に統合 -->
+
+
+<!-- ===== 変更申請モーダル ===== -->
+<div
+  id="change-modal"
+  class="hidden fixed inset-0 bg-black/50 flex items-center justify-center z-50"
+  onclick="closeModalOutside(event)"
+>
+  <div class="bg-slate-800/90 backdrop-blur-xl border border-white/60 rounded-3xl p-8 max-w-md w-full mx-4 shadow-2xl" onclick="event.stopPropagation()">
+    <h3 class="text-lg font-bold text-white mb-6">📝 変更申請</h3>
+    <div class="space-y-5">
+      <div>
+        <label class="block text-sm font-semibold text-white/60 mb-1">理由</label>
+        <textarea rows="3" placeholder="〆切調整の理由を記入"
+          class="w-full bg-white/40 border border-white/60 rounded-2xl px-4 py-3 text-sm focus:outline-none focus:ring-2 focus:ring-indigo-400 text-white placeholder-white/30 resize-none"></textarea>
+      </div>
+      <div>
+        <label class="block text-sm font-semibold text-white/60 mb-1">希望〆切</label>
+        <input type="date" class="w-full bg-white/40 border border-white/60 rounded-2xl px-4 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-indigo-400 text-white" />
+      </div>
+      <div>
+        <label class="block text-sm font-semibold text-white/60 mb-1">補足</label>
+        <textarea rows="2" class="w-full bg-white/40 border border-white/60 rounded-2xl px-4 py-3 text-sm focus:outline-none focus:ring-2 focus:ring-indigo-400 text-white resize-none"></textarea>
+      </div>
+    </div>
+    <div class="flex gap-3 mt-7">
+      <button onclick="submitModal()" class="flex-1 bg-indigo-600 text-white font-semibold rounded-2xl py-3 hover:bg-indigo-700 transition-colors">PMに送信</button>
+      <button onclick="closeModal()" class="flex-1 bg-white/40 text-slate-800 font-semibold rounded-2xl py-3 hover:bg-white/40 transition-colors">キャンセル</button>
+    </div>
+  </div>
+</div>
+
+<!-- 技術トラブル報告モーダル -->
+<div id="modal-trouble" class="fixed inset-0 bg-black/50 backdrop-blur-sm flex items-center justify-center z-50 hidden">
+  <div class="bg-slate-800/90 backdrop-blur-xl border border-white/60 rounded-3xl shadow-xl p-6 w-96">
+    <p class="text-lg font-black text-white mb-4">🚨 技術トラブル報告</p>
+    <div class="mb-3">
+      <label class="text-xs font-bold text-white/60 mb-1 block">トラブル種別</label>
+      <select class="w-full bg-white/40 border border-white/60 rounded-xl p-2 text-sm text-white">
+        <option>シーン破損</option>
+        <option>レンダリング障害</option>
+        <option>アセット欠損</option>
+        <option>その他</option>
+      </select>
+    </div>
+    <div class="mb-4">
+      <label class="text-xs font-bold text-white/60 mb-1 block">詳細説明</label>
+      <textarea class="w-full bg-white/40 border border-white/60 rounded-xl p-2 text-sm text-white h-20 resize-none" placeholder="発生状況・タイムコード・症状を記入"></textarea>
+    </div>
+    <div id="trouble-sent" class="hidden mb-3 text-sm font-bold text-emerald-600 bg-emerald-500/10 rounded-xl p-3">
+      ✅ <span translate="no">Kato</span> に報告しました
+    </div>
+    <div class="flex gap-2">
+      <button onclick="submitTrouble()" class="flex-1 bg-rose-500 hover:bg-rose-600 text-white font-bold rounded-2xl py-2 text-sm transition-all">📤 <span translate="no">Kato</span> に報告する</button>
+      <button onclick="closeTroubleModal()" class="flex-1 bg-white/40 hover:bg-white/40 text-white font-bold rounded-2xl py-2 text-sm border border-white/60 transition-all">閉じる</button>
+    </div>
+  </div>
+</div>
+
+<!-- トースト通知 -->
+<div
+  id="toast"
+  class="toast fixed bottom-28 right-8 bg-emerald-600 text-white text-sm font-semibold px-5 py-3 rounded-2xl shadow-xl opacity-0 translate-y-4 pointer-events-none z-50"
+>
+  ✅ PM Tanaka に送信しました
+</div>
+
+{% if isolated_task %}
+<script>
+  // QC/review asset upload (殿御命 2026-06-01) — isolated_task ページのみ active
+  (function() {
+    const fileInput = document.getElementById('asset-file-input');
+    const fileLabel = document.getElementById('asset-file-label');
+    const uploadBtn = document.getElementById('asset-upload-btn');
+    const statusEl  = document.getElementById('asset-upload-status');
+    if (!fileInput) return;  // 通常 shot_detail (isolated_task=false) ではスキップ
+    fileInput.addEventListener('change', function() {
+      const f = fileInput.files[0];
+      if (f) {
+        fileLabel.textContent = '📄 ' + f.name + ' (' + Math.round(f.size / 1024) + ' KB)';
+        uploadBtn.disabled = false;
+      }
+    });
+    // 殿御命 2026-06-03: QC 時 mention 非表示+選択クリア・Review 時のみ表示
+    const mentionsBlock = document.getElementById('asset-mentions-block');
+    const mentionsSel = document.getElementById('asset-mentions');
+    const dirPreview = document.getElementById('dir-preview');
+    document.querySelectorAll('input[name="submission_type"]').forEach(r => {
+      r.addEventListener('change', () => {
+        const stype = (document.querySelector('input[name="submission_type"]:checked') || {}).value || 'qc';
+        if (mentionsBlock) mentionsBlock.classList.toggle('hidden', stype === 'qc');
+        if (stype === 'qc' && mentionsSel) {
+          Array.from(mentionsSel.options).forEach(o => o.selected = false);
+        }
+        if (dirPreview) dirPreview.style.display = (stype === 'qc') ? '' : 'none';
+      });
+    });
+    // 殿御命 2026-06-03: drag/drop 対応
+    fileLabel.addEventListener('dragover', function(e) {
+      e.preventDefault(); e.stopPropagation();
+      fileLabel.classList.add('ring-2', 'ring-indigo-500', 'bg-indigo-100');
+    });
+    fileLabel.addEventListener('dragleave', function(e) {
+      e.preventDefault(); e.stopPropagation();
+      fileLabel.classList.remove('ring-2', 'ring-indigo-500', 'bg-indigo-100');
+    });
+    fileLabel.addEventListener('drop', function(e) {
+      e.preventDefault(); e.stopPropagation();
+      fileLabel.classList.remove('ring-2', 'ring-indigo-500', 'bg-indigo-100');
+      const files = e.dataTransfer && e.dataTransfer.files;
+      if (files && files.length > 0) {
+        const dt = new DataTransfer();
+        dt.items.add(files[0]);
+        fileInput.files = dt.files;
+        fileInput.dispatchEvent(new Event('change'));
+      }
+    });
+    // 殿御命 2026-06-03: asset 削除 (nibu DELETE /api/assets/{id} 経由)
+    window.deleteAsset = async function(assetId, version) {
+      if (!confirm('🗑️ ' + version + ' を削除します。\n物理削除のため復旧不可。よろしいですか?')) return;
+      try {
+        const resp = await fetch('/api/bff/assets/' + assetId, {
+          method: 'DELETE', credentials: 'include'
+        });
+        if (!resp.ok) {
+          if (resp.status === 403) throw new Error('権限なし (本人 or admin のみ削除可)');
+          if (resp.status === 404) throw new Error('対象 asset が存在しません');
+          throw new Error('HTTP ' + resp.status);
+        }
+        window.location.reload();
+      } catch (e) {
+        alert('❌ 削除失敗: ' + e.message);
+      }
+    };
+    // 殿御命 2026-06-03: task status / progress 更新
+    window.changeTaskStatus = async function(taskId, newStatus) {
+      try {
+        const resp = await fetch('/api/bff/tasks/' + taskId, {
+          method: 'PATCH', credentials: 'include',
+          headers: {'Content-Type': 'application/json'},
+          body: JSON.stringify({status: newStatus})
+        });
+        if (!resp.ok) throw new Error('HTTP ' + resp.status);
+        window.location.reload();
+      } catch (e) {
+        alert('❌ status 更新失敗: ' + e.message);
+      }
+    };
+    window.updateTaskProgress = async function(taskId, progress) {
+      try {
+        const resp = await fetch('/api/bff/tasks/' + taskId, {
+          method: 'PATCH', credentials: 'include',
+          headers: {'Content-Type': 'application/json'},
+          body: JSON.stringify({progress: progress})
+        });
+        if (!resp.ok) throw new Error('HTTP ' + resp.status);
+      } catch (e) {
+        alert('❌ progress 更新失敗: ' + e.message);
+      }
+    };
+    window.uploadAsset = async function() {
+      const f = fileInput.files[0];
+      if (!f) return;
+      // 殿御命 2026-06-03: QC/review は 500MB 上限 (納品実データは別経路)
+      const MAX_BYTES = 500 * 1024 * 1024;
+      if (f.size > MAX_BYTES) {
+        statusEl.innerHTML = '❌ ファイル ' + Math.round(f.size/1024/1024) + 'MB は上限超過 (QC/review 500MB max・実データ納品は別経路)';
+        return;
+      }
+      uploadBtn.disabled = true;
+      statusEl.textContent = '⏳ アップロード中...';
+      // 殿御命 2026-06-03: file 名 = {project}_{seq}_{shot}_{task}_{version}_{memo}.{ext}
+      const _sanitize = (s) => (s || '').toString().trim().replace(/[^a-zA-Z0-9_\-]/g, '_').replace(/_+/g, '_').replace(/^_|_$/g, '');
+      const _proj = _sanitize(document.getElementById('asset-project').value) || 'proj';
+      const _seq = _sanitize(document.getElementById('asset-seq').value) || 'seq';
+      const _shot = _sanitize(document.getElementById('asset-shot').value) || 'shot';
+      const _task = _sanitize(document.getElementById('asset-task').value) || 'task';
+      const _ver = _sanitize(document.getElementById('asset-version').value) || 'v001';
+      const _memo = _sanitize((document.getElementById('asset-name-memo') || {}).value || '');
+      const _origName = f.name || 'upload.bin';
+      const _dot = _origName.lastIndexOf('.');
+      const _ext = _dot > 0 ? _origName.substring(_dot) : '';
+      const _parts = [_proj, _seq, _shot, _task, _ver];
+      if (_memo) _parts.push(_memo);
+      const _newName = _parts.join('_') + _ext;
+      const _renamed = new File([f], _newName, { type: f.type });
+      const fd = new FormData();
+      fd.append('file', _renamed);
+      const taskId = {{ task_id|default(none)|tojson }};
+      const shotId = {{ shot_id|default(none)|tojson }};
+      const projectId = {{ (project_id or 0)|tojson }};
+      if (taskId) fd.append('task_id', taskId);
+      if (shotId) fd.append('shot_id', shotId);
+      // 殿御命 2026-06-03: 提出種別 (QC/Review) + mention (project members から multi-select)
+      const stype = (document.querySelector('input[name="submission_type"]:checked') || {}).value || 'qc';
+      // client-side validation (cmd_473)
+      const mentionsVal = (document.getElementById('asset-mentions') || {}).value || '';
+      if (stype === 'qc' && !mentionsVal.trim()) {
+        if (!confirm('QC 提出: mention が空です。Director が未設定の場合サーバーで 400 エラーになります。続けますか?')) {
+          statusEl.innerHTML = '';
+          uploadBtn.disabled = false;
+          return;
+        }
+      }
+      fd.append('submission_type', stype);
+      const mEl = document.getElementById('asset-mentions');
+      const selected = mEl ? Array.from(mEl.selectedOptions).map(o => o.value).filter(v => v) : [];
+      if (selected.length) fd.append('mentions', selected.join(','));
+      const v = document.getElementById('asset-version').value.trim();
+      if (v) fd.append('version', v);
+      try {
+        const resp = await fetch('/api/bff/assets', { method: 'POST', credentials: 'include', body: fd });
+        if (!resp.ok) throw new Error('HTTP ' + resp.status);
+        const data = await resp.json();
+        statusEl.innerHTML = '✅ アップロード完了 (id=' + (data.id || '?') + ') — 画面更新中...';
+        uploadBtn.disabled = false;
+        // 殿御命 2026-06-03: upload 後 提出済成果物 + アセット履歴 + サムネ 更新のため reload
+        setTimeout(function() { window.location.reload(); }, 600);
+      } catch (e) {
+        statusEl.innerHTML = '❌ エラー: ' + e.message;
+        uploadBtn.disabled = false;
+      }
+    };
+  })();
+</script>
+{% endif %}
+
+<script>
+  function toggleChat() {
+    const panel = document.getElementById('chat-panel');
+    if (panel.classList.contains('closed')) {
+      panel.classList.remove('closed');
+      panel.classList.add('open');
+    } else {
+      panel.classList.remove('open');
+      panel.classList.add('closed');
+    }
+  }
+
+  function openModal() {
+    document.getElementById('change-modal').classList.remove('hidden');
+    document.getElementById('change-modal').classList.add('flex');
+  }
+
+  function closeModal() {
+    document.getElementById('change-modal').classList.add('hidden');
+    document.getElementById('change-modal').classList.remove('flex');
+  }
+
+  function closeModalOutside(e) {
+    if (e.target === document.getElementById('change-modal')) closeModal();
+  }
+
+  function submitModal() {
+    closeModal();
+    const toast = document.getElementById('toast');
+    toast.style.opacity = '1';
+    toast.style.transform = 'translateY(0)';
+    setTimeout(() => {
+      toast.style.opacity = '0';
+      toast.style.transform = 'translateY(16px)';
+    }, 3000);
+  }
+
+  function showTroubleModal() {
+    document.getElementById('modal-trouble').classList.remove('hidden');
+    document.getElementById('trouble-sent').classList.add('hidden');
+  }
+  function submitTrouble() {
+    document.getElementById('trouble-sent').classList.remove('hidden');
+  }
+  function closeTroubleModal() {
+    document.getElementById('modal-trouble').classList.add('hidden');
+  }
+
+  if (new URLSearchParams(location.search).get('chat') === 'open') {
+    document.addEventListener('DOMContentLoaded', () => {
+      const panel = document.getElementById('chat-panel');
+      if (panel) {
+        panel.classList.remove('closed');
+        panel.classList.add('open');
+      }
+    });
+  }
+</script>
+
+{% endblock %}

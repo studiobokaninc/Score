@@ -1,0 +1,927 @@
+{% extends "base.html" %}
+
+{% block title %}Score — メッセージセンター{% endblock %}
+
+{% block content %}
+<style>
+  .thread-row { transition: all 0.15s ease; }
+  .bubble-left { border-radius: 1rem 1rem 1rem 0.25rem; }
+  .bubble-right { border-radius: 1rem 1rem 0.25rem 1rem; }
+  .msg-area { scroll-behavior: smooth; }
+  body { background: linear-gradient(135deg, #E0F2FE 0%, #F3E8FF 50%, #FCE7F3 100%); }
+</style>
+
+<div class="flex overflow-hidden h-screen text-slate-800">
+
+  {% include '_sidemenu.html' %}
+
+  <!-- ===== Main Area ===== -->
+  <div class="flex-1 ml-24 flex overflow-hidden">
+
+    <!-- ===== Left Pane: Thread List ===== -->
+    <div class="w-80 flex flex-col border-r border-white/60 bg-white/10 shrink-0 h-screen">
+      {# 殿御命 2026-06-03: task/shot 別 thread query 受領時の案内 #}
+      {% if thread_query %}
+      <div class="mx-4 mt-3 px-3 py-2 bg-amber-50 border border-amber-200 text-amber-800 rounded-xl text-xs">
+        💬 task/shot 別 thread「<span translate="no" class="font-bold">{{ thread_query }}</span>」専用 thread は <strong>demo data 未配置</strong>(今後実装予定)。下記の全 thread 一覧を御確認頂きたく。
+      </div>
+      {% endif %}
+      <div class="px-4 pt-6 pb-3 shrink-0">
+        <div class="flex items-center gap-3 mb-2">
+          <h2 class="text-lg font-black text-slate-800">💬 メッセージ</h2>
+          <span id="unread-badge" class="bg-rose-500 text-white rounded-full px-2 py-0.5 text-xs font-bold">未読 0</span>
+          <button onclick="openNewDMModal()"
+                  class="ml-auto bg-indigo-600 hover:bg-indigo-700 text-white font-black text-sm rounded-2xl px-3 py-1.5 transition">
+            ✏️ 新規DM
+          </button>
+        </div>
+        <div class="bg-white/40 rounded-2xl p-1 flex gap-1">
+          <button id="tab-shot" onclick="switchTab('shot')"
+            class="flex-1 px-2 py-1.5 text-xs font-bold rounded-xl transition-all bg-indigo-600 text-white">
+            🎬 SHOT<span id="tab-count-shot" class="ml-1 text-[10px] opacity-80">(0)</span>
+            <span id="tab-unread-shot" class="hidden ml-1 bg-rose-500 text-white rounded-full px-1.5 text-[9px]">0</span>
+          </button>
+          <button id="tab-dm" onclick="switchTab('dm')"
+            class="flex-1 px-2 py-1.5 text-xs font-bold rounded-xl transition-all">
+            👤 DM<span id="tab-count-dm" class="ml-1 text-[10px] opacity-80">(0)</span>
+            <span id="tab-unread-dm" class="hidden ml-1 bg-rose-500 text-white rounded-full px-1.5 text-[9px]">0</span>
+          </button>
+          <button id="tab-notice" onclick="switchTab('notice')"
+            class="flex-1 px-2 py-1.5 text-xs font-bold rounded-xl transition-all">
+            📢<span id="tab-count-notice" class="ml-1 text-[10px] opacity-80">(0)</span>
+            <span id="tab-unread-notice" class="hidden ml-1 bg-rose-500 text-white rounded-full px-1.5 text-[9px]">0</span>
+          </button>
+        </div>
+      </div>
+
+      <div class="flex-1 overflow-y-auto px-3 pb-4">
+        <div id="list-shot">
+          {% if not demo_mode and (all_messages_count or 0) == 0 %}
+          <div class="text-center py-12 text-slate-400 text-xs">
+            <p class="text-4xl mb-2">📭</p>
+            <p class="font-bold">メッセージなし</p>
+            <p class="mt-1">Calendar BE 経由で受信 message はまだありません</p>
+            <p class="mt-3 text-[10px] text-slate-300">(demo_mode で再起動すると mock thread が表示されます)</p>
+          </div>
+          {% endif %}
+          {% if demo_mode %}
+          <div class="thread-row px-3 py-3 rounded-2xl cursor-pointer hover:bg-white/50 flex items-center gap-3 mb-1 relative group"
+            id="row-shot001" data-unread="true" onclick="showThread('shot001')">
+            <div class="w-10 h-10 bg-rose-100 rounded-full flex items-center justify-center text-base shrink-0">🎬</div>
+            <div class="flex-1 min-w-0">
+              <div class="flex items-center justify-between">
+                <span class="font-bold text-slate-800 text-xs">Director Yamada</span>
+                <span class="text-[10px] text-slate-400">10:05</span>
+              </div>
+              <div class="text-xs font-semibold text-slate-700 truncate"><span translate="no">SHOT_001</span> 関係者 thread</div>
+              <div class="text-[11px] text-slate-400 truncate">黄金色の彩度は強めで...</div>
+            </div>
+            <span class="row-unread-count bg-rose-500 text-white text-[10px] rounded-full w-5 h-5 flex items-center justify-center font-bold shrink-0">2</span>
+            <button onclick="deleteThread('shot001', event)" class="absolute top-1 right-1 opacity-0 group-hover:opacity-100 w-5 h-5 rounded-full bg-rose-100 hover:bg-rose-200 text-rose-600 text-[10px] flex items-center justify-center transition-all" title="非表示 (DB は保持)">🗑</button>
+          </div>
+
+          <div class="thread-row px-3 py-3 rounded-2xl cursor-pointer hover:bg-white/50 flex items-center gap-3 mb-1 relative group"
+            id="row-shotB007" data-unread="true" onclick="showThread('shotB007')">
+            <div class="w-10 h-10 bg-blue-100 rounded-full flex items-center justify-center text-base shrink-0">📋</div>
+            <div class="flex-1 min-w-0">
+              <div class="flex items-center justify-between">
+                <span class="font-bold text-slate-800 text-xs">PM Tanaka</span>
+                <span class="text-[10px] text-slate-400">14:00</span>
+              </div>
+              <div class="text-xs font-semibold text-slate-700 truncate"><span translate="no">SHOT_B_007</span> 引継ぎ</div>
+              <div class="text-[11px] text-slate-400 truncate">Adopt対応で期限は本日EOD...</div>
+            </div>
+            <span class="row-unread-count bg-rose-500 text-white text-[10px] rounded-full w-5 h-5 flex items-center justify-center font-bold shrink-0">1</span>
+            <button onclick="deleteThread('shotB007', event)" class="absolute top-1 right-1 opacity-0 group-hover:opacity-100 w-5 h-5 rounded-full bg-rose-100 hover:bg-rose-200 text-rose-600 text-[10px] flex items-center justify-center transition-all" title="非表示 (DB は保持)">🗑</button>
+          </div>
+
+          <div class="thread-row px-3 py-3 rounded-2xl cursor-pointer hover:bg-white/50 flex items-center gap-3 mb-1 relative group"
+            id="row-mattepaint" onclick="showThread('mattepaint')">
+            <div class="w-10 h-10 bg-green-100 rounded-full flex items-center justify-center text-base shrink-0">🖌</div>
+            <div class="flex-1 min-w-0">
+              <div class="flex items-center justify-between">
+                <span class="font-bold text-slate-800 text-xs">Suzuki</span>
+                <span class="text-[10px] text-slate-400">16:55</span>
+              </div>
+              <div class="text-xs font-semibold text-slate-700 truncate"><span translate="no">MattePaint</span> v05 完了通知</div>
+              <div class="text-[11px] text-slate-400 truncate">Approved になりました...</div>
+            </div>
+            <span class="text-slate-400 text-sm">✅</span>
+            <button onclick="deleteThread('mattepaint', event)" class="absolute top-1 right-1 opacity-0 group-hover:opacity-100 w-5 h-5 rounded-full bg-rose-100 hover:bg-rose-200 text-rose-600 text-[10px] flex items-center justify-center transition-all" title="非表示 (DB は保持)">🗑</button>
+          </div>
+
+          <div class="thread-row px-3 py-3 rounded-2xl cursor-pointer hover:bg-white/50 flex items-center gap-3 mb-1 relative group"
+            id="row-morning" onclick="showThread('morning')">
+            <div class="w-10 h-10 bg-rose-100 rounded-full flex items-center justify-center text-base shrink-0">🎬</div>
+            <div class="flex-1 min-w-0">
+              <div class="flex items-center justify-between">
+                <span class="font-bold text-slate-800 text-xs">Director Yamada</span>
+                <span class="text-[10px] text-slate-400">09:00</span>
+              </div>
+              <div class="text-xs font-semibold text-slate-700 truncate">朝会議事録共有</div>
+              <div class="text-[11px] text-slate-400 truncate">3件のタスク提案...</div>
+            </div>
+            <button onclick="deleteThread('morning', event)" class="absolute top-1 right-1 opacity-0 group-hover:opacity-100 w-5 h-5 rounded-full bg-rose-100 hover:bg-rose-200 text-rose-600 text-[10px] flex items-center justify-center transition-all" title="非表示 (DB は保持)">🗑</button>
+          </div>
+          {% endif %}
+        </div>
+
+        <div id="list-dm" class="hidden">
+          {% if not demo_mode and (all_messages_count or 0) == 0 and (dm_threads | length) == 0 %}
+          <div class="text-center py-12 text-slate-400 text-xs">
+            <p class="text-4xl mb-2">📭</p>
+            <p class="font-bold">DM なし</p>
+            <p class="mt-1">右上「✏️ 新規DM」 で開始可能</p>
+          </div>
+          {% endif %}
+          {% if demo_mode %}
+          <div class="thread-row px-3 py-3 rounded-2xl cursor-pointer hover:bg-white/50 flex items-center gap-3 mb-1 relative group"
+            id="row-dm-pm" data-unread="true" onclick="showThread('dm_pm')">
+            <div class="w-10 h-10 bg-blue-100 rounded-full flex items-center justify-center text-base shrink-0 relative">
+              📋
+              <span class="unread-dot absolute top-0 right-0 w-3 h-3 bg-rose-500 rounded-full border-2 border-white"></span>
+            </div>
+            <div class="flex-1 min-w-0">
+              <div class="flex items-center justify-between">
+                <span class="font-bold text-slate-800 text-xs">PM Tanaka</span>
+                <span class="text-[10px] text-slate-400">14:45</span>
+              </div>
+              <div class="text-xs font-bold text-rose-700 truncate">🔴 未読 変更申請の返信</div>
+              <div class="text-[11px] text-slate-400 truncate">1日延長で調整しました。<button onclick="deleteThread('dm-pm', event)" class="absolute top-2 right-2 opacity-0 group-hover:opacity-100 w-6 h-6 rounded-full bg-rose-100 hover:bg-rose-200 text-rose-600 text-xs flex items-center justify-center transition-all" title="非表示にする (DB は保持)">🗑</button></div>
+            </div>
+          </div>
+          <div class="thread-row px-3 py-3 rounded-2xl cursor-pointer hover:bg-white/50 flex items-center gap-3 mb-1 relative group"
+            id="row-dm-kato" data-unread="true" onclick="showThread('dm_kato')">
+            <div class="w-10 h-10 bg-amber-100 rounded-full flex items-center justify-center text-base shrink-0 relative">
+              💡
+              <span class="unread-dot absolute top-0 right-0 w-3 h-3 bg-rose-500 rounded-full border-2 border-white"></span>
+            </div>
+            <div class="flex-1 min-w-0">
+              <div class="flex items-center justify-between">
+                <span class="font-bold text-slate-800 text-xs">Lighting Lead Kato</span>
+                <span class="text-[10px] text-slate-400">13:20</span>
+              </div>
+              <div class="text-xs font-bold text-rose-700 truncate">🔴 未読 テクニカル相談</div>
+              <div class="text-[11px] text-slate-400 truncate">LUTの設定値を共有します。<button onclick="deleteThread('dm-kato', event)" class="absolute top-2 right-2 opacity-0 group-hover:opacity-100 w-6 h-6 rounded-full bg-rose-100 hover:bg-rose-200 text-rose-600 text-xs flex items-center justify-center transition-all" title="非表示にする (DB は保持)">🗑</button></div>
+            </div>
+          </div>
+          {% endif %}
+
+          <!-- 動的 DM threads (state.messages から sender 別 group・mock 連動表示) -->
+          {% for thread in (dm_threads or []) %}
+          <div class="thread-row px-3 py-3 rounded-2xl cursor-pointer hover:bg-white/50 flex items-center gap-3 mb-1"
+            id="row-dm-dynamic-{{ thread.sender_id }}" onclick="showDynamicDM({{ thread.sender_id }})">
+            <div class="w-10 h-10 bg-slate-100 rounded-full flex items-center justify-center text-base shrink-0">👤</div>
+            <div class="flex-1 min-w-0">
+              <div class="flex items-center justify-between">
+                <span class="font-bold text-slate-800 text-xs" translate="no">{{ thread.sender }}</span>
+                <span class="text-[10px] text-slate-400">{{ thread.messages[-1].created_at if thread.messages else '' }}</span>
+              </div>
+              <div class="text-xs font-semibold text-slate-700 truncate">DM ({{ thread.messages|length }}件)</div>
+              <div class="text-[11px] text-slate-400 truncate">{{ thread.messages[-1].body if thread.messages else '' }}</div>
+            </div>
+          </div>
+          {% endfor %}
+        </div>
+
+        <!-- 動的 DM thread data (sender_id → messages 配列) を JS 側で展開可能に -->
+        <script id="dynamic-dm-data" type="application/json">
+        {
+          {% for thread in (dm_threads or []) %}
+          "{{ thread.sender_id }}": {
+            "title": "{{ thread.sender }} — DM",
+            "members": "{{ thread.sender }}, {{ user.name or 'ユーザ' }}",
+            "iconBg": "bg-slate-100",
+            "icon": "👤",
+            "messages": [
+              {% for m in thread.messages %}
+              {
+                "from": "{{ m.sender or thread.sender }}",
+                "time": "{{ m.created_at }}",
+                "side": "left",
+                "text": {{ (m.body or '')|tojson }}
+              }{% if not loop.last %},{% endif %}
+              {% endfor %}
+            ]
+          }{% if not loop.last %},{% endif %}
+          {% endfor %}
+        }
+        </script>
+
+        <div id="list-notice" class="hidden">
+          {% if not demo_mode %}
+          <div class="text-center py-12 text-slate-400 text-xs">
+            <p class="text-4xl mb-2">📭</p>
+            <p class="font-bold">お知らせなし</p>
+            <p class="mt-1">Calendar BE 経由のシステム通知はまだありません</p>
+          </div>
+          {% else %}
+          <div class="thread-row px-3 py-3 rounded-2xl cursor-pointer hover:bg-white/50 flex items-center gap-3 mb-1 relative group"
+            id="row-system" onclick="showThread('system_notice')">
+            <div class="w-10 h-10 bg-slate-100 rounded-full flex items-center justify-center text-base shrink-0">⚙️</div>
+            <div class="flex-1 min-w-0">
+              <div class="flex items-center justify-between">
+                <span class="font-bold text-slate-800 text-xs">Score Admin</span>
+                <span class="text-[10px] text-slate-400">03:05</span>
+              </div>
+              <div class="text-xs font-semibold text-slate-700 truncate">システム更新通知</div>
+              <div class="text-[11px] text-slate-400 truncate">メンテナンスを実施しました。<button onclick="deleteThread('system', event)" class="absolute top-2 right-2 opacity-0 group-hover:opacity-100 w-6 h-6 rounded-full bg-rose-100 hover:bg-rose-200 text-rose-600 text-xs flex items-center justify-center transition-all" title="非表示にする (DB は保持)">🗑</button></div>
+            </div>
+          </div>
+          {% endif %}
+        </div>
+      </div>
+      </div>
+
+    <!-- ===== Right Pane: Conversation ===== -->
+    <div class="flex-1 flex flex-col h-screen bg-white/5">
+      <div id="conv-header" class="px-6 py-4 bg-white/20 backdrop-blur-md border-b border-white/30 shrink-0">
+        <div class="flex items-center gap-3">
+          <div id="conv-icon" class="w-10 h-10 bg-rose-100 rounded-full flex items-center justify-center text-base">🎬</div>
+          <div>
+            <div id="conv-title" class="font-black text-slate-800 text-base"><span translate="no">SHOT_001</span> 関係者 thread</div>
+            <div id="conv-members" class="text-xs text-slate-400"><span translate="no">Director Yamada</span>, <span translate="no">Sato</span></div>
+          </div>
+        </div>
+      </div>
+
+      <div id="conv-messages" class="flex-1 overflow-y-auto p-6 msg-area space-y-4"></div>
+
+      <div class="border-t border-white/40 p-4 bg-white/20 shrink-0 relative">
+        <!-- @ mention autocomplete dropdown -->
+        <div id="mention-dropdown" class="hidden absolute bottom-20 left-4 right-4 bg-white border border-slate-200 rounded-2xl shadow-2xl z-50 max-h-48 overflow-y-auto"></div>
+        <div class="flex gap-3">
+          <input type="text" id="mainInput" placeholder="メッセージを入力... (@ で mention)"
+            oninput="handleMentionInput(event)"
+            onkeydown="handleMentionKeydown(event)"
+            class="flex-1 bg-white/60 border border-white/60 rounded-2xl px-4 py-3 text-sm focus:outline-none focus:border-indigo-300">
+          <button onclick="sendMessage()" class="bg-indigo-600 text-white rounded-2xl px-4 py-3 font-bold text-sm hover:bg-indigo-700 transition-all">送信</button>
+        </div>
+      </div>
+
+    </div>
+  </div>
+</div>
+
+<script>
+const threads = {
+  // ===== SHOT 全体 thread =====
+  shot001: {
+    icon: '🎬', iconBg: 'bg-rose-100',
+    title: 'SHOT_001 関係者 thread',
+    members: 'PM Tanaka, Director Yamada, Kato (Lighting Lead), Sato (Compositor)',
+    messages: [
+      { from: 'Director Yamada', role: '🎬 Director', roleCls: 'bg-rose-100 text-rose-700', time: '10:00', side: 'left',
+        text: '10:00 デイリーレビュー: SHOT_001 v04 確認。全体の方向性 OK・但し空気感とライティングで Retake 発令予定。詳細は各 task thread で。' },
+      { from: 'PM Tanaka', role: '📋 PM', roleCls: 'bg-blue-100 text-blue-700', time: '10:15', side: 'left',
+        text: 'Sato さん、〆切 5/15 厳守でお願いします。中間レビューは 14:00。' },
+      { from: 'Sato', time: '10:20', side: 'right', text: '承知しました。Retake 待機・修正に入ります。' },
+      { from: 'Director Yamada', role: '🎬 Director', roleCls: 'bg-rose-100 text-rose-700', time: '12:00', side: 'left',
+        text: '🔴 Retake 発令: Composite + MattePaint + Lighting 3 工程。各 task thread で詳細指示。',
+        link: { label: '📎 参考資料 8件 →', href: '/reference/1' } },
+      { from: 'Sato', time: '12:40', side: 'right', text: '全 task 確認しました。順次対応します。' },
+    ]
+  },
+  shot002: {
+    icon: '🎬', iconBg: 'bg-rose-100',
+    title: 'SHOT_002 関係者 thread',
+    members: 'PM Tanaka, Director Yamada, Kato (Lighting Lead), Suzuki (Compositor)',
+    messages: [
+      { from: 'Director Yamada', role: '🎬 Director', roleCls: 'bg-rose-100 text-rose-700', time: '23:45', side: 'left',
+        text: '🔴 緊急 Retake: SHOT_002 Composite v04 → v05 。明日 client review に向けて優先対応願います。詳細は task23 thread で。' },
+      { from: 'Suzuki', time: '23:50', side: 'right', text: 'はい、対応します。緊急出勤申請出します。' },
+      { from: 'PM Tanaka', role: '📋 PM', roleCls: 'bg-blue-100 text-blue-700', time: '08:30', side: 'left',
+        text: 'Suzuki さん、進捗状況お知らせください。緊急出勤の代休も後ほど調整します。' },
+    ]
+  },
+  shot003: {
+    icon: '🎬', iconBg: 'bg-rose-100',
+    title: 'SHOT_003 関係者 thread',
+    members: 'PM Tanaka, Director Yamada, Kato (Lighting Lead), Suzuki',
+    messages: [
+      { from: 'Suzuki', time: '13:00', side: 'right',
+        text: 'Look_v02 上げました。Kato さん、まずは部内レビュー願います。' },
+      { from: 'Kato', role: '💡 Lighting', roleCls: 'bg-amber-100 text-amber-700', time: '13:30', side: 'left',
+        text: '色温度のグラデーション良い感じです。部内 OK・Director に上申します。' },
+      { from: 'Kato', role: '💡 Lighting', roleCls: 'bg-amber-100 text-amber-700', time: '14:30', side: 'left',
+        text: 'Yamada さん、Look_v02 上申しました。判定お願いします。' },
+    ]
+  },
+  morning: {
+    icon: '🎬', iconBg: 'bg-rose-100',
+    title: '11:30 朝会議事録 — Ramps チーム',
+    members: 'Director Yamada, PM Tanaka, Kato, Sato, Suzuki',
+    messages: [
+      { from: 'Director Yamada', role: '🎬 Director', roleCls: 'bg-rose-100 text-rose-700', time: '11:30', side: 'left',
+        text: '11:30 朝会開始。本日の議題: ① SHOT_001 v04 Retake方針 ② SHOT_002 緊急対応 ③ SHOT_003 Look レビュー。' },
+      { from: 'PM Tanaka', role: '📋 PM', roleCls: 'bg-blue-100 text-blue-700', time: '11:35', side: 'left',
+        text: 'スケジュール確認: SHOT_001 〆切 5/15・SHOT_002 緊急対応・SHOT_003 進行中。' },
+      { from: 'Kato', role: '💡 Lighting', roleCls: 'bg-amber-100 text-amber-700', time: '11:45', side: 'left',
+        text: 'Look_v05 配布予定: 本日 17:00。Look 工程の整合性確認・各 Compositor は適用願います。' },
+      { from: 'Director Yamada', role: '🎬 Director', roleCls: 'bg-rose-100 text-rose-700', time: '12:00', side: 'left',
+        text: '朝会終了。SHOT_001 Retake は 12:00 ちょうどで発令します。' },
+    ]
+  },
+  mattepaint: {
+    icon: '🖌', iconBg: 'bg-green-100',
+    title: 'SHOT_001 MattePaint v05 完了通知',
+    members: 'Sato (MattePaint担当), Director Yamada, PM Tanaka',
+    messages: [
+      { from: 'Sato', time: '15:30', side: 'right',
+        text: 'MattePaint_v05 修正完了 (12:00 Retake 対応分・色味と空気感調整済)。Approved 判定願います。' },
+      { from: 'Director Yamada', role: '🎬 Director', roleCls: 'bg-rose-100 text-rose-700', time: '16:00', side: 'left',
+        text: 'MattePaint_v05 ✅ Approved。Composite 工程の更新お願いします。' },
+      { from: 'Sato', time: '16:05', side: 'right', text: 'ありがとうございます。Composite v05 修正進めます。' },
+    ]
+  },
+  dm_pm: {
+    icon: '📋', iconBg: 'bg-blue-100',
+    title: 'PM Tanaka — DM',
+    members: 'PM Tanaka, Sato',
+    messages: [
+      { from: 'Sato', time: '13:30', side: 'right',
+        text: 'SHOT_001 Composite Retake 3 工程同時対応・〆切 5/15 で問題ないでしょうか?' },
+      { from: 'PM Tanaka', role: '📋 PM', roleCls: 'bg-blue-100 text-blue-700', time: '14:00', side: 'left',
+        text: '了解。〆切自体は 5/15 厳守ですが・無理あれば 1 日延長検討します。状況見せてください。' },
+      { from: 'Sato', time: '14:05', side: 'right', text: '今のところ 17:00 までに MattePaint・19:00 までに Composite v05 で進めます。' },
+      { from: 'PM Tanaka', role: '📋 PM', roleCls: 'bg-blue-100 text-blue-700', time: '14:10', side: 'left',
+        text: '了解。何かあれば即報告お願いします。' },
+    ]
+  },
+  dm_kato: {
+    icon: '💡', iconBg: 'bg-amber-100',
+    title: 'Lighting Lead Kato — DM',
+    members: 'Kato, Sato',
+    messages: [
+      { from: 'Sato', time: '13:00', side: 'right',
+        text: 'Kato さん、SHOT_001 Lighting Retake 対応中で LUT 設定値の判断に迷ってます。アドバイス頂けますか?' },
+      { from: 'Kato', role: '💡 Lighting', roleCls: 'bg-amber-100 text-amber-700', time: '13:20', side: 'left',
+        text: 'LUT 設定値共有します: pre-grade Rec.709 base + post に dust LUT を 30% ブレンド。本日 17:00 Look_v05 で全体統一する予定なので・Lighting も Look_v05 適用後 再調整推奨。' },
+      { from: 'Sato', time: '13:25', side: 'right', text: '了解です。Look_v05 待ってから本格修正します。応急処置で v05 仮対応を上げます。' },
+      { from: 'Sato', time: '15:00', side: 'right',
+        text: 'すみません、別件で SHOT_005 render 遅延出てます。Lighting node 詰まり気味。' },
+      { from: 'Kato', role: '💡 Lighting', roleCls: 'bg-amber-100 text-amber-700', time: '15:10', side: 'left',
+        text: 'trouble 受信しました。render farm 担当に振替依頼します。Sato さんは Lighting 修正続けて下さい。' },
+    ]
+  },
+  system_notice: {
+    icon: '⚙️', iconBg: 'bg-slate-100',
+    title: 'システム更新通知 — Score Admin',
+    members: 'Score Admin',
+    messages: [
+      { from: 'Score Admin', role: '⚙️ System', roleCls: 'bg-slate-100 text-slate-700', time: '03:05', side: 'left',
+        text: '本日 03:00〜03:05 に Score のメンテナンスを実施しました。' },
+      { from: 'Score Admin', role: '⚙️ System', roleCls: 'bg-slate-100 text-slate-700', time: '03:05', side: 'left',
+        text: '更新内容: (1) QC ビューアの比較機能を強化 (2) 通知センターのリアルタイム配信遅延を改善 (3) Calendar 連携 API の安定性向上。' },
+      { from: 'Score Admin', role: '⚙️ System', roleCls: 'bg-slate-100 text-slate-700', time: '03:05', side: 'left',
+        text: '稼働状況: 正常稼働中。アクセスに支障が出ている場合はブラウザのキャッシュをクリアしてください。' },
+      { from: 'Score Admin', role: '⚙️ System', roleCls: 'bg-slate-100 text-slate-700', time: '03:05', side: 'left',
+        text: '不具合がございましたら Score サポート(support@score.local)までご連絡ください。',
+        link: { label: '📖 ヘルプページを開く →', href: '/help' } },
+    ]
+  },
+  // ===== Task 別 thread (SHOT 全体 thread とは別系統・task assignee + 関連 Lead 限定) =====
+  // task15 — SHOT_001 Composite Retake (12:00 発令)
+  task15: {
+    icon: '🎨', iconBg: 'bg-emerald-100',
+    title: 'SHOT_001 Composite task thread',
+    members: 'Sato (Composite担当), Director Yamada',
+    messages: [
+      { from: 'Sato', time: '08:00', side: 'right', text: 'Composite v04 を上げました。色味 + 空気感を v03 から修正済です。' },
+      { from: 'Director Yamada', role: '🎬 Director', roleCls: 'bg-rose-100 text-rose-700', time: '10:00', side: 'left',
+        text: '10:00 デイリーレビュー: v04 確認。色味 OK ですがリムライト弱め・空気感もっと夕方に。再 Retake 検討中。' },
+      { from: 'Director Yamada', role: '🎬 Director', roleCls: 'bg-rose-100 text-rose-700', time: '12:00', side: 'left',
+        text: '🔴 Retake 発令: v05 へ修正願います。詳細指示は /director_retake_input で発行・参考資料 8 件添付。',
+        link: { label: '📎 参考資料 →', href: '/reference/1?task_id=15' } },
+      { from: 'Sato', time: '12:40', side: 'right', text: '承知しました。MattePaint Retake と並行で v05 修正します。19:00 までに提出予定。' },
+    ]
+  },
+  // task14 — SHOT_001 MattePaint Retake (12:00 発令)
+  task14: {
+    icon: '🖼️', iconBg: 'bg-purple-100',
+    title: 'SHOT_001 MattePaint task thread',
+    members: 'Sato (MattePaint担当), Director Yamada',
+    messages: [
+      { from: 'Sato', time: '07:30', side: 'right', text: 'MattePaint v04 を上げました。背景空気感 + 夕焼け表現 を強化済です。' },
+      { from: 'Director Yamada', role: '🎬 Director', roleCls: 'bg-rose-100 text-rose-700', time: '12:00', side: 'left',
+        text: '🔴 Retake: 空気感をもっと夕方に。光量を落として、夕焼けの黄金色を強めに。v05 で対応願います。' },
+      { from: 'Sato', time: '12:40', side: 'right', text: '承知しました。色温度を 5600K → 4800K まで下げて再調整します。15:30 までに v05 提出予定。' },
+      { from: 'Sato', time: '15:30', side: 'right', text: 'MattePaint_v05 修正完了・Approved 判定願います。' },
+      { from: 'Director Yamada', role: '🎬 Director', roleCls: 'bg-rose-100 text-rose-700', time: '16:00', side: 'left',
+        text: 'MattePaint_v05 ✅ Approved。Composite に進めて下さい。' },
+    ]
+  },
+  // task13 — SHOT_001 FX reviewing (Director 確認待ち)
+  task13: {
+    icon: '✨', iconBg: 'bg-blue-100',
+    title: 'SHOT_001 FX task thread',
+    members: 'Sato (FX担当), Director Yamada',
+    messages: [
+      { from: 'Sato', time: '08:30', side: 'right', text: 'FX v04 上げました。ダスト粒子サイズ + 動き量 を調整済。Reviewing 中です。' },
+      { from: 'Director Yamada', role: '🎬 Director', roleCls: 'bg-rose-100 text-rose-700', time: '10:30', side: 'left',
+        text: 'デイリーレビューで確認。粒子量 OK・但し前景部分でやや過剰。Composite v05 提出後 まとめて判定します。' },
+    ]
+  },
+  // task12 — SHOT_001 Lighting Retake (12:00 発令・Kato 助言中)
+  task12: {
+    icon: '💡', iconBg: 'bg-amber-100',
+    title: 'SHOT_001 Lighting task thread',
+    members: 'Sato (Lighting担当), Kato (Lighting Lead), Director Yamada',
+    messages: [
+      { from: 'Sato', time: '08:45', side: 'right', text: 'Lighting v04 上げました。リムライトを 1 段強くした版です。' },
+      { from: 'Director Yamada', role: '🎬 Director', roleCls: 'bg-rose-100 text-rose-700', time: '12:00', side: 'left',
+        text: '🔴 Retake: リムライトは OK・但し色温度を寒色寄りに調整願います (夕焼けではなく夜の入り口感)。' },
+      { from: 'Sato', time: '12:50', side: 'right', text: '了解です。Kato さん、寒色寄り LUT のアドバイス頂けますか?' },
+      { from: 'Kato', role: '💡 Lighting', roleCls: 'bg-amber-100 text-amber-700', time: '13:20', side: 'left',
+        text: 'LUT 設定値: pre-grade Rec.709 base + post に dust LUT を 30% ブレンド。本日 17:00 配布の Look_v05 適用後 再調整推奨。' },
+      { from: 'Sato', time: '13:25', side: 'right', text: '了解。応急処置で v05 仮対応上げて・Look_v05 配布後本格修正します。' },
+    ]
+  },
+  // task22 — SHOT_002 Lighting reviewing (Kato 担当・Director 確認待ち)
+  task22: {
+    icon: '💡', iconBg: 'bg-amber-100',
+    title: 'SHOT_002 Lighting task thread',
+    members: 'Kato (Lighting担当 + Lead), Director Yamada',
+    messages: [
+      { from: 'Kato', role: '💡 Lighting', roleCls: 'bg-amber-100 text-amber-700', time: '09:00', side: 'right',
+        text: 'SHOT_002 Lighting v04 上げました。color temperature 統一・rim light 強調済。' },
+      { from: 'Director Yamada', role: '🎬 Director', roleCls: 'bg-rose-100 text-rose-700', time: '10:00', side: 'left',
+        text: 'v04 確認しました。良い感じです。SHOT_001 の Retake 整合性を見てから 改めて判定します。' },
+    ]
+  },
+  // task23 — SHOT_002 Composite Retake (緊急・23:45 前日発令)
+  task23: {
+    icon: '🎨', iconBg: 'bg-emerald-100',
+    title: 'SHOT_002 Composite task thread (緊急)',
+    members: 'Suzuki (Composite担当), Director Yamada, PM Tanaka',
+    messages: [
+      { from: 'Suzuki', time: '20:00', side: 'right', text: 'SHOT_002 Composite v04 上げました。' },
+      { from: 'Director Yamada', role: '🎬 Director', roleCls: 'bg-rose-100 text-rose-700', time: '23:45', side: 'left',
+        text: '🔴 緊急 Retake: 明日の clients review に向け優先対応願います。timing + 色味で v05 修正必要。' },
+      { from: 'Suzuki', time: '23:50', side: 'right', text: '緊急出勤申請出します。明朝 10:00 までに v05 提出予定。' },
+      { from: 'PM Tanaka', role: '📋 PM', roleCls: 'bg-blue-100 text-blue-700', time: '08:30', side: 'left',
+        text: 'Suzuki さん、進捗どうですか? clients review は 11:00 から。' },
+      { from: 'Suzuki', time: '08:35', side: 'right', text: '進行中・10:00 提出間に合わせます。' },
+    ]
+  },
+  // task33 — SHOT_003 Look reviewing (Suzuki 担当・Kato 部内 OK → Director 上申待ち)
+  task33: {
+    icon: '💡', iconBg: 'bg-amber-100',
+    title: 'SHOT_003 Look task thread',
+    members: 'Suzuki (Look担当), Kato (Lighting Lead), Director Yamada',
+    messages: [
+      { from: 'Suzuki', time: '13:00', side: 'right',
+        text: 'Look_v02 上げました。Kato さん、まずは部内レビュー願います。' },
+      { from: 'Kato', role: '💡 Lighting', roleCls: 'bg-amber-100 text-amber-700', time: '13:30', side: 'left',
+        text: '色温度のグラデーション良い感じです・特に夕焼け部分の表現が綺麗。部内 OK・Director に上申します。' },
+      { from: 'Kato', role: '💡 Lighting', roleCls: 'bg-amber-100 text-amber-700', time: '14:30', side: 'left',
+        text: 'Yamada さん、Look_v02 上申しました。判定願います。' },
+    ]
+  }
+};
+
+let activeThread = null;
+
+function buildBubble(msg) {
+  const isRight = msg.side === 'right';
+  const roleBadge = msg.role
+    ? `<span class="text-[10px] px-2 py-0.5 rounded-full font-bold ${msg.roleCls}">${msg.role}</span>`
+    : '';
+  const linkHtml = msg.link
+    ? `<a href="${msg.link.href}" class="block mt-2 text-indigo-600 text-xs font-semibold hover:underline">${msg.link.label}</a>`
+    : '';
+
+  if (isRight) {
+    return `
+      <div class="flex justify-end">
+        <div class="max-w-sm">
+          <div class="text-[10px] text-slate-400 text-right mb-1">Sato · ${msg.time}</div>
+          <div class="bg-indigo-50 border border-indigo-100 p-3 bubble-right text-sm text-slate-700">${msg.text}</div>
+        </div>
+      </div>`;
+  } else {
+    return `
+      <div class="flex gap-3 items-end">
+        <div class="max-w-sm">
+          <div class="flex items-center gap-2 mb-1">
+            <span class="text-xs font-bold text-slate-700">${msg.from}</span>
+            ${roleBadge}
+            <span class="text-[10px] text-slate-400">${msg.time}</span>
+          </div>
+          <div class="bg-white/60 border border-white/50 p-3 bubble-left text-sm text-slate-700">${msg.text}${linkHtml}</div>
+        </div>
+      </div>`;
+  }
+}
+
+// 動的 DM data を server から JSON で受取り threads に merge
+(function(){
+  const el = document.getElementById('dynamic-dm-data');
+  if (!el) return;
+  try {
+    const dyn = JSON.parse(el.textContent);
+    Object.keys(dyn).forEach(function(senderId){
+      threads['dyn_' + senderId] = dyn[senderId];
+    });
+  } catch(e) { console.warn('dynamic DM merge failed:', e); }
+})();
+
+function showDynamicDM(senderId) {
+  showThread('dyn_' + senderId);
+}
+
+// === 未読 badge + tab 別 counts 計算 (hidden row 除外) ===
+function _isRowVisible(row) {
+  return row && row.style.display !== 'none';
+}
+function _updateUnreadBadge() {
+  const tabs = ['shot', 'dm', 'notice'];
+  let totalUnread = 0;
+  tabs.forEach(tab => {
+    const list = document.getElementById('list-' + tab);
+    if (!list) return;
+    const allRows = list.querySelectorAll('.thread-row[id^="row-"]');
+    let visible = 0;
+    let unread = 0;  // 未読 thread 数 (個別 row count の sum でも tab 別 badge 表示でも使う)
+    let unreadMsgCount = 0;  // 個別 row の未読 message 数 sum
+    allRows.forEach(r => {
+      if (!_isRowVisible(r)) return;
+      visible++;
+      const isUnread = r.dataset.unread === 'true';
+      if (isUnread) unread++;
+      // 個別 row 内 row-unread-count badge の数字を sum
+      const cntEl = r.querySelector('.row-unread-count');
+      if (cntEl && cntEl.style.display !== 'none') {
+        const n = parseInt(cntEl.textContent.trim()) || 0;
+        unreadMsgCount += n;
+      }
+    });
+    const cnt = document.getElementById('tab-count-' + tab);
+    if (cnt) cnt.textContent = '(' + visible + ')';
+    const ub = document.getElementById('tab-unread-' + tab);
+    if (ub) {
+      // 表示は max(thread単位未読, msg単位未読) を使用 — どちらが意味ある値かを許容
+      const showVal = unreadMsgCount > 0 ? unreadMsgCount : unread;
+      ub.textContent = String(showVal);
+      ub.classList.toggle('hidden', showVal === 0);
+    }
+    totalUnread += (unreadMsgCount > 0 ? unreadMsgCount : unread);
+  });
+  // header 全体 未読 badge
+  const badge = document.getElementById('unread-badge');
+  if (badge) {
+    badge.textContent = '未読 ' + totalUnread;
+    badge.style.display = totalUnread === 0 ? 'none' : '';
+  }
+  // sidemenu の 「🔔 通知」 badge も同期 (任意・存在すれば更新)
+  const sideBadge = document.getElementById('sidemenu-unread-badge');
+  if (sideBadge) {
+    sideBadge.textContent = String(totalUnread);
+    sideBadge.classList.toggle('hidden', totalUnread === 0);
+  }
+}
+
+// === thread 削除 (UI 非表示・DB 上は保持・hidden 状態を localStorage) ===
+function deleteThread(id, ev) {
+  if (ev) { ev.stopPropagation(); ev.preventDefault(); }
+  if (!confirm('この thread を一覧から非表示にしますか?\n(DB 上には保持されます・将来復元可能)')) return;
+  const row = document.getElementById('row-' + id);
+  if (!row) return;
+  row.style.display = 'none';
+  try { localStorage.setItem('score_thread_hidden_' + id, '1'); } catch(e) {}
+  if (id === activeThread) {
+    activeThread = null;
+    const area = document.getElementById('conv-messages');
+    if (area) area.innerHTML = '<p class="text-center text-sm text-slate-400 mt-8">スレッドを選択してください</p>';
+  }
+  _updateUnreadBadge();
+}
+
+// === Page load 時 — localStorage の既読/非表示 state を反映 ===
+(function(){
+  document.querySelectorAll('.thread-row[id^="row-"]').forEach(function(row) {
+    const id = row.id.replace('row-', '');
+    if (localStorage.getItem('score_thread_hidden_' + id) === '1') {
+      row.style.display = 'none';
+      return;
+    }
+    if (localStorage.getItem('score_thread_read_' + id) === '1') {
+      row.dataset.unread = 'false';
+      const dot = row.querySelector('.unread-dot');
+      if (dot) dot.remove();
+      const unreadText = row.querySelector('.text-rose-700');
+      if (unreadText) {
+        unreadText.className = 'text-xs font-semibold text-slate-700 truncate';
+        unreadText.textContent = unreadText.textContent.replace(/^🔴 未読\s*/, '');
+      }
+      const rowCnt = row.querySelector('.row-unread-count');
+      if (rowCnt) rowCnt.style.display = 'none';
+    }
+  });
+  _updateUnreadBadge();
+
+  // URL ?thread=XXX で自動 thread 表示 (/shot/{id} 「💬 thread を開く」からの遷移時)
+  const params = new URLSearchParams(location.search);
+  const targetThread = params.get('thread');
+  if (targetThread) {
+    // 該当 thread が threads dict に存在すれば showThread・なければ SHOT tab を開いて選択
+    setTimeout(() => {
+      if (typeof threads !== 'undefined' && threads[targetThread]) {
+        // tab を thread タイプ別に切替
+        if (targetThread.startsWith('task')) switchTab('shot');  // task thread は SHOT tab で表示
+        else if (targetThread.startsWith('shot')) switchTab('shot');
+        else if (targetThread.startsWith('dm') || targetThread.startsWith('dyn_')) switchTab('dm');
+        else if (targetThread === 'system_notice' || targetThread === 'morning') switchTab('notice');
+        showThread(targetThread);
+      } else {
+        console.warn('thread not found:', targetThread);
+      }
+    }, 100);
+  }
+})();
+
+// thread key → notification id 紐付け (通知センターとの sync 用)
+const _threadToNotif = {
+  'shot001': [1, 6],       // Director Yamada Retake指示 + Yamada v04 上げて
+  'shotB007': [2],          // SHOT_B_007 Layout Retake
+  'mattepaint': [4],        // MattePaint_v05 Approved by Suzuki
+  'morning': [3],           // 朝会 AI 提案
+  'dm_pm': [5],             // PM Tanaka 〆切
+  'system_notice': [7],     // System v2.1 リリース
+};
+
+function showThread(id) {
+  const t = threads[id];
+  if (!t) return;
+  if (activeThread) {
+    const prevRow = document.getElementById('row-' + activeThread);
+    if (prevRow) prevRow.classList.remove('bg-indigo-50', 'border-l-4', 'border-indigo-400');
+  }
+  activeThread = id;
+  const row = document.getElementById('row-' + id);
+  if (row) row.classList.add('bg-indigo-50', 'border-l-4', 'border-indigo-400');
+
+  // thread 表示 = 既読化 → 関連 notification も localStorage で既読 mark
+  const notifIds = _threadToNotif[id] || [];
+  notifIds.forEach(nid => {
+    try { localStorage.setItem('score_notif_read_' + nid, '1'); } catch(e) {}
+  });
+  // thread 本体も既読化 (row の unread dot + 未読 text + 個別 unread count badge を消す)
+  if (row) {
+    row.dataset.unread = 'false';
+    const dot = row.querySelector('.unread-dot');
+    if (dot) dot.remove();
+    const unreadText = row.querySelector('.text-rose-700');
+    if (unreadText) {
+      unreadText.className = 'text-xs font-semibold text-slate-700 truncate';
+      unreadText.textContent = unreadText.textContent.replace(/^🔴 未読\s*/, '');
+    }
+    // 個別 unread count badge (右側の rose 円形数字) を非表示化
+    const rowCnt = row.querySelector('.row-unread-count');
+    if (rowCnt) rowCnt.style.display = 'none';
+    try { localStorage.setItem('score_thread_read_' + id, '1'); } catch(e) {}
+  }
+  // DM 未読 badge を再計算
+  _updateUnreadBadge();
+
+  const iconEl = document.getElementById('conv-icon');
+  iconEl.className = `w-10 h-10 ${t.iconBg} rounded-full flex items-center justify-center text-base`;
+  iconEl.textContent = t.icon;
+  document.getElementById('conv-title').textContent = t.title;
+  document.getElementById('conv-members').textContent = t.members;
+
+  const area = document.getElementById('conv-messages');
+  area.innerHTML = t.messages.map(buildBubble).join('');
+  area.scrollTop = area.scrollHeight;
+}
+
+function switchTab(tab) {
+  ['shot', 'dm', 'notice'].forEach(t => {
+    document.getElementById('list-' + t).classList.toggle('hidden', t !== tab);
+    const btn = document.getElementById('tab-' + t);
+    btn.classList.toggle('bg-indigo-600', t === tab);
+    btn.classList.toggle('text-white', t === tab);
+  });
+}
+
+switchTab('shot');
+{% if demo_mode %}
+// demo mode のみ default で mock thread を開く・real mode では空白表示で誤解防止
+showThread('shot001');
+{% else %}
+// real Calendar 接続時は thread 選択なし(右ペインに promp 表示)
+const _convArea = document.getElementById('conv-messages');
+if (_convArea) _convArea.innerHTML = '<div class="text-center text-slate-400 py-16 px-6"><p class="text-5xl mb-3">💬</p><p class="text-sm font-bold">thread を選択してください</p><p class="text-xs mt-2">左の thread 一覧から選ぶか・右上「✏️ 新規DM」 で開始</p></div>';
+const _convTitle = document.getElementById('conv-title');
+if (_convTitle) _convTitle.textContent = '';
+const _convMembers = document.getElementById('conv-members');
+if (_convMembers) _convMembers.textContent = '';
+{% endif %}
+
+let dmMode = null;
+const dmAvatarMap = {
+  yamada: { char: '山', bg: 'bg-purple-600' },
+  tanaka: { char: '田', bg: 'bg-emerald-600' },
+  kato:   { char: '加', bg: 'bg-amber-500' },
+  suzuki: { char: '鈴', bg: 'bg-indigo-400' },
+  sato:   { char: '佐', bg: 'bg-indigo-600' },
+};
+
+function openNewDMModal() { document.getElementById('newDMModal').classList.remove('hidden'); }
+function closeNewDMModal() { document.getElementById('newDMModal').classList.add('hidden'); }
+
+function startDM(userId, userName) {
+  closeNewDMModal();
+  if (activeThread) {
+    const prevRow = document.getElementById('row-' + activeThread);
+    if (prevRow) prevRow.classList.remove('bg-indigo-50', 'border-l-4', 'border-indigo-400');
+  }
+  activeThread = null;
+  dmMode = { userId, userName };
+
+  const av = dmAvatarMap[userId] || { char: userName[0], bg: 'bg-slate-400' };
+  const iconEl = document.getElementById('conv-icon');
+  iconEl.className = `w-10 h-10 ${av.bg} rounded-full flex items-center justify-center text-sm font-black text-white`;
+  iconEl.textContent = av.char;
+  document.getElementById('conv-title').textContent = userName + ' へのDM';
+  document.getElementById('conv-members').textContent = '🟢 オンライン';
+
+  const area = document.getElementById('conv-messages');
+  area.innerHTML = '<p class="text-center text-sm text-slate-400 mt-8">DM を開始しましょう</p>';
+  switchTab('dm');
+}
+
+// ===== @mention 機能 (Discord 風 autocomplete) =====
+function _getActiveParticipants() {
+  // active thread の members 文字列を name list に parse
+  if (!activeThread || !threads[activeThread]) return [];
+  const members = threads[activeThread].members || '';
+  // "PM Tanaka, Director Yamada, Kato, Sato" → ["Tanaka", "Yamada", "Kato", "Sato"]
+  return members.split(/[,、]/)
+    .map(s => s.replace(/\(.*?\)/g, '').trim())
+    .map(s => s.replace(/^(PM|Director|Lighting Lead|担当|MattePaint|Composite|Animation|FX|Look)\s+/i, ''))
+    .map(s => s.replace(/\s+(PM|Director|担当)$/i, ''))
+    .filter(Boolean);
+}
+function handleMentionInput(ev) {
+  const input = ev.target;
+  const cursor = input.selectionStart;
+  const text = input.value.substring(0, cursor);
+  const lastAt = text.lastIndexOf('@');
+  const dropdown = document.getElementById('mention-dropdown');
+  if (!dropdown) return;
+  if (lastAt < 0 || /\s/.test(text.substring(lastAt + 1))) {
+    dropdown.classList.add('hidden');
+    return;
+  }
+  const query = text.substring(lastAt + 1).toLowerCase();
+  const participants = _getActiveParticipants();
+  const matches = participants.filter(p => p.toLowerCase().includes(query));
+  if (matches.length === 0) {
+    dropdown.classList.add('hidden');
+    return;
+  }
+  dropdown.innerHTML = matches.map(name =>
+    `<div class="px-4 py-2 cursor-pointer hover:bg-indigo-50 text-sm flex items-center gap-2" onclick="insertMention('${name}')">
+      <span class="w-6 h-6 rounded-full bg-indigo-100 text-indigo-700 flex items-center justify-center text-xs font-bold">@</span>
+      <span class="font-bold text-slate-700" translate="no">${name}</span>
+    </div>`
+  ).join('');
+  dropdown.classList.remove('hidden');
+}
+function handleMentionKeydown(ev) {
+  const dropdown = document.getElementById('mention-dropdown');
+  if (ev.key === 'Enter') {
+    if (dropdown && !dropdown.classList.contains('hidden')) {
+      // first match を選択
+      const first = dropdown.querySelector('div');
+      if (first) { first.click(); ev.preventDefault(); return; }
+    }
+    sendMessage();
+    ev.preventDefault();
+    return;
+  }
+  if (ev.key === 'Escape' && dropdown) {
+    dropdown.classList.add('hidden');
+  }
+}
+function insertMention(name) {
+  const input = document.getElementById('mainInput');
+  const cursor = input.selectionStart;
+  const text = input.value;
+  const lastAt = text.lastIndexOf('@', cursor - 1);
+  if (lastAt < 0) return;
+  const before = text.substring(0, lastAt);
+  const after = text.substring(cursor);
+  input.value = before + '@' + name + ' ' + after;
+  const newPos = lastAt + name.length + 2;
+  input.focus();
+  input.setSelectionRange(newPos, newPos);
+  document.getElementById('mention-dropdown').classList.add('hidden');
+}
+// メッセージ中の @mention を強調 (HTML render 時)
+function _highlightMentions(text) {
+  return text.replace(/@([A-Za-zあ-ん0-9_]+)/g, '<span class="bg-indigo-100 text-indigo-700 font-bold rounded px-1">@$1</span>');
+}
+
+function sendMessage() {
+  const input = document.getElementById('mainInput');
+  const msg = input.value.trim();
+  // 新規 DM mode or 既存 thread どちらか active であれば送信可
+  if (!msg || (!dmMode && !activeThread)) { input.value = ''; return; }
+  // @mention 抽出 (notification 用 — 暫定 alert で確認)
+  const mentions = (msg.match(/@([A-Za-zあ-ん0-9_]+)/g) || []);
+  const area = document.getElementById('conv-messages');
+  const now = new Date().toLocaleTimeString('ja-JP', {hour: '2-digit', minute: '2-digit'});
+  area.innerHTML += `
+    <div class="flex justify-end">
+      <div class="max-w-sm">
+        <div class="text-[10px] text-slate-400 text-right mb-1">{{ user.name or 'Me' }} · ${now}</div>
+        <div class="bg-indigo-50 border border-indigo-100 p-3 bubble-right text-sm text-slate-700">${_highlightMentions(msg)}</div>
+      </div>
+    </div>`;
+  input.value = '';
+  document.getElementById('mention-dropdown').classList.add('hidden');
+  area.scrollTop = area.scrollHeight;
+  if (mentions.length > 0) {
+    console.log('Mentions extracted:', mentions);
+    // 将来: 各 mention user の notification を生成・POST /api/bff/messages の mentions field で渡す
+  }
+}
+</script>
+
+<!-- 新規DM モーダル -->
+<div id="newDMModal" class="hidden fixed inset-0 bg-black/50 z-50 flex items-center justify-center"
+     onclick="if(event.target===this)closeNewDMModal()">
+  <div class="bg-white rounded-3xl p-6 w-full max-w-md mx-4 shadow-2xl">
+    <div class="flex items-center justify-between mb-4">
+      <h3 class="font-black text-slate-800 text-lg">新規DM — 宛先を選択</h3>
+      <button onclick="closeNewDMModal()" class="text-slate-400 hover:text-slate-600 text-2xl leading-none">✕</button>
+    </div>
+    <div class="space-y-2 max-h-64 overflow-y-auto">
+      <p class="text-xs text-slate-400 font-bold px-2 py-1">👤 個人 (自分以外の全員)</p>
+      {% set _self_email = (user.email or '').lower() if user else '' %}
+      {% if _self_email != 'yamada@studiobokan.com' %}
+      <button onclick="startDM('yamada', 'Director Yamada')"
+              class="w-full flex items-center gap-3 p-3 rounded-2xl hover:bg-indigo-50 transition text-left">
+        <span class="w-8 h-8 rounded-full bg-purple-600 text-white text-xs font-black flex items-center justify-center">山</span>
+        <div><p class="font-black text-slate-800 text-sm" translate="no">Director Yamada</p><p class="text-xs text-slate-400">Director</p></div>
+      </button>
+      {% endif %}
+      {% if _self_email != 'tanaka@studiobokan.com' %}
+      <button onclick="startDM('tanaka', 'PM Tanaka')"
+              class="w-full flex items-center gap-3 p-3 rounded-2xl hover:bg-indigo-50 transition text-left">
+        <span class="w-8 h-8 rounded-full bg-emerald-600 text-white text-xs font-black flex items-center justify-center">田</span>
+        <div><p class="font-black text-slate-800 text-sm" translate="no">PM Tanaka</p><p class="text-xs text-slate-400">PM</p></div>
+      </button>
+      {% endif %}
+      {% if _self_email != 'kato@studiobokan.com' %}
+      <button onclick="startDM('kato', 'Lighting Lead Kato')"
+              class="w-full flex items-center gap-3 p-3 rounded-2xl hover:bg-indigo-50 transition text-left">
+        <span class="w-8 h-8 rounded-full bg-amber-500 text-white text-xs font-black flex items-center justify-center">加</span>
+        <div><p class="font-black text-slate-800 text-sm" translate="no">Lighting Lead Kato</p><p class="text-xs text-slate-400">Lighting Lead</p></div>
+      </button>
+      {% endif %}
+      {% if _self_email != 'sato@studiobokan.com' %}
+      <button onclick="startDM('sato', 'Sato')"
+              class="w-full flex items-center gap-3 p-3 rounded-2xl hover:bg-indigo-50 transition text-left">
+        <span class="w-8 h-8 rounded-full bg-indigo-600 text-white text-xs font-black flex items-center justify-center">佐</span>
+        <div><p class="font-black text-slate-800 text-sm" translate="no">Sato</p><p class="text-xs text-slate-400">Compositor</p></div>
+      </button>
+      {% endif %}
+      {% if _self_email != 'suzuki@studiobokan.com' %}
+      <button onclick="startDM('suzuki', 'Suzuki')"
+              class="w-full flex items-center gap-3 p-3 rounded-2xl hover:bg-indigo-50 transition text-left">
+        <span class="w-8 h-8 rounded-full bg-indigo-400 text-white text-xs font-black flex items-center justify-center">鈴</span>
+        <div><p class="font-black text-slate-800 text-sm" translate="no">Suzuki</p><p class="text-xs text-slate-400">Compositor</p></div>
+      </button>
+      {% endif %}
+      {% if _self_email != 'ryoji@studiobokan.com' %}
+      <button onclick="startDM('ryoji', 'Ryoji Bokan')"
+              class="w-full flex items-center gap-3 p-3 rounded-2xl hover:bg-indigo-50 transition text-left">
+        <span class="w-8 h-8 rounded-full bg-slate-700 text-white text-xs font-black flex items-center justify-center">凌</span>
+        <div><p class="font-black text-slate-800 text-sm" translate="no">Ryoji Bokan</p><p class="text-xs text-slate-400">Lead (殿)</p></div>
+      </button>
+      {% endif %}
+    </div>
+  </div>
+</div>
+
+
+
+<!-- Language Modal -->
+<div id="language-modal" class="hidden fixed inset-0 bg-black/30 backdrop-blur-sm flex items-center justify-center z-50">
+  <div class="bg-white/90 backdrop-blur-xl border border-white/60 rounded-3xl shadow-2xl p-8 max-w-sm w-full mx-4 flex flex-col gap-4">
+    <h3 class="font-black text-slate-800 text-lg text-center">🌐 言語を選択</h3>
+    <button class="w-full py-3 bg-white border border-slate-200 rounded-2xl font-bold text-slate-700 hover:bg-slate-50 transition-all">繁體中文</button>
+    <button class="w-full py-3 bg-indigo-600 text-white rounded-2xl font-bold transition-all">日本語（現在）</button>
+    <button class="w-full py-3 bg-white border border-slate-200 rounded-2xl font-bold text-slate-700 hover:bg-slate-50 transition-all">English</button>
+    <p class="text-center text-xs text-slate-400">段階的に拡張中</p>
+    <button onclick="closeLanguageModal()" class="w-full py-2.5 bg-slate-100 hover:bg-slate-200 text-slate-600 font-bold rounded-2xl transition-all">閉じる</button>
+  </div>
+</div>
+<script>
+function openLanguageModal() { document.getElementById('language-modal').classList.remove('hidden'); }
+function closeLanguageModal() { document.getElementById('language-modal').classList.add('hidden'); }
+</script>
+{% endblock %}

@@ -1,0 +1,606 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Score — 退勤報告</title>
+<script src="https://cdn.tailwindcss.com"></script>
+<style>
+@keyframes fadeIn { from { opacity:0; transform:translateY(6px); } to { opacity:1; transform:translateY(0); } }
+.fade-in { animation: fadeIn 0.4s ease-out forwards; }
+#toast {
+  position: fixed; top: 24px; left: 50%; transform: translateX(-50%);
+  background: #1e293b; color: white; font-weight: 700;
+  padding: 12px 28px; border-radius: 999px; box-shadow: 0 8px 32px rgba(0,0,0,0.2);
+  opacity: 0; transition: opacity 0.3s; pointer-events: none; z-index: 9999;
+}
+#toast.show { opacity: 1; }
+</style>
+</head>
+<body class="min-h-screen bg-gradient-to-br from-[#E0F2FE] via-[#F3E8FF] to-[#FCE7F3] font-sans text-slate-800 flex h-screen overflow-hidden">
+
+<div id="toast">✅ 前日報告を提出しました</div>
+
+{# 殿御命 2026-06-03 是正: login 直後 強制 prompt フロー (mode=previous + return=routine) のみ sidemenu 非表示
+   sidemenu からの任意アクセスは sidemenu 表示維持 #}
+{% set _force_prompt = (mode == 'previous' and request.query_params.get('return') == 'routine') %}
+{% if not _force_prompt %}
+{% include '_sidemenu.html' %}
+{% endif %}
+
+<div class="flex-1 {% if not _force_prompt %}ml-24{% endif %} overflow-y-auto pb-32">
+<div class="max-w-2xl mx-auto px-4 pt-8">
+
+  <!-- Mode switcher -->
+  <div class="bg-white/40 backdrop-blur-xl border border-white/60 rounded-3xl shadow-xl p-2 flex gap-2 mb-8">
+    <button id="btn-prev"
+      class="flex-1 py-3 rounded-xl font-bold text-sm transition-all text-slate-600"
+      onclick="setMode('prev')">
+      📅 前日振返り（遡及）
+    </button>
+    <button id="btn-today"
+      class="flex-1 py-3 rounded-xl font-bold text-sm transition-all text-slate-600"
+      onclick="setMode('today')">
+      🚪 本日退勤
+    </button>
+  </div>
+
+  <!-- 過去 7 日履歴 panel (nibu 殿納品 2026-06-01 GET /api/me/timecards 結線) -->
+  {% if timecards_history %}
+  <details class="mb-4 bg-white/40 backdrop-blur-xl border border-white/60 rounded-2xl shadow-md">
+    <summary class="cursor-pointer p-3 flex items-center gap-2 select-none">
+      <span class="text-base">🕘</span>
+      <span class="font-black text-slate-800 text-sm">過去 7 日の退勤履歴</span>
+      <span class="ml-2 text-xs bg-indigo-100 text-indigo-700 rounded-full px-2 py-0.5 font-bold">{{ timecards_history|length }} 件</span>
+      <span class="ml-auto text-slate-400 text-xs">▼</span>
+    </summary>
+    <div class="px-4 pb-4 border-t border-slate-200">
+      <ul class="mt-3 space-y-1">
+        {% for tc in timecards_history %}
+        <li class="flex items-center gap-3 text-xs py-1.5 border-b border-slate-100 last:border-0">
+          <span class="font-mono text-slate-600 w-24 shrink-0">{{ (tc.date or '')[:10] }}</span>
+          {% if tc.clock_out_at %}<span class="text-emerald-600">🚪 {{ (tc.clock_out_at or '')[11:16] }}</span>{% endif %}
+          {% if tc.worked_minutes %}<span class="text-slate-500">⏱ {{ tc.worked_minutes // 60 }}h{{ tc.worked_minutes % 60 }}m</span>{% endif %}
+          {% if tc.memo %}<span class="ml-auto text-slate-400 truncate text-[10px]" title="{{ tc.memo }}">{{ tc.memo[:30] }}</span>{% endif %}
+        </li>
+        {% endfor %}
+      </ul>
+    </div>
+  </details>
+  {% endif %}
+
+  <!-- ===== PREV MODE ===== -->
+  <div id="section-prev" class="space-y-6 fade-in">
+    <!-- TODO Phase4: 日付を実データバインド -->
+    <h1 class="text-2xl font-black text-slate-800">📅 昨日の退勤報告（遡及）</h1>
+
+    <!-- Alert -->
+    <div class="bg-rose-50 border border-rose-200 rounded-2xl p-4">
+      <p class="text-sm text-rose-800 leading-relaxed font-medium">
+        昨夜未提出のまま強制ログアウトされました。本日中に提出してください。
+      </p>
+    </div>
+
+    <!-- Assigned tasks (interactive: WIP 進捗率 / 状態変更 chk / 空時=新規入力) -->
+    <div class="bg-white/40 backdrop-blur-xl border border-white/60 rounded-3xl shadow-xl p-6">
+      <h2 class="text-sm font-black text-slate-500 uppercase tracking-widest mb-4">📊 アサインタスク（直近）</h2>
+      <p class="text-[10px] text-slate-400 mb-3">※ 完了済タスクは「今日完了」マーク付のみ表示。WIP は進捗率を、完了・QC・レビューへの変更はチェックで指定。</p>
+      <div id="prev-task-list" class="space-y-3" data-mode="previous"></div>
+      <div id="prev-empty-task" class="hidden mt-3"></div>
+    </div>
+
+    <!-- Manual supplement -->
+    <div class="bg-white/40 backdrop-blur-xl border border-white/60 rounded-3xl shadow-xl p-6">
+      <h2 class="text-sm font-black text-slate-500 uppercase tracking-widest mb-4">✏️ 手動補足</h2>
+      <div class="space-y-4">
+        <div>
+          <label class="block text-xs font-bold text-slate-500 mb-1">昨日の退勤時間</label>
+          <input type="time" value="20:00"
+            class="w-full bg-white/70 border border-white/80 rounded-xl px-4 py-3 text-sm text-slate-800 outline-none focus:ring-2 focus:ring-rose-300 transition">
+        </div>
+        <div>
+          <label class="block text-xs font-bold text-slate-500 mb-1">昨日の作業報告 <span class="text-rose-500">*必須</span></label>
+          <textarea id="blocker-input" rows="2" required placeholder="昨日の作業報告を入力(必須)" class="w-full bg-white/70 border border-white/80 rounded-xl px-4 py-3 text-sm text-slate-800 placeholder-slate-400 outline-none focus:ring-2 focus:ring-rose-300 resize-none transition"></textarea>
+          <p id="blocker-error" class="hidden mt-1 text-xs text-rose-600 font-bold">⚠ 昨日の作業報告は必須項目です</p>
+        </div>
+        <div>
+          <label class="block text-xs font-bold text-slate-500 mb-1">申し送り</label>
+          <textarea rows="2" placeholder="共有したいこと" class="w-full bg-white/70 border border-white/80 rounded-xl px-4 py-3 text-sm text-slate-800 placeholder-slate-400 outline-none focus:ring-2 focus:ring-rose-300 resize-none transition"></textarea>
+        </div>
+      </div>
+    </div>
+
+    <!-- Submit prev (POST /api/bff/timecards/clock_out 配線) -->
+    <button onclick="submitPrev()" id="submit-prev-btn" class="w-full py-4 bg-rose-500 hover:bg-rose-600 text-white font-black text-lg rounded-2xl shadow-lg shadow-rose-200 transition-all">
+      📨 前日報告を提出
+    </button>
+  </div>
+
+  <!-- ===== TODAY MODE ===== -->
+  <div id="section-today" class="space-y-6 fade-in" style="display:none;">
+    <h1 class="text-2xl font-black text-slate-800">🚪 本日退勤報告</h1>
+
+    <!-- Assigned tasks (interactive: WIP 進捗率 / 状態変更 chk / 空時=新規入力) -->
+    <div class="bg-white/40 backdrop-blur-xl border border-white/60 rounded-3xl shadow-xl p-6">
+      <h2 class="text-sm font-black text-slate-500 uppercase tracking-widest mb-4">📊 アサインタスク（直近）</h2>
+      <p class="text-[10px] text-slate-400 mb-3">※ 完了済タスクは「今日完了」マーク付のみ表示。WIP は進捗率を、完了・QC・レビューへの変更はチェックで指定。</p>
+      <div id="today-task-list" class="space-y-3" data-mode="current"></div>
+      <div id="today-empty-task" class="hidden mt-3"></div>
+    </div>
+
+    <!-- Manual supplement -->
+    <div class="bg-white/40 backdrop-blur-xl border border-white/60 rounded-3xl shadow-xl p-6">
+      <h2 class="text-sm font-black text-slate-500 uppercase tracking-widest mb-4">✏️ 翌日の予定と申し送り</h2>
+      <div class="space-y-4">
+        <div>
+          <label class="block text-xs font-bold text-slate-500 mb-2">翌日優先タスク <span class="text-[10px] font-normal text-slate-400">（システムが優先度順で提示）</span></label>
+          <p class="text-[10px] text-slate-400 mb-2">優先度: retake → reviewing → in_progress → open。上位 5 件を既定選択。</p>
+          <div id="next-priority-list" class="space-y-1 mb-3 max-h-48 overflow-y-auto bg-white/40 border border-white/60 rounded-xl p-2"></div>
+        </div>
+        <div>
+          <label class="block text-xs font-bold text-slate-500 mb-1">申し送り</label>
+          <textarea rows="2" placeholder="申し送り" class="w-full bg-white/70 border border-white/80 rounded-xl px-4 py-3 text-sm text-slate-800 placeholder-slate-400 outline-none focus:ring-2 focus:ring-indigo-300 resize-none transition"></textarea>
+        </div>
+      </div>
+    </div>
+
+    <!-- Submit today (Phase4で書込API連携 + v番号表示) -->
+    <button id="submit-today-btn" onclick="submitReport()" class="w-full py-4 bg-slate-800 hover:bg-slate-900 text-white font-black text-lg rounded-2xl shadow-xl shadow-slate-300 transition-all">
+      提出 &amp; 退勤 🌙
+    </button>
+  </div>
+
+</div>
+
+
+
+<!-- Language Modal -->
+<div id="language-modal" class="hidden fixed inset-0 bg-black/30 backdrop-blur-sm flex items-center justify-center z-50">
+  <div class="bg-white/90 backdrop-blur-xl border border-white/60 rounded-3xl shadow-2xl p-8 max-w-sm w-full mx-4 flex flex-col gap-4">
+    <h3 class="font-black text-slate-800 text-lg text-center">🌐 言語を選択</h3>
+    <button class="w-full py-3 bg-white border border-slate-200 rounded-2xl font-bold text-slate-700 hover:bg-slate-50 transition-all">繁體中文</button>
+    <button class="w-full py-3 bg-indigo-600 text-white rounded-2xl font-bold transition-all">日本語（現在）</button>
+    <button class="w-full py-3 bg-white border border-slate-200 rounded-2xl font-bold text-slate-700 hover:bg-slate-50 transition-all">English</button>
+    <p class="text-center text-xs text-slate-400">段階的に拡張中</p>
+    <button onclick="closeLanguageModal()" class="w-full py-2.5 bg-slate-100 hover:bg-slate-200 text-slate-600 font-bold rounded-2xl transition-all">閉じる</button>
+  </div>
+</div>
+
+</div>
+
+<script>
+function setMode(m) {
+  const prev = document.getElementById('section-prev');
+  const today = document.getElementById('section-today');
+  const btnPrev = document.getElementById('btn-prev');
+  const btnToday = document.getElementById('btn-today');
+
+  prev.style.display = m === 'prev' ? 'block' : 'none';
+  today.style.display = m === 'today' ? 'block' : 'none';
+
+  if (m === 'prev') {
+    btnPrev.classList.add('bg-rose-500', 'text-white');
+    btnPrev.classList.remove('text-slate-600');
+    btnToday.classList.remove('bg-indigo-600', 'text-white');
+    btnToday.classList.add('text-slate-600');
+  } else {
+    btnToday.classList.add('bg-indigo-600', 'text-white');
+    btnToday.classList.remove('text-slate-600');
+    btnPrev.classList.remove('bg-rose-500', 'text-white');
+    btnPrev.classList.add('text-slate-600');
+  }
+}
+
+function _collectExitFields(sectionId) {
+  const sect = document.getElementById(sectionId);
+  if (!sect) return {};
+  const timeInput = sect.querySelector('input[type="time"]');
+  const textareas = sect.querySelectorAll('textarea');
+  // checkbox で選択された翌日優先タスク値を収集
+  const checkboxes = sect.querySelectorAll('input[type="checkbox"][name="priority_task"]:checked');
+  const priorityTasks = Array.from(checkboxes).map(cb => cb.value);
+  // localStorage で管理しているアサインタスク編集内容を payload に含める
+  const taskEdits = {
+    progress: _lsGet(LS_PROGRESS, {}),
+    status_change: _lsGet(LS_STATUS_CHG, {}),
+    completed_marks: _lsGet(LS_COMPLETED, {}),
+    new_tasks: _lsGet(LS_NEW_TASKS, []),
+  };
+  // previous mode: textareas[0]=作業報告 (blocker), textareas[1]=申し送り (handover)
+  // current mode:  textareas[0]=申し送り (handover)
+  const isPrev = sectionId === 'section-prev';
+  return {
+    clock_out_time: timeInput ? timeInput.value : null,
+    blocker: isPrev ? (textareas[0] ? textareas[0].value : '') : '',
+    handover: isPrev
+      ? (textareas[1] ? textareas[1].value : '')
+      : (textareas[0] ? textareas[0].value : ''),
+    next_priority_tasks: priorityTasks,
+    next_priority: priorityTasks.join(', '),
+    task_edits: taskEdits,
+  };
+}
+
+async function submitPrev() {
+  const btn = document.getElementById('submit-prev-btn');
+  const orig = btn.textContent;
+  const fields = _collectExitFields('section-prev');
+  // 必須 validation: 昨日の作業報告 (blocker) 入力チェック
+  const blockerInput = document.getElementById('blocker-input');
+  const errorEl = document.getElementById('blocker-error');
+  if (!fields.blocker || !fields.blocker.trim()) {
+    if (errorEl) errorEl.classList.remove('hidden');
+    if (blockerInput) {
+      blockerInput.classList.add('ring-2', 'ring-rose-500');
+      blockerInput.focus();
+    }
+    return;
+  }
+  if (errorEl) errorEl.classList.add('hidden');
+  if (blockerInput) blockerInput.classList.remove('ring-2', 'ring-rose-500');
+  btn.disabled = true;
+  btn.textContent = '📨 送信中...';
+  // 翌朝 /routine の「前日報告ガード」を提出操作で必ず解除する
+  // (API 永続化は別途・UI 都合のフラグなので fetch 結果に関わらず記録)
+  try { localStorage.setItem('score_last_exit_report_submitted', TODAY_KEY); } catch(e) {}
+  const body = {
+    mode: 'previous',
+    submitted_at: new Date().toISOString(),
+    ...fields,
+  };
+  // mode=previous (前日報告) 提出後は /routine に遷移 = 本日の優先タスクを即確認できる導線
+  // (?return=dashboard で従来の /dashboard 行きも可)
+  const _ret = new URLSearchParams(location.search).get('return');
+  const _dest = (_ret === 'dashboard') ? '/dashboard' : '/routine?step=2';
+  try {
+    const resp = await fetch('/api/bff/timecards/clock_out', {
+      method: 'POST',
+      credentials: 'include',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(body),
+    });
+    if (!resp.ok) throw new Error('HTTP ' + resp.status);
+    // 即時遷移 — 殿御指示で動作軽量化 (2026-05-27)
+    window.location.href = _dest;
+  } catch (e) {
+    alert('❌ 送信エラー: ' + e.message);
+    btn.disabled = false;
+    btn.textContent = orig;
+  }
+}
+
+async function submitReport() {
+  const btn = document.getElementById('submit-today-btn');
+  const orig = btn.textContent;
+  btn.disabled = true;
+  btn.textContent = '📨 送信中...';
+  const fields = _collectExitFields('section-today');
+  // 本日退勤提出 = 翌朝ルーチンの「前日報告」として扱う (UI 都合のフラグ)
+  try { localStorage.setItem('score_last_exit_report_submitted', TODAY_KEY); } catch(e) {}
+  const body = {
+    mode: 'current',
+    submitted_at: new Date().toISOString(),
+    ...fields,
+  };
+  try {
+    const resp = await fetch('/api/bff/timecards/clock_out', {
+      method: 'POST',
+      credentials: 'include',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(body),
+    });
+    if (!resp.ok) throw new Error('HTTP ' + resp.status);
+    // 即時遷移 — 動作軽量化
+    window.location.href = '/goodbye';
+  } catch (e) {
+    alert('❌ 送信エラー: ' + e.message);
+    btn.disabled = false;
+    btn.textContent = orig;
+  }
+}
+
+function openLanguageModal() {
+  document.getElementById('language-modal').classList.remove('hidden');
+}
+function closeLanguageModal() {
+  document.getElementById('language-modal').classList.add('hidden');
+}
+
+// URL param でモード初期化
+setMode(new URLSearchParams(location.search).get('mode') === 'previous' ? 'prev' : 'today');
+
+// ===== Assigned tasks dynamic UI =====
+window.__MY_TASKS__ = {{ my_tasks | tojson }};
+
+const TODAY_KEY = (function(){ const d = new Date(); return d.getFullYear()+'-'+String(d.getMonth()+1).padStart(2,'0')+'-'+String(d.getDate()).padStart(2,'0'); })();
+const LS_COMPLETED = 'score_exit_completed_marks';      // {task_id: 'YYYY-MM-DD'}
+const LS_PROGRESS  = 'score_exit_progress';             // {task_id: pct}
+const LS_STATUS_CHG= 'score_exit_status_change';        // {task_id: 'complete'|'qc'|'review'}
+const LS_NEW_TASKS = 'score_exit_new_tasks_' + TODAY_KEY; // [{title, body}]
+const LS_PRIORITY  = 'score_exit_next_priority';        // {task_id: bool}
+
+function _lsGet(key, fallback) {
+  try { return JSON.parse(localStorage.getItem(key) || JSON.stringify(fallback)); }
+  catch(e) { return fallback; }
+}
+function _lsSet(key, val) {
+  try { localStorage.setItem(key, JSON.stringify(val)); } catch(e) {}
+}
+
+const TASK_PRIORITY = { 'retake': 0, 'reviewing': 1, 'in_progress': 2, 'open': 3, 'approved': 9 };
+const WIP_STATUSES = ['in_progress', 'open', 'retake', 'reviewing'];
+
+function _taskIconFor(type) {
+  if (type === 'Composite') return '🎨';
+  if (type === 'Lighting' || type === 'Look' || type === 'lighting') return '💡';
+  if (type === 'MattePaint') return '🖼️';
+  if (type === 'FX' || type === 'fx') return '✨';
+  if (type === 'Animation') return '🎬';
+  if (type === 'layout') return '📐';
+  return '🎯';
+}
+
+function _taskLabel(tk) {
+  let shot = tk.shot_code || tk.name || '';
+  if (!shot || shot === 'task') {
+    shot = tk.shot_id ? ('SHOT_' + String(tk.shot_id).padStart(3, '0')) : ('task#' + (tk.task_id || '?'));
+  }
+  const type = tk.task_type || tk.type || '';
+  const project = tk.project_name || '';
+  const seq = tk.seq_code || '';
+  return { project, seq, shot, type, name: shot };
+}
+
+// Render the project / seq / shot / task breadcrumb. Empty levels collapse.
+function _breadcrumbHTML(parts) {
+  // parts: {project, seq, shot, type}
+  const segs = [];
+  if (parts.project) segs.push(`<span class="text-[10px] text-slate-400" translate="no">${parts.project}</span>`);
+  if (parts.seq) segs.push(`<span class="text-[10px] text-slate-500" translate="no">${parts.seq}</span>`);
+  if (parts.shot) segs.push(`<span class="text-xs font-semibold text-slate-600" translate="no">${parts.shot}</span>`);
+  const breadcrumb = segs.join('<span class="text-slate-300 mx-1">/</span>');
+  const taskName = parts.type
+    ? `<span class="text-sm font-black text-slate-900" translate="no">${parts.type}</span>`
+    : `<span class="text-sm font-black text-slate-900" translate="no">${parts.shot || 'task'}</span>`;
+  return `<div class="leading-tight">
+    <div class="flex flex-wrap items-center gap-x-0.5">${breadcrumb}</div>
+    <div class="mt-0.5">${taskName}</div>
+  </div>`;
+}
+
+function renderAssignedTasks(listEl, emptyEl, mode) {
+  if (!listEl) return;
+  const tasks = window.__MY_TASKS__ || [];
+  const completedMarks = _lsGet(LS_COMPLETED, {});
+  const progress = _lsGet(LS_PROGRESS, {});
+  const statusChg = _lsGet(LS_STATUS_CHG, {});
+
+  // Filter: approved は今日完了マーク付きのみ表示
+  const visible = tasks.filter(t => {
+    const st = (t.status || '').toLowerCase();
+    if (['approved','completed','done'].indexOf(st) >= 0) {
+      return completedMarks[t.task_id] === TODAY_KEY;
+    }
+    return true;
+  });
+
+  listEl.innerHTML = '';
+  if (visible.length === 0) {
+    // 空タスク = 新規入力フォーム
+    if (emptyEl) {
+      emptyEl.classList.remove('hidden');
+      emptyEl.innerHTML = `
+        <div class="bg-white/60 border-2 border-dashed border-slate-300 rounded-2xl p-5">
+          <p class="text-xs font-bold text-slate-500 mb-3">📝 アサインタスクなし — 本日の作業を入力</p>
+          <input type="text" data-new-title placeholder="タスクのタイトル"
+            class="w-full bg-white/80 border border-slate-200 rounded-xl px-3 py-2 text-sm mb-2 outline-none focus:ring-2 focus:ring-indigo-300">
+          <textarea data-new-body rows="2" placeholder="作業内容（任意）"
+            class="w-full bg-white/80 border border-slate-200 rounded-xl px-3 py-2 text-sm outline-none focus:ring-2 focus:ring-indigo-300 resize-none"></textarea>
+        </div>`;
+      // 既存 localStorage の新規 task があれば復元
+      const existing = _lsGet(LS_NEW_TASKS, []);
+      if (existing.length > 0) {
+        const t = emptyEl.querySelector('[data-new-title]');
+        const b = emptyEl.querySelector('[data-new-body]');
+        if (t) t.value = existing[0].title || '';
+        if (b) b.value = existing[0].body || '';
+      }
+      // input change → localStorage 保存
+      const persistNew = () => {
+        const t = emptyEl.querySelector('[data-new-title]');
+        const b = emptyEl.querySelector('[data-new-body]');
+        const title = t ? t.value.trim() : '';
+        const body = b ? b.value.trim() : '';
+        if (title || body) _lsSet(LS_NEW_TASKS, [{title, body}]);
+        else localStorage.removeItem(LS_NEW_TASKS);
+      };
+      emptyEl.querySelectorAll('input,textarea').forEach(el => el.addEventListener('input', persistNew));
+    }
+    return;
+  }
+  if (emptyEl) emptyEl.classList.add('hidden');
+
+  // sort by priority (retake first)
+  visible.sort((a,b) => (TASK_PRIORITY[a.status]||5) - (TASK_PRIORITY[b.status]||5));
+
+  for (const tk of visible) {
+    const tid = tk.task_id;
+    const st = (tk.status || '').toLowerCase();
+    const {name, type} = _taskLabel(tk);
+    const icon = _taskIconFor(type);
+    const isWIP = WIP_STATUSES.indexOf(st) >= 0;
+    const isDone = ['approved','completed','done'].indexOf(st) >= 0;
+    const pct = (progress[tid] !== undefined) ? progress[tid] : (isDone ? 100 : (st === 'reviewing' ? 80 : (st === 'retake' ? 50 : 30)));
+    const chg = statusChg[tid] || '';
+
+    const statusBadge = (function(){
+      if (st === 'retake') return '<span class="px-2 py-0.5 bg-rose-100 text-rose-700 text-[10px] font-black rounded-full">🔴 Retake</span>';
+      if (st === 'reviewing') return '<span class="px-2 py-0.5 bg-amber-100 text-amber-700 text-[10px] font-black rounded-full">⚠️ Reviewing</span>';
+      if (isDone) return '<span class="px-2 py-0.5 bg-emerald-100 text-emerald-700 text-[10px] font-black rounded-full">✅ 完了（今日）</span>';
+      if (st === 'open') return '<span class="px-2 py-0.5 bg-slate-100 text-slate-600 text-[10px] font-black rounded-full">⏳ Open</span>';
+      return '<span class="px-2 py-0.5 bg-indigo-100 text-indigo-700 text-[10px] font-black rounded-full">🔧 In Progress</span>';
+    })();
+
+    const card = document.createElement('div');
+    card.className = 'bg-white/70 border border-white/80 rounded-2xl px-4 py-3';
+    card.dataset.taskId = tid;
+    const lbl = _taskLabel(tk);
+    card.innerHTML = `
+      <div class="flex items-center gap-3 mb-2">
+        <span class="text-lg shrink-0">${icon}</span>
+        <div class="flex-1 min-w-0">
+          ${_breadcrumbHTML(lbl)}
+        </div>
+        ${statusBadge}
+      </div>
+      ${isWIP ? `
+      <div class="mb-2">
+        <div class="flex items-center justify-between text-[10px] text-slate-500 mb-1">
+          <span>進捗率</span>
+          <span class="font-black text-indigo-600" data-pct-label>${pct}%</span>
+        </div>
+        <input type="range" min="0" max="100" value="${pct}" data-progress
+          class="w-full accent-indigo-500 cursor-pointer">
+      </div>` : ''}
+      <div class="flex flex-wrap items-center gap-3 text-xs">
+        <span class="text-[10px] text-slate-500">状態変更:</span>
+        <label class="flex items-center gap-1 cursor-pointer">
+          <input type="checkbox" data-status-change value="complete" ${chg === 'complete' ? 'checked' : ''} class="accent-emerald-500">
+          <span class="text-emerald-700 font-bold">✅ 完了</span>
+        </label>
+        <label class="flex items-center gap-1 cursor-pointer">
+          <input type="checkbox" data-status-change value="qc" ${chg === 'qc' ? 'checked' : ''} class="accent-cyan-500">
+          <span class="text-cyan-700 font-bold">🔍 QC</span>
+        </label>
+        <label class="flex items-center gap-1 cursor-pointer">
+          <input type="checkbox" data-status-change value="review" ${chg === 'review' ? 'checked' : ''} class="accent-amber-500">
+          <span class="text-amber-700 font-bold">👀 レビュー</span>
+        </label>
+      </div>
+    `;
+    listEl.appendChild(card);
+
+    // wire progress slider
+    if (isWIP) {
+      const slider = card.querySelector('[data-progress]');
+      const label = card.querySelector('[data-pct-label]');
+      slider.addEventListener('input', () => {
+        label.textContent = slider.value + '%';
+        const cur = _lsGet(LS_PROGRESS, {});
+        cur[tid] = parseInt(slider.value, 10);
+        _lsSet(LS_PROGRESS, cur);
+      });
+    }
+
+    // status-change checkboxes (mutually exclusive)
+    const checks = card.querySelectorAll('[data-status-change]');
+    checks.forEach(cb => {
+      cb.addEventListener('change', () => {
+        if (cb.checked) {
+          // uncheck siblings
+          checks.forEach(other => { if (other !== cb) other.checked = false; });
+          const cur = _lsGet(LS_STATUS_CHG, {});
+          cur[tid] = cb.value;
+          _lsSet(LS_STATUS_CHG, cur);
+          // 「complete」選択時 → 今日完了マーク
+          if (cb.value === 'complete') {
+            const marks = _lsGet(LS_COMPLETED, {});
+            marks[tid] = TODAY_KEY;
+            _lsSet(LS_COMPLETED, marks);
+          }
+        } else {
+          const cur = _lsGet(LS_STATUS_CHG, {});
+          delete cur[tid];
+          _lsSet(LS_STATUS_CHG, cur);
+          // 「完了」を外したら今日完了マークも撤去
+          if (cb.value === 'complete') {
+            const marks = _lsGet(LS_COMPLETED, {});
+            delete marks[tid];
+            _lsSet(LS_COMPLETED, marks);
+          }
+        }
+        // 翌日優先タスクへの即時反映 (complete → リストから除外)
+        renderNextPriorityList();
+      });
+    });
+  }
+}
+
+// ===== Next-day priority tasks (system-presented) =====
+const DONE_STATUSES = ['approved', 'completed', 'done'];
+function _isTaskComplete(t) {
+  if (DONE_STATUSES.indexOf((t.status || '').toLowerCase()) >= 0) return true;
+  // 「完了」チェックボックス ON または今日完了マーク有 = コンプリート扱い
+  const statusChg = _lsGet(LS_STATUS_CHG, {});
+  if (statusChg[t.task_id] === 'complete') return true;
+  const marks = _lsGet(LS_COMPLETED, {});
+  if (marks[t.task_id] === TODAY_KEY) return true;
+  return false;
+}
+function renderNextPriorityList() {
+  const wrap = document.getElementById('next-priority-list');
+  if (!wrap) return;
+  const tasks = (window.__MY_TASKS__ || [])
+    .filter(t => !_isTaskComplete(t))
+    .slice()
+    .sort((a, b) => (TASK_PRIORITY[a.status]||5) - (TASK_PRIORITY[b.status]||5));
+  const selected = _lsGet(LS_PRIORITY, null);
+
+  wrap.innerHTML = '';
+  if (tasks.length === 0) {
+    wrap.innerHTML = '<p class="text-xs text-slate-400 italic px-2 py-1">未完了タスクはありません</p>';
+    return;
+  }
+  // 既定: 上位 5 件 checked
+  tasks.forEach((tk, idx) => {
+    const tid = tk.task_id;
+    const lbl = _taskLabel(tk);
+    const icon = _taskIconFor(lbl.type);
+    const isChecked = (selected && selected[tid] !== undefined) ? selected[tid] : (idx < 5);
+    const rank = idx + 1;
+    // top 3 — gold/silver/bronze tinting; others slate
+    const rankClass = rank === 1
+      ? 'bg-amber-400 text-white'
+      : (rank === 2 ? 'bg-slate-300 text-slate-700'
+      : (rank === 3 ? 'bg-orange-300 text-orange-900' : 'bg-slate-100 text-slate-500'));
+    const row = document.createElement('label');
+    row.className = 'flex items-start gap-3 px-2 py-2 rounded-lg hover:bg-white/60 cursor-pointer';
+    row.innerHTML = `
+      <span class="shrink-0 w-7 h-7 rounded-full flex items-center justify-center text-xs font-black ${rankClass}">${rank}</span>
+      <input type="checkbox" name="priority_task" value="${lbl.shot}_${lbl.type}_task${tid}" ${isChecked ? 'checked' : ''} class="rounded mt-2">
+      <span class="text-base mt-0.5">${icon}</span>
+      <div class="flex-1 min-w-0">
+        ${_breadcrumbHTML(lbl)}
+      </div>
+      <span class="text-[10px] font-bold rounded-full px-2 py-0.5 shrink-0 mt-1 ${
+        tk.status === 'retake' ? 'bg-rose-100 text-rose-600' :
+        tk.status === 'reviewing' ? 'bg-amber-100 text-amber-600' :
+        tk.status === 'in_progress' ? 'bg-indigo-100 text-indigo-600' :
+        'bg-slate-100 text-slate-600'
+      }"><span translate="no">${tk.status}</span></span>
+    `;
+    wrap.appendChild(row);
+    const cb = row.querySelector('input[type="checkbox"]');
+    cb.addEventListener('change', () => {
+      const cur = _lsGet(LS_PRIORITY, {}) || {};
+      cur[tid] = cb.checked;
+      _lsSet(LS_PRIORITY, cur);
+    });
+  });
+}
+
+// initial render (both modes share data; render into each)
+document.addEventListener('DOMContentLoaded', () => {
+  renderAssignedTasks(document.getElementById('prev-task-list'), document.getElementById('prev-empty-task'), 'previous');
+  renderAssignedTasks(document.getElementById('today-task-list'), document.getElementById('today-empty-task'), 'current');
+  renderNextPriorityList();
+});
+// In case DOMContentLoaded already fired (script at bottom)
+if (document.readyState !== 'loading') {
+  renderAssignedTasks(document.getElementById('prev-task-list'), document.getElementById('prev-empty-task'), 'previous');
+  renderAssignedTasks(document.getElementById('today-task-list'), document.getElementById('today-empty-task'), 'current');
+  renderNextPriorityList();
+}
+</script>
+</body>
+</html>

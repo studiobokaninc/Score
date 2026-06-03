@@ -1,0 +1,196 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Score — 通知センター</title>
+<script src="https://cdn.tailwindcss.com"></script>
+<style>
+.tab-btn { transition: all 0.2s ease; }
+.tab-content { display: none; }
+.tab-content.active { display: block; }
+.notification-card { transition: all 0.2s ease; }
+.notification-card:hover { transform: translateY(-1px); box-shadow: 0 8px 32px rgba(99,102,241,0.12); }
+.read-btn { transition: all 0.15s ease; }
+.read-btn:hover { background-color: rgba(99,102,241,0.1); }
+</style>
+</head>
+<body class="min-h-screen bg-gradient-to-br from-[#E0F2FE] via-[#F3E8FF] to-[#FCE7F3] flex">
+{% if demo_mode %}
+<div style="background:#f39c12;color:#fff;text-align:center;padding:6px 12px;font-size:12px;font-weight:bold;position:fixed;top:0;left:0;right:0;z-index:9999;letter-spacing:0.05em;">
+  ⚠️ DEMO DATA — 本番データではありません
+</div>
+{% endif %}
+{% include '_sidemenu.html' %}
+{# Defensive defaults: server-side python may not yet have shipped `groups`/`counts`
+   (uvicorn restart required to pick up app/routers changes). Without these,
+   undefined-attribute access during render raises 500. #}
+{% set counts = counts if counts is mapping else {'unread': 0, 'mention': 0, 'notice': 0} %}
+{% set groups = groups if groups is mapping else {'unread': [], 'mention': [], 'notice': []} %}
+
+  <!-- Main -->
+  <main class="flex-1 ml-24 p-10 overflow-y-auto">
+
+    <!-- Header -->
+    <div class="mb-8">
+      <h1 class="text-3xl font-black text-slate-800 flex items-center gap-3">🔔 通知センター</h1>
+      <p class="text-slate-500 mt-1 text-sm font-medium">あなた宛の未読通知 — 計 <span id="total-count">{{ (counts.unread or 0) + (counts.mention or 0) + (counts.notice or 0) }}</span> 件</p>
+    </div>
+
+    <!-- Tab Navigation -->
+    <div class="flex gap-2 mb-8">
+      <button id="tab-unread" onclick="showTab('unread')"
+        class="tab-btn px-5 py-2 rounded-full text-sm font-bold bg-indigo-600 text-white shadow-md">
+        未読 (<span id="count-unread">{{ counts.unread or 0 }}</span>)
+      </button>
+      <button id="tab-mention" onclick="showTab('mention')"
+        class="tab-btn px-5 py-2 rounded-full text-sm font-bold bg-white/50 text-slate-600 hover:bg-white/70">
+        @メンション (<span id="count-mention">{{ counts.mention or 0 }}</span>)
+      </button>
+      <button id="tab-notice" onclick="showTab('notice')"
+        class="tab-btn px-5 py-2 rounded-full text-sm font-bold bg-white/50 text-slate-600 hover:bg-white/70">
+        お知らせ (<span id="count-notice">{{ counts.notice or 0 }}</span>)
+      </button>
+    </div>
+
+    {% macro notification_card(n) -%}
+      <div id="notif-card-{{ n.id }}" data-notif-id="{{ n.id }}" data-category="{{ n.category }}" class="notification-card bg-white/40 backdrop-blur-xl border border-white/60 rounded-2xl p-4 flex items-start gap-4">
+        <div class="w-12 h-12 rounded-full {{ n.icon_bg }} flex items-center justify-center text-2xl flex-shrink-0">{{ n.emoji }}</div>
+        <div class="flex-1 min-w-0">
+          <div class="flex items-start justify-between gap-2">
+            <p class="font-bold text-slate-800 text-sm" translate="no">{{ n.title or '通知' }}</p>
+            <button onclick="markNotificationRead({{ n.id }})" class="read-btn w-8 h-8 rounded-full flex items-center justify-center text-slate-400 hover:text-indigo-600 flex-shrink-0 text-sm" title="既読にする">✓</button>
+          </div>
+          {% if n.body %}
+          <p class="text-slate-600 text-xs mt-1">{{ n.body }}</p>
+          {% endif %}
+          <div class="flex items-center gap-4 mt-2">
+            {% if n.when_label %}<span class="text-slate-400 text-xs">{{ n.when_label }}</span>{% endif %}
+            {% if n.link %}<a href="{{ n.link }}" class="text-indigo-600 text-xs font-semibold hover:underline">詳細 →</a>{% endif %}
+          </div>
+        </div>
+      </div>
+    {%- endmacro %}
+
+    <!-- ===== 未読タブ ===== -->
+    <div id="content-unread" class="tab-content active space-y-4">
+      {% if groups and groups.unread %}
+        {% for n in groups.unread %}{{ notification_card(n) }}{% endfor %}
+      {% else %}
+        <div class="bg-white/40 backdrop-blur-xl border border-white/60 rounded-2xl p-8 text-center text-slate-400 text-sm">未読の通知はありません</div>
+      {% endif %}
+    </div>
+
+    <!-- ===== @メンションタブ ===== -->
+    <div id="content-mention" class="tab-content space-y-4">
+      {% if groups and groups.mention %}
+        {% for n in groups.mention %}{{ notification_card(n) }}{% endfor %}
+      {% else %}
+        <div class="bg-white/40 backdrop-blur-xl border border-white/60 rounded-2xl p-8 text-center text-slate-400 text-sm">@メンションはありません</div>
+      {% endif %}
+    </div>
+
+    <!-- ===== お知らせタブ ===== -->
+    <div id="content-notice" class="tab-content space-y-4">
+      {% if groups and groups.notice %}
+        {% for n in groups.notice %}{{ notification_card(n) }}{% endfor %}
+      {% else %}
+        <div class="bg-white/40 backdrop-blur-xl border border-white/60 rounded-2xl p-8 text-center text-slate-400 text-sm">お知らせはありません</div>
+      {% endif %}
+    </div>
+
+  </main>
+
+  <!-- language-modal -->
+  <div id="language-modal" class="hidden fixed inset-0 bg-black/30 backdrop-blur-sm flex items-center justify-center z-[999]" onclick="document.getElementById('language-modal').classList.add('hidden')">
+    <div class="bg-white/90 backdrop-blur-xl border border-white/60 rounded-3xl shadow-2xl p-8 w-80 text-center" onclick="event.stopPropagation()">
+      <h3 class="text-lg font-black text-slate-800 mb-6">🌐 言語を選択</h3>
+      <div class="flex flex-col gap-3">
+        <button class="w-full py-3 bg-slate-100 hover:bg-slate-200 text-slate-600 font-bold rounded-2xl text-sm transition-all">繁體中文</button>
+        <button class="w-full py-3 bg-indigo-600 text-white font-bold rounded-2xl text-sm cursor-default">日本語（現在）</button>
+        <button class="w-full py-3 bg-slate-100 hover:bg-slate-200 text-slate-600 font-bold rounded-2xl text-sm transition-all">English</button>
+      </div>
+      <p class="text-xs text-slate-400 mt-4">段階的に拡張中</p>
+    </div>
+  </div>
+
+  <script>
+    function showTab(name) {
+      document.querySelectorAll('.tab-content').forEach(el => el.classList.remove('active'));
+      document.querySelectorAll('.tab-btn').forEach(btn => {
+        btn.classList.remove('bg-indigo-600', 'text-white', 'shadow-md');
+        btn.classList.add('bg-white/50', 'text-slate-600');
+      });
+      document.getElementById('content-' + name).classList.add('active');
+      const activeBtn = document.getElementById('tab-' + name);
+      activeBtn.classList.add('bg-indigo-600', 'text-white', 'shadow-md');
+      activeBtn.classList.remove('bg-white/50', 'text-slate-600');
+    }
+    function openLanguageModal() {
+      document.getElementById('language-modal').classList.remove('hidden');
+    }
+  </script>
+
+  <script>
+  async function markNotificationRead(notifId) {
+    const card = document.getElementById('notif-card-' + notifId);
+    const cat = card ? card.dataset.category : null;
+    try {
+      await fetch('/api/bff/notifications/' + notifId + '/read', {
+        method: 'PATCH',
+        credentials: 'include',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({read: true}),
+      });
+    } catch (e) {}
+    // 既読化 = カードを **完全に非表示**(未読として積み残さない・殿御指示 2026-05-22)
+    if (card) card.style.display = 'none';
+    try {
+      localStorage.setItem('score_notif_read_' + notifId, '1');
+    } catch (e) {}
+    // タブカウントとヘッダ合計をデクリメント
+    if (cat) {
+      const elCount = document.getElementById('count-' + cat);
+      if (elCount) {
+        const v = parseInt(elCount.textContent || '0', 10) - 1;
+        if (!isNaN(v) && v >= 0) elCount.textContent = v;
+      }
+    }
+    const elTotal = document.getElementById('total-count');
+    if (elTotal) {
+      const v = parseInt(elTotal.textContent || '0', 10) - 1;
+      if (!isNaN(v) && v >= 0) elTotal.textContent = v;
+    }
+  }
+  // page load 時に localStorage 既読 state を反映(既読は完全非表示) + カウント補正
+  (function(){
+    let decremented = {unread: 0, mention: 0, notice: 0};
+    document.querySelectorAll('[data-notif-id]').forEach(function(card) {
+      const id = card.dataset.notifId;
+      if (localStorage.getItem('score_notif_read_' + id) === '1') {
+        card.style.display = 'none';
+        const cat = card.dataset.category;
+        if (cat && decremented[cat] !== undefined) decremented[cat] += 1;
+      }
+    });
+    Object.keys(decremented).forEach(function(cat) {
+      if (decremented[cat] === 0) return;
+      const el = document.getElementById('count-' + cat);
+      if (el) {
+        const v = parseInt(el.textContent || '0', 10) - decremented[cat];
+        if (!isNaN(v) && v >= 0) el.textContent = v;
+      }
+    });
+    const total = decremented.unread + decremented.mention + decremented.notice;
+    if (total > 0) {
+      const elTotal = document.getElementById('total-count');
+      if (elTotal) {
+        const v = parseInt(elTotal.textContent || '0', 10) - total;
+        if (!isNaN(v) && v >= 0) elTotal.textContent = v;
+      }
+    }
+  })();
+  </script>
+
+</body>
+</html>

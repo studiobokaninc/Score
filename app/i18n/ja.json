@@ -1,0 +1,23 @@
+{
+  "dashboard.title": "ダッシュボード",
+  "dashboard.greeting": "おはよう、{name} さん",
+  "dashboard.greeting.morning": "おはよう、{name} さん",
+  "dashboard.greeting.afternoon": "こんにちは、{name} さん",
+  "dashboard.greeting.evening": "こんばんは、{name} さん",
+  "dashboard.subtitle": "本日のSHOT一覧は下記のタスクセクションをご確認ください",
+  "shot.list": "本日のタスク",
+  "shot.detail.title": "SHOTの詳細",
+  "routine.title": "ルーティン",
+  "messages.title": "メッセージ",
+  "goodbye.title": "お疲れさまでした",
+  "exit_report.title": "退勤レポート",
+  "nav.dashboard": "ダッシュボード",
+  "nav.shot_detail": "SHOT詳細",
+  "nav.routine": "ルーティン",
+  "nav.messages": "メッセージ",
+  "nav.exit_report": "退勤",
+  "nav.notifications": "通知",
+  "lang.ja": "日本語",
+  "lang.en": "English",
+  "lang.select": "言語を選択"
+}

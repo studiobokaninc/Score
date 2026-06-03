@@ -1,0 +1,150 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>議事録 — {{ meeting.title or 'Meeting' }}</title>
+  <script src="https://cdn.tailwindcss.com"></script>
+</head>
+<body class="h-screen bg-gradient-to-br from-[#E0F2FE] via-[#F3E8FF] to-[#FCE7F3] flex overflow-hidden">
+{% if demo_mode %}
+<div style="background:#f39c12;color:#fff;text-align:center;padding:6px 12px;font-size:12px;font-weight:bold;position:fixed;top:0;left:0;right:0;z-index:9999;">
+  ⚠️ DEMO DATA
+</div>
+{% endif %}
+  {% include '_sidemenu.html' %}
+  <main class="flex-1 ml-24 overflow-y-auto p-8 max-w-4xl mx-auto">
+    <!-- breadcrumb -->
+    <nav class="text-xs text-slate-500 mb-4">
+      <a href="/lead_dashboard" class="hover:text-indigo-600">ダッシュボード</a>
+      <span class="text-slate-300 mx-1">›</span>
+      <a href="/projects" class="hover:text-indigo-600">プロジェクト一覧</a>
+      {% if project_name %}<span class="text-slate-300 mx-1">›</span><a href="/project_detail/{{ meeting.project_id }}" class="hover:text-indigo-600" translate="no">{{ project_name }}</a>{% endif %}
+      <span class="text-slate-300 mx-1">›</span>
+      <span class="text-indigo-600 font-bold">📋 議事録</span>
+    </nav>
+
+    {% if not meeting or not meeting.title %}
+    <div class="bg-rose-50 border border-rose-200 rounded-3xl p-6">
+      <h1 class="text-xl font-black text-rose-700 mb-2">⚠️ 議事録が見つかりません</h1>
+      <p class="text-sm text-slate-600">meeting_id={{ meeting_id }} は Calendar 側 DB に存在しないか、閲覧権限がありません。</p>
+      <a href="/lead_dashboard" class="inline-block mt-3 bg-indigo-600 hover:bg-indigo-700 text-white font-bold rounded-xl px-4 py-2 text-sm">← ダッシュボードへ戻る</a>
+    </div>
+    {% else %}
+
+    <!-- title -->
+    <div class="mb-6">
+      <h1 class="text-2xl font-black text-slate-800">📋 {{ meeting.title }}</h1>
+      <div class="flex items-center gap-3 mt-2 text-sm text-slate-500 flex-wrap">
+        {% if project_name %}<span class="bg-indigo-100 text-indigo-700 font-bold rounded-full px-3 py-1 text-xs">📁 <span translate="no">{{ project_name }}</span></span>{% endif %}
+        {% set _date = (meeting.date or '')[:16].replace('T', ' ') %}
+        {% if _date %}<span class="bg-slate-100 text-slate-600 font-bold rounded-full px-3 py-1 text-xs">📅 {{ _date }}</span>{% endif %}
+        {% if meeting.status %}<span class="bg-emerald-100 text-emerald-700 font-bold rounded-full px-3 py-1 text-xs" translate="no">{{ meeting.status }}</span>{% endif %}
+        {% if meeting.attendees %}<span class="bg-purple-100 text-purple-700 font-bold rounded-full px-3 py-1 text-xs">👥 {{ meeting.attendees|length }} 名参加</span>{% endif %}
+      </div>
+    </div>
+
+    <!-- attendees -->
+    {% if meeting.attendees %}
+    <div class="mb-6 bg-white/60 backdrop-blur-xl border border-white/60 rounded-3xl shadow p-4">
+      <h2 class="text-xs font-bold text-slate-500 uppercase tracking-widest mb-2">👥 参加者</h2>
+      <div class="flex flex-wrap gap-2">
+        {% for at in meeting.attendees %}
+        <span class="bg-white border border-slate-200 rounded-full px-3 py-1 text-xs">
+          <span translate="no">{{ at.name or at.user_id or '?' }}</span>{% if at.user_id %}<span class="text-slate-400 ml-1">(uid={{ at.user_id }})</span>{% endif %}
+        </span>
+        {% endfor %}
+      </div>
+    </div>
+    {% endif %}
+
+    <!-- media player -->
+    {% if meeting.audio_url or meeting.video_url %}
+    <div class="mb-6 bg-white/60 backdrop-blur-xl border border-white/60 rounded-3xl shadow p-4">
+      <h2 class="text-xs font-bold text-slate-500 uppercase tracking-widest mb-2">🎬 メディア</h2>
+      {% if meeting.video_url %}
+      <video controls class="w-full max-h-96 rounded-2xl mb-3 bg-slate-800">
+        <source src="{{ meeting.video_url }}" type="video/mp4">
+        ご利用の browser は video tag 未対応です
+      </video>
+      {% endif %}
+      {% if meeting.audio_url %}
+      <audio controls class="w-full">
+        <source src="{{ meeting.audio_url }}" type="audio/mpeg">
+        ご利用の browser は audio tag 未対応です
+      </audio>
+      <p class="text-[10px] text-slate-400 mt-1">音声: <a href="{{ meeting.audio_url }}" target="_blank" class="text-indigo-600 hover:underline" translate="no">{{ meeting.audio_url }}</a></p>
+      {% endif %}
+    </div>
+    {% endif %}
+
+    <!-- decisions -->
+    {% if meeting.decisions %}
+    <div class="mb-6 bg-blue-50 border border-blue-200 rounded-3xl shadow p-5">
+      <h2 class="text-sm font-black text-blue-700 mb-3">✅ 決定事項 ({{ meeting.decisions|length }})</h2>
+      <ul class="space-y-2">
+        {% for dc in meeting.decisions %}
+        <li class="bg-white border border-blue-100 rounded-xl px-3 py-2 text-sm text-slate-700">{{ dc }}</li>
+        {% endfor %}
+      </ul>
+    </div>
+    {% endif %}
+
+    <!-- tasks -->
+    {% if meeting.tasks %}
+    <div class="mb-6 bg-emerald-50 border border-emerald-200 rounded-3xl shadow p-5">
+      <h2 class="text-sm font-black text-emerald-700 mb-3">📌 提案タスク ({{ meeting.tasks|length }})</h2>
+      <ul class="space-y-2">
+        {% for tk in meeting.tasks %}
+        <li class="bg-white border border-emerald-100 rounded-xl px-3 py-2 text-sm text-slate-700">▶ {{ tk }}</li>
+        {% endfor %}
+      </ul>
+    </div>
+    {% endif %}
+
+    <!-- deadlines -->
+    {% if meeting.deadlines %}
+    <div class="mb-6 bg-rose-50 border border-rose-200 rounded-3xl shadow p-5">
+      <h2 class="text-sm font-black text-rose-700 mb-3">⏰ 期限 ({{ meeting.deadlines|length }})</h2>
+      <ul class="space-y-2">
+        {% for dl in meeting.deadlines %}
+        <li class="bg-white border border-rose-100 rounded-xl px-3 py-2 text-sm text-slate-700">{{ dl }}</li>
+        {% endfor %}
+      </ul>
+    </div>
+    {% endif %}
+
+    <!-- discussion points -->
+    {% if meeting.discussion_points %}
+    <div class="mb-6 bg-amber-50 border border-amber-200 rounded-3xl shadow p-5">
+      <h2 class="text-sm font-black text-amber-700 mb-3">💭 議論ポイント ({{ meeting.discussion_points|length }})</h2>
+      <ul class="space-y-2">
+        {% for dp in meeting.discussion_points %}
+        <li class="bg-white border border-amber-100 rounded-xl px-3 py-2 text-sm text-slate-700">{{ dp }}</li>
+        {% endfor %}
+      </ul>
+    </div>
+    {% endif %}
+
+    <!-- transcript (full text) -->
+    {% if meeting.transcript %}
+    <div class="mb-6 bg-white/80 backdrop-blur-xl border border-slate-200 rounded-3xl shadow-lg p-6">
+      <div class="flex items-center justify-between mb-3">
+        <h2 class="text-sm font-black text-slate-700">📝 文字起こし(transcript)</h2>
+        <button onclick="document.getElementById('transcript-body').classList.toggle('hidden')" class="text-xs text-indigo-600 hover:text-indigo-800 font-bold">▼ 開閉</button>
+      </div>
+      <div id="transcript-body" class="prose prose-sm max-w-none bg-slate-50 border border-slate-100 rounded-2xl p-4 text-sm text-slate-700 whitespace-pre-wrap leading-relaxed">{{ meeting.transcript }}</div>
+    </div>
+    {% endif %}
+
+    <!-- meta -->
+    <div class="text-[10px] text-slate-400 mt-4 mb-8">
+      meeting_id: <span translate="no">{{ meeting.id }}</span> · project_id: <span translate="no">{{ meeting.project_id }}</span>
+      {% if meeting.event_id %} · event_id: <span translate="no">{{ meeting.event_id }}</span>{% endif %}
+      {% if meeting.updated_at %} · 更新: {{ meeting.updated_at[:16].replace('T', ' ') }}{% endif %}
+    </div>
+
+    {% endif %}
+  </main>
+</body>
+</html>

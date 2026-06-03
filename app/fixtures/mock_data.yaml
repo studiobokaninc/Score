@@ -1,0 +1,321 @@
+# Score Mock Data — 発注書_2026-05-20 §2 response 例準拠
+# CALENDAR_MOCK=1 時に mock_calendar_client.py が参照するサンプルデータ
+
+endpoints:
+  # --- 既実装 API (読出系) ---
+
+  GET /api/me:
+    user_id: "ryoji@studiobokan.com"
+    name: "Ryoji Bokan"
+    role: "user"
+
+  GET /api/me/shots:
+    shots:
+      - id: 1
+        project_id: 33
+        name: "SHOT_001"
+        status: "in_review"
+        shot_code: "SHOT_001"
+        seq_code: "SEQ01"
+      - id: 2
+        project_id: 33
+        name: "SHOT_002"
+        status: "retake"
+        shot_code: "SHOT_002"
+        seq_code: "SEQ01"
+
+  GET /api/me/projects:
+    projects:
+      - id: 33
+        name: "Ramps"
+        role: "Compositor"
+      - id: 34
+        name: "Bali"
+        role: "Compositor"
+
+  GET /api/me/notifications:
+    notifications:
+      - id: 1
+        title: "QCコメント"
+        body: "SHOT_001 の修正依頼が届きました"
+        read: false
+        created_at: "2026-05-21"
+      - id: 2
+        title: "Look配布"
+        body: "Ramps v04 Look が配布されました"
+        read: false
+        created_at: "2026-05-20"
+
+  GET /api/me/retakes:
+    retakes:
+      - id: 1
+        shot_code: "SHOT_002"
+        reason: "色味調整"
+        created_at: "2026-05-20"
+
+  GET /api/me/troubles:
+    troubles:
+      - id: 1
+        title: "レンダーサーバー応答遅延"
+        status: "open"
+        reported_at: "2026-05-21 09:00"
+      - id: 2
+        title: "Nuke クラッシュ (SHOT_003)"
+        status: "resolved"
+        reported_at: "2026-05-20 14:30"
+
+  POST /api/routines:
+    id: 99
+    condition: "😊"
+    date: "2026-05-21"
+
+  POST /api/retakes:
+    id: 99
+    shot_code: "SHOT_002"
+    reason: "色味調整"
+
+  POST /api/troubles:
+    id: 99
+    title: "新規トラブル"
+    status: "open"
+
+  POST /api/messages:
+    id: 99
+    sender: "Ryoji Bokan"
+
+  PATCH /api/troubles/{id}/resolve:
+    ok: true
+
+  PATCH /api/notifications/{id}/read:
+    ok: true
+
+  # --- 未実装 読出系 12 件 (R-01〜R-12, 発注書 §2.1) ---
+
+  # R-01: SHOT 詳細 (詳細版)
+  GET /api/me/shots/{id}:
+    id: 1
+    project_id: 33
+    name: "SHOT_001"
+    status: "in_review"
+    shot_code: "SHOT_001"
+    seq_code: "SEQ01"
+    asset_list:
+      - id: 101
+        shot_id: 1
+        task_id: 15
+        version: "v04"
+        file_path: "uploads/SHOT_001_v04.exr"
+        created_by: 30
+        created_at: "2026-05-21T19:00:00Z"
+    upstream:
+      - shot_code: "SHOT_000"
+        status: "done"
+    my_tasks:
+      - task_id: 12
+        content: "コンポジット修正"
+        status: "in_progress"
+
+  # R-02: イベント一覧 (event_id, start/end 構造)
+  GET /api/me/events:
+    events:
+      - event_id: 1
+        type: "meeting"
+        start: "2026-05-21T10:00:00"
+        end: "2026-05-21T10:30:00"
+        title: "朝会 — Ramps チーム"
+      - event_id: 2
+        type: "review"
+        start: "2026-05-21T14:00:00"
+        end: "2026-05-21T15:00:00"
+        title: "QC レビュー SEQ01"
+
+  # R-03: プロジェクト詳細 (project_id, color, my_shots, my_team_members)
+  GET /api/me/projects/{id}:
+    project_id: 33
+    name: "Ramps"
+    color: "#4F46E5"
+    status: "in_progress"
+    description: "VFX Project Ramps"
+    my_shots:
+      - id: 1
+        shot_code: "SHOT_001"
+        status: "in_review"
+      - id: 2
+        shot_code: "SHOT_002"
+        status: "retake"
+    my_team_members:
+      - user_id: "tanaka@studiobokan.com"
+        name: "田中 太郎"
+        role: "Compositor"
+      - user_id: "suzuki@studiobokan.com"
+        name: "鈴木 花子"
+        role: "Lighter"
+
+  # R-04: メッセージ一覧 (message_id, channel_id, author 構造)
+  GET /api/me/messages:
+    messages:
+      - message_id: 1
+        channel_id: "ch-ramps-general"
+        body: "SHOT_001 確認しました"
+        author:
+          user_id: "tanaka@studiobokan.com"
+          name: "田中 太郎"
+        created_at: "2026-05-21T09:15:00"
+
+  # R-05: DM スレッド一覧
+  GET /api/me/dm/threads:
+    threads:
+      - thread_id: 1
+        participants:
+          - user_id: "tanaka@studiobokan.com"
+            name: "田中 太郎"
+        last_message:
+          body: "よろしくお願いします"
+          created_at: "2026-05-21T09:00:00"
+        unread_count: 1
+
+  # R-06: AI ミーティングタスク候補
+  GET /api/me/meeting_tasks:
+    meeting_tasks:
+      - meeting_task_id: 1
+        content: "SHOT_001 修正スケジュール確認"
+        suggested_assignee:
+          user_id: "ryoji@studiobokan.com"
+          name: "Ryoji Bokan"
+        status: "pending"
+
+  # R-07: ルーティン最新 (routine_id, condition, ai_priorities, previous_tasks)
+  GET /api/me/routines/latest:
+    routine_id: 5
+    condition: "😊"
+    ai_priorities:
+      - "SHOT_001 コンポジット修正 (締切 今日)"
+      - "QC コメント対応"
+    prev_tasks:
+      - title: "SHOT_001 コンポジット修正"
+        status: "done"
+      - title: "QC コメント対応"
+        status: "done"
+      - title: "SHOT_003 初回提出"
+        status: "pending"
+
+  # R-08: SHOT コメント一覧
+  GET /api/me/shots/{id}/comments:
+    comments:
+      - comment_id: 1
+        author:
+          user_id: "director@studiobokan.com"
+          name: "Director"
+        body: "00:01:23 — 空の色味を調整してください"
+        timecode: "00:01:23"
+        created_at: "2026-05-20T16:00:00"
+
+  # R-09: プロジェクトチームメンバー (director ロール向け)
+  GET /api/me/projects/{id}/team_members:
+    team_members:
+      - user_id: "tanaka@studiobokan.com"
+        name: "田中 太郎"
+        role: "Compositor"
+        current_assignment: "SHOT_001"
+      - user_id: "suzuki@studiobokan.com"
+        name: "鈴木 花子"
+        role: "Lighter"
+        current_assignment: "SHOT_005"
+
+  # R-10: Look 配布一覧 (Kato 画面向け)
+  GET /api/me/look_distributions:
+    look_distributions:
+      - distribution_id: 11
+        shot_ids: [1, 2, 3]
+        source_director: "director@studiobokan.com"
+        name: "Ramps v04"
+        status: "pending"
+        deadline: "2026-05-25"
+        shot_count: 12
+      - distribution_id: 12
+        shot_ids: [4, 5]
+        source_director: "director@studiobokan.com"
+        name: "Bali v02"
+        status: "distributed"
+        deadline: null
+        shot_count: 8
+
+  # R-11: グループ一覧
+  GET /api/me/groups:
+    groups:
+      - group_id: 1
+        name: "Ramps チーム"
+        members_count: 5
+
+  # R-12: 参考資料一覧
+  GET /api/reference_materials:
+    reference_materials:
+      - ref_id: 1
+        title: "Color Reference v04"
+        url: "#"
+        tags: ["color", "ramps"]
+        created_at: "2026-05-15"
+      - ref_id: 2
+        title: "Comp Guide SEQ01"
+        url: "#"
+        tags: ["comp", "guideline"]
+        created_at: "2026-05-10"
+
+  # --- 未実装 書込系 6 件 (W-01〜W-06, 発注書 §2.2) ---
+
+  # W-01: SHOT コメント投稿
+  POST /api/shots/{id}/comments:
+    comment_id: 7
+
+  # W-02: アセット投稿 (7 field 確定形 / nibu 殿御回答 2026-06-02)
+  POST /api/assets:
+    id: 120
+    shot_id: 1
+    task_id: 15
+    version: "v05"
+    file_path: "uploads/SHOT_001_v05.exr"
+    created_by: 30
+    created_at: "2026-06-02T10:00:00Z"
+
+  # W-03: 納品受領 (PM ロール向け)
+  POST /api/deliveries/{id}/receive:
+    delivery_id: 22
+    status: "received"
+
+  # W-04: Look 配布受領
+  PATCH /api/look_distributions/{id}/accept:
+    distribution_id: 11
+    status: "in_progress"
+
+  # W-05: Look 配布完了
+  PATCH /api/look_distributions/{id}/complete:
+    distribution_id: 11
+    status: "completed"
+
+  # W-06: 通知一括既読
+  PATCH /api/notifications/read_all:
+    marked_count: 7
+
+  # --- 追補 4 点 (発注書 §2.3) ---
+
+  # 2.3.2: プロフィール編集
+  PATCH /api/me:
+    user_id: "ryoji@studiobokan.com"
+    name: "Ryoji Bokan"
+    role: "user"
+    iconUrl: null
+    base_load_hours_per_week: 40.0
+
+  # 2.3.3: ユーザー検索 (非 admin)
+  GET /api/users:
+    users:
+      - user_id: "tanaka@studiobokan.com"
+        name: "田中 太郎"
+        username: "tanaka"
+        email: "tanaka@studiobokan.com"
+        iconUrl: null
+      - user_id: "suzuki@studiobokan.com"
+        name: "鈴木 花子"
+        username: "suzuki"
+        email: "suzuki@studiobokan.com"
+        iconUrl: null

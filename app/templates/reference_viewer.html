@@ -1,0 +1,439 @@
+{% extends "base.html" %}
+
+{% block title %}参考資料ビューア — Score{% endblock %}
+
+{% block content %}
+{% if demo_mode %}
+<div style="background:#f39c12;color:#fff;text-align:center;padding:6px 12px;font-size:12px;font-weight:bold;position:sticky;top:0;z-index:9999;letter-spacing:0.05em;">
+  ⚠️ DEMO DATA — 本番データではありません
+</div>
+{% endif %}
+<div class="min-h-screen bg-gradient-to-br from-[#E0F2FE] via-[#F3E8FF] to-[#FCE7F3] font-sans text-slate-800 flex h-screen overflow-hidden" lang="ja">
+  <style>
+    .custom-scrollbar::-webkit-scrollbar { width: 6px; }
+    .custom-scrollbar::-webkit-scrollbar-track { background: transparent; }
+    .custom-scrollbar::-webkit-scrollbar-thumb { background: rgba(0,0,0,0.07); border-radius: 10px; }
+    .custom-scrollbar::-webkit-scrollbar-thumb:hover { background: rgba(0,0,0,0.13); }
+  </style>
+
+  <!-- ===== MODAL ===== -->
+  <div id="img-modal"
+       class="hidden fixed inset-0 bg-black/70 flex items-center justify-center z-50 p-6"
+       onclick="closeModal()">
+    <div class="max-w-2xl w-full relative" onclick="event.stopPropagation()">
+      <div id="modal-img-area"
+           class="aspect-video w-full rounded-3xl flex items-center justify-center shadow-2xl bg-gradient-to-br from-orange-400 to-rose-500">
+        <p id="modal-title" class="text-white font-black text-2xl text-center px-6 drop-shadow-lg"></p>
+      </div>
+      <button onclick="closeModal()"
+              class="absolute -top-4 -right-4 w-10 h-10 bg-white rounded-full shadow-xl flex items-center justify-center text-slate-600 font-black text-lg hover:bg-rose-50 transition-all">
+        ✕
+      </button>
+    </div>
+  </div>
+
+  {% include '_sidemenu.html' %}
+
+  <div class="flex-1 flex flex-col overflow-hidden">
+  <!-- ===== HEADER ===== -->
+  <header class="sticky top-0 z-20 h-16 bg-white/30 backdrop-blur-xl border-b border-white/40 flex items-center justify-between px-8 shadow-sm">
+    <a href="/shot/{{ shot_id }}"
+       class="text-indigo-600 font-bold text-sm flex items-center gap-2 hover:text-indigo-800 transition-colors">
+      ← SHOT詳細に戻る
+    </a>
+    <h1 class="font-black text-slate-800 text-base">📎 参考資料ビューア — <span translate="no">SHOT_{{ shot_id }}</span> <span translate="no">Retake</span></h1>
+    <span class="bg-indigo-100 text-indigo-600 font-black text-sm rounded-full px-3 py-1">8件</span>
+  </header>
+
+  <!-- パンくず -->
+  <nav class="text-sm text-gray-500 mb-2 px-4 py-2">
+    <a href="/projects" class="hover:text-indigo-600">プロジェクト一覧</a>
+    <span class="mx-1">›</span>
+    <a href="/project_detail/{{ project_id or 33 }}" class="hover:text-indigo-600"><span translate="no">{{ project_name or '-' }}</span></a>
+    <span class="mx-1">›</span>
+    <a href="/project_detail/{{ project_id or 33 }}" class="hover:text-indigo-600"><span translate="no">SEQ01</span></a>
+    <span class="mx-1">›</span>
+    <a href="/shot/{{ shot_id }}" class="hover:text-indigo-600"><span translate="no">SHOT_{{ shot_id }}</span></a>
+    <span class="mx-1">›</span>
+    {% if task_name %}
+    <a href="/task/{{ task_id }}" class="hover:text-indigo-600" translate="no">{{ task_name }}</a>
+    <span class="mx-1">›</span>
+    {% endif %}
+    <span class="text-gray-700">📎 参考資料</span>
+  </nav>
+
+  <!-- ===== MAIN ===== -->
+  <main class="flex-1 ml-24 overflow-y-auto max-w-5xl mx-auto px-6 py-10 space-y-10 custom-scrollbar">
+
+    <!-- Section 0: 直近 Retake 発行記録 (localStorage 経由・demo 用) -->
+    <section id="retake-records-section" class="bg-purple-50 border border-purple-200 rounded-3xl p-6 shadow-lg">
+      <div class="flex items-center gap-3 mb-4">
+        <span class="text-2xl">🎨</span>
+        <h2 class="font-black text-slate-800 text-base">直近の Retake 発行記録 (ペイント + コメント)</h2>
+        <span id="retake-saved-at" class="ml-auto text-xs text-slate-500"></span>
+        <button onclick="_injectTestPaint()" title="display logic を確認する test data 挿入" class="text-xs bg-amber-400 hover:bg-amber-500 text-white font-bold rounded-lg px-3 py-1">🧪 test data</button>
+      </div>
+      <div id="retake-records-list" class="grid grid-cols-1 md:grid-cols-2 gap-4">
+        <!-- 動的挿入 (空時は diagnostic message) -->
+      </div>
+      <div id="retake-diagnostic" class="text-xs text-slate-600 bg-white/60 border border-slate-200 rounded-xl p-3 mt-3 font-mono"></div>
+      <p class="text-xs text-slate-500 mt-3">※ /director_retake_input で 💾 保存したマーカー(TC + コメント + オーバーペイント)を表示。空時は 🧪 test data button で display 確認可</p>
+    </section>
+
+    <!-- Section 1: Retake Message -->
+    <section class="bg-rose-50 border border-rose-200 rounded-3xl p-6 space-y-4 shadow-lg">
+      <div class="flex items-start gap-4">
+        <div class="w-12 h-12 bg-rose-100 rounded-full flex items-center justify-center text-2xl shrink-0 border border-rose-200 shadow-sm">
+          🎬
+        </div>
+        <div class="flex-1">
+          <div class="flex items-center gap-3 flex-wrap">
+            <span class="font-black text-slate-800" translate="no">Director Yamada</span>
+            <span class="bg-rose-100 text-rose-700 rounded-full px-2 py-0.5 text-xs font-black">🎬 <span translate="no">Director</span></span>
+            <span class="text-xs text-slate-400 font-medium">2026-05-09 10:05</span>
+          </div>
+          <p class="mt-3 text-sm text-slate-700 leading-relaxed">
+            空気感をもっと夕方に。光量を落として、夕焼けの黄金色を強めに。<br/>
+            参考画像と動画を添付します。特に画像①の右側の空の色味を参考にしてください。<br/>
+            黄金色の彩度は強めで、ただし白飛びは避けること。17:00〜18:00の時間帯のイメージです。
+          </p>
+        </div>
+      </div>
+    </section>
+
+    <!-- Section 2: Image Gallery -->
+    <section>
+      <h2 class="text-lg font-black text-slate-800 mb-5 flex items-center gap-2">
+        <span class="w-2 h-6 bg-amber-400 rounded-full inline-block"></span>
+        🖼️ 参考静止画（4枚）
+      </h2>
+      <div class="grid grid-cols-2 gap-6">
+
+        <div onclick="openModal(0)"
+             class="bg-white/40 backdrop-blur-xl border border-white/60 rounded-3xl overflow-hidden cursor-pointer hover:scale-105 transition-transform shadow-xl group relative">
+          <div class="aspect-video bg-gradient-to-br from-orange-400 to-rose-500 flex items-center justify-center">
+            <span class="text-white font-black text-lg drop-shadow-lg text-center px-4">参考画像① 夕焼けの空</span>
+          </div>
+          <div class="absolute bottom-0 left-0 right-0 p-3 bg-black/30">
+            <span class="text-xs text-white/80 font-medium">ref_001_sunset.jpg</span>
+          </div>
+          <div class="absolute inset-0 bg-white/10 opacity-0 group-hover:opacity-100 transition-opacity rounded-3xl flex items-center justify-center">
+            <span class="text-white text-4xl drop-shadow-lg">🔍</span>
+          </div>
+        </div>
+
+        <div onclick="openModal(1)"
+             class="bg-white/40 backdrop-blur-xl border border-white/60 rounded-3xl overflow-hidden cursor-pointer hover:scale-105 transition-transform shadow-xl group relative">
+          <div class="aspect-video bg-gradient-to-br from-amber-400 to-orange-600 flex items-center justify-center">
+            <span class="text-white font-black text-lg drop-shadow-lg text-center px-4">参考画像② 黄金色ライト</span>
+          </div>
+          <div class="absolute bottom-0 left-0 right-0 p-3 bg-black/30">
+            <span class="text-xs text-white/80 font-medium">ref_002_golden_light.jpg</span>
+          </div>
+          <div class="absolute inset-0 bg-white/10 opacity-0 group-hover:opacity-100 transition-opacity rounded-3xl flex items-center justify-center">
+            <span class="text-white text-4xl drop-shadow-lg">🔍</span>
+          </div>
+        </div>
+
+        <div onclick="openModal(2)"
+             class="bg-white/40 backdrop-blur-xl border border-white/60 rounded-3xl overflow-hidden cursor-pointer hover:scale-105 transition-transform shadow-xl group relative">
+          <div class="aspect-video bg-gradient-to-br from-rose-400 to-violet-500 flex items-center justify-center">
+            <span class="text-white font-black text-lg drop-shadow-lg text-center px-4">参考画像③ コンポジット例</span>
+          </div>
+          <div class="absolute bottom-0 left-0 right-0 p-3 bg-black/30">
+            <span class="text-xs text-white/80 font-medium">ref_003_composite.jpg</span>
+          </div>
+          <div class="absolute inset-0 bg-white/10 opacity-0 group-hover:opacity-100 transition-opacity rounded-3xl flex items-center justify-center">
+            <span class="text-white text-4xl drop-shadow-lg">🔍</span>
+          </div>
+        </div>
+
+        <div onclick="openModal(3)"
+             class="bg-white/40 backdrop-blur-xl border border-white/60 rounded-3xl overflow-hidden cursor-pointer hover:scale-105 transition-transform shadow-xl group relative">
+          <div class="aspect-video bg-gradient-to-br from-yellow-400 to-amber-600 flex items-center justify-center">
+            <span class="text-white font-black text-lg drop-shadow-lg text-center px-4">参考画像④ 彩度サンプル</span>
+          </div>
+          <div class="absolute bottom-0 left-0 right-0 p-3 bg-black/30">
+            <span class="text-xs text-white/80 font-medium">ref_004_saturation.jpg</span>
+          </div>
+          <div class="absolute inset-0 bg-white/10 opacity-0 group-hover:opacity-100 transition-opacity rounded-3xl flex items-center justify-center">
+            <span class="text-white text-4xl drop-shadow-lg">🔍</span>
+          </div>
+        </div>
+
+      </div>
+    </section>
+
+    <!-- Section 3: Video Players -->
+    <section>
+      <h2 class="text-lg font-black text-slate-800 mb-5 flex items-center gap-2">
+        <span class="w-2 h-6 bg-rose-400 rounded-full inline-block"></span>
+        🎬 参考動画（2本）
+      </h2>
+      <div class="grid grid-cols-2 gap-6">
+
+        <div class="bg-white/40 backdrop-blur-xl border border-white/60 rounded-3xl overflow-hidden shadow-xl">
+          <div class="aspect-video bg-slate-800 relative flex items-center justify-center">
+            <div class="w-16 h-16 bg-white/20 rounded-full flex items-center justify-center text-3xl cursor-pointer hover:bg-white/30 transition-all border border-white/30">
+              ▶️
+            </div>
+            <div class="absolute bottom-3 left-4 text-white/80 text-xs font-bold">参考動画① / 00:15</div>
+          </div>
+          <div class="p-4 space-y-3">
+            <p class="text-xs font-black text-slate-600 truncate">夕焼けライティング参考_01.mp4</p>
+            <input type="range" min="0" max="15" value="0"
+                   class="w-full accent-indigo-600 cursor-pointer h-1.5 rounded-full" />
+            <div class="flex items-center justify-between">
+              <div class="flex items-center gap-3 text-slate-500">
+                <button class="hover:text-indigo-600 transition-colors text-lg" onclick="">⏮</button>
+                <button class="hover:text-indigo-600 transition-colors text-lg" onclick="">▶</button>
+                <button class="hover:text-indigo-600 transition-colors text-lg" onclick="">⏭</button>
+              </div>
+              <button class="text-slate-400 hover:text-indigo-600 transition-colors text-lg" onclick="">🔊</button>
+            </div>
+          </div>
+        </div>
+
+        <div class="bg-white/40 backdrop-blur-xl border border-white/60 rounded-3xl overflow-hidden shadow-xl">
+          <div class="aspect-video bg-slate-700 relative flex items-center justify-center">
+            <div class="w-16 h-16 bg-white/20 rounded-full flex items-center justify-center text-3xl cursor-pointer hover:bg-white/30 transition-all border border-white/30">
+              ▶️
+            </div>
+            <div class="absolute bottom-3 left-4 text-white/80 text-xs font-bold">参考動画② / 00:22</div>
+          </div>
+          <div class="p-4 space-y-3">
+            <p class="text-xs font-black text-slate-600 truncate">黄金色コンポジット参考_02.mp4</p>
+            <input type="range" min="0" max="22" value="0"
+                   class="w-full accent-indigo-600 cursor-pointer h-1.5 rounded-full" />
+            <div class="flex items-center justify-between">
+              <div class="flex items-center gap-3 text-slate-500">
+                <button class="hover:text-indigo-600 transition-colors text-lg" onclick="">⏮</button>
+                <button class="hover:text-indigo-600 transition-colors text-lg" onclick="">▶</button>
+                <button class="hover:text-indigo-600 transition-colors text-lg" onclick="">⏭</button>
+              </div>
+              <button class="text-slate-400 hover:text-indigo-600 transition-colors text-lg" onclick="">🔊</button>
+            </div>
+          </div>
+        </div>
+
+      </div>
+    </section>
+
+    <!-- Section 4: External Link Cards -->
+    <section>
+      <h2 class="text-lg font-black text-slate-800 mb-5 flex items-center gap-2">
+        <span class="w-2 h-6 bg-blue-400 rounded-full inline-block"></span>
+        🔗 外部参考リンク（2件）
+      </h2>
+      <div class="grid grid-cols-2 gap-6">
+
+        <div class="border-l-4 border-red-400 bg-white/40 backdrop-blur-xl rounded-3xl p-6 shadow-xl flex flex-col gap-4">
+          <div class="flex items-center gap-3">
+            <span class="text-2xl">📌</span>
+            <span class="font-black text-red-500 text-lg tracking-tight">Pinterest</span>
+          </div>
+          <div>
+            <h3 class="font-black text-slate-800 text-sm">夕焼けコンポジット参考ボード</h3>
+            <p class="text-xs text-slate-400 mt-1 font-medium truncate">pinterest.com/cinematography/sunset-comp</p>
+          </div>
+          <button onclick="window.open('#','_blank')"
+                  class="w-full py-2.5 bg-red-50 hover:bg-red-100 text-red-600 font-black rounded-2xl text-sm border border-red-200 transition-all">
+            外部で開く ↗
+          </button>
+        </div>
+
+        <div class="border-l-4 border-blue-400 bg-white/40 backdrop-blur-xl rounded-3xl p-6 shadow-xl flex flex-col gap-4">
+          <div class="flex items-center gap-3">
+            <span class="text-2xl">🎞</span>
+            <span class="font-black text-blue-500 text-lg tracking-tight">Vimeo</span>
+          </div>
+          <div>
+            <h3 class="font-black text-slate-800 text-sm" translate="no">Golden Hour Compositing — Reference Reel</h3>
+            <p class="text-xs text-slate-400 mt-1 font-medium truncate">vimeo.com/cinematography/golden-hour</p>
+          </div>
+          <button onclick="window.open('#','_blank')"
+                  class="w-full py-2.5 bg-blue-50 hover:bg-blue-100 text-blue-600 font-black rounded-2xl text-sm border border-blue-200 transition-all">
+            外部で開く ↗
+          </button>
+        </div>
+
+      </div>
+    </section>
+
+    <!-- Section 5: Action Footer -->
+    <section class="flex flex-col items-center gap-4 py-6">
+      {% if task_id %}
+      <a href="/messages?thread=task{{ task_id }}"
+         class="flex flex-col items-center gap-1 bg-indigo-600 hover:bg-indigo-700 text-white rounded-2xl px-8 py-4 text-base font-black transition-all shadow-lg">
+        <span>💬 <span translate="no">Director Yamada</span> にチャットで質問する</span>
+        <span class="text-xs font-normal opacity-80">→ <span translate="no">SHOT_{{ shot_id }} {{ task_name or '' }}</span> task thread が開きます</span>
+      </a>
+      <p class="text-xs text-slate-400 font-medium">task thread (関係者: 担当 + Lead + Director) が開きます</p>
+      {% else %}
+      <a href="/messages?thread=shot{{ '%03d' % shot_id }}"
+         class="flex flex-col items-center gap-1 bg-indigo-600 hover:bg-indigo-700 text-white rounded-2xl px-8 py-4 text-base font-black transition-all shadow-lg">
+        <span>💬 <span translate="no">Director Yamada</span> にチャットで質問する</span>
+        <span class="text-xs font-normal opacity-80">→ <span translate="no">SHOT_{{ '%03d' % shot_id }}</span> 関係者 thread が開きます</span>
+      </a>
+      <p class="text-xs text-slate-400 font-medium">SHOT 関係者全員の thread が開きます</p>
+      {% endif %}
+      <a href="/shot/{{ shot_id }}"
+         class="text-slate-500 text-sm hover:text-indigo-600 transition-colors font-medium">
+        ← SHOT詳細に戻る
+      </a>
+    </section>
+
+  </main>
+  </div>
+
+  <!-- mini-footer Language button -->
+  
+
+  <!-- language-modal -->
+  <div id="language-modal" class="hidden fixed inset-0 bg-black/30 backdrop-blur-sm flex items-center justify-center z-[999]" onclick="document.getElementById('language-modal').classList.add('hidden')">
+    <div class="bg-white/90 backdrop-blur-xl border border-white/60 rounded-3xl shadow-2xl p-8 w-80 text-center" onclick="event.stopPropagation()">
+      <h3 class="text-lg font-black text-slate-800 mb-6">🌐 言語を選択</h3>
+      <div class="flex flex-col gap-3">
+        <button class="w-full py-3 bg-slate-100 hover:bg-slate-200 text-slate-600 font-bold rounded-2xl text-sm transition-all">繁體中文</button>
+        <button class="w-full py-3 bg-indigo-600 text-white font-bold rounded-2xl text-sm cursor-default">日本語（現在）</button>
+        <button class="w-full py-3 bg-slate-100 hover:bg-slate-200 text-slate-600 font-bold rounded-2xl text-sm transition-all">English</button>
+      </div>
+      <p class="text-xs text-slate-400 mt-4">段階的に拡張中</p>
+    </div>
+  </div>
+
+  <script>
+  function openLanguageModal() {
+    document.getElementById('language-modal').classList.remove('hidden');
+  }
+  </script>
+
+  <script>
+    const imgData = [
+      { title: "参考画像① 夕焼けの空",       gradient: "from-orange-400 to-rose-500" },
+      { title: "参考画像② 黄金色ライト",     gradient: "from-amber-400 to-orange-600" },
+      { title: "参考画像③ コンポジット例",   gradient: "from-rose-400 to-violet-500" },
+      { title: "参考画像④ 彩度サンプル",     gradient: "from-yellow-400 to-amber-600" },
+    ];
+
+    function openModal(idx) {
+      const d = imgData[idx];
+      const area = document.getElementById('modal-img-area');
+      area.className = `aspect-video w-full rounded-3xl flex items-center justify-center shadow-2xl bg-gradient-to-br ${d.gradient}`;
+      document.getElementById('modal-title').textContent = d.title;
+      document.getElementById('img-modal').classList.remove('hidden');
+    }
+
+    function closeModal() {
+      document.getElementById('img-modal').classList.add('hidden');
+    }
+
+    document.addEventListener('keydown', e => { if (e.key === 'Escape') closeModal(); });
+
+    // ===== Retake オーバーペイント 表示 (localStorage 経由) =====
+    const _SHOT_ID = "{{ shot_id }}";
+    const _TASK_ID = "{{ task_id or '' }}";
+    function _renderRetakeRecords(){
+      const shotId = _SHOT_ID;
+      const taskId = _TASK_ID;
+      const sec = document.getElementById('retake-records-section');
+      const list = document.getElementById('retake-records-list');
+      const saved = document.getElementById('retake-saved-at');
+      const diag = document.getElementById('retake-diagnostic');
+      if (!sec || !list) return;
+      // localStorage 全 key 走査 — 全 SHOT/全 task の保存記録を catch-all 集約
+      const matches = [];
+      const allKeys = [];
+      const generalPrefix = 'score_retake_paint_';
+      for (let i = 0; i < localStorage.length; i++) {
+        const k = localStorage.key(i);
+        if (!k || !k.startsWith(generalPrefix)) continue;
+        allKeys.push(k);
+        // key 形式: score_retake_paint_{shotId}_{taskId}
+        const parts = k.substring(generalPrefix.length).split('_');
+        const keyShot = parts[0] || '0';
+        const keyTask = parts.slice(1).join('_') || '0';
+        try {
+          const v = JSON.parse(localStorage.getItem(k));
+          if (v && v.comments && v.comments.length > 0) {
+            const isCurrentShot = keyShot === shotId;
+            const isCurrentTask = keyTask === taskId;
+            matches.push({key: k, shotId: keyShot, taskId: keyTask, isCurrentShot, isCurrentTask, data: v});
+          }
+        } catch(e) {}
+      }
+      // ソート: 現 task 最優先 → 現 SHOT → 別 SHOT
+      matches.sort((a, b) => {
+        if (a.isCurrentTask !== b.isCurrentTask) return a.isCurrentTask ? -1 : 1;
+        if (a.isCurrentShot !== b.isCurrentShot) return a.isCurrentShot ? -1 : 1;
+        return 0;
+      });
+      // diagnostic 情報
+      if (diag) {
+        diag.innerHTML = `<strong>🔍 diagnostic</strong>:<br>
+          現在 URL: shot_id=${shotId} task_id=${taskId}<br>
+          score_retake_paint_* な全 key (${allKeys.length} 件): ${allKeys.join(', ') || '(なし)'}<br>
+          表示 matches: ${matches.length} 件 (全 SHOT 横断)<br>
+          ${matches.length === 0 ? '⚠️ <strong>保存データが見つかりません</strong> — /director_retake_input で 💾 保存 button を押したか確認してください。<br>または 🧪 test data button で display 動作を確認可能。' : '✅ 表示中'}`;
+      }
+      if (matches.length === 0) { list.innerHTML = ''; return; }
+      sec.classList.remove('hidden');
+      if (saved && matches[0].data.saved_at) {
+        saved.textContent = '保存: ' + matches[0].data.saved_at.substring(0, 16).replace('T', ' ') + (matches.length > 1 ? ` / 他 ${matches.length - 1} 件` : '');
+      }
+      // 各 match を section 単位で render — SHOT/task 横断で表示・現 SHOT/task をハイライト
+      list.innerHTML = matches.map(m => {
+        let badge, badgeCls;
+        if (m.isCurrentTask && m.isCurrentShot) {
+          badge = '✅ 現 task'; badgeCls = 'text-purple-700';
+        } else if (m.isCurrentShot) {
+          badge = '📁 別 task (同 SHOT)'; badgeCls = 'text-indigo-700';
+        } else {
+          badge = '🔀 別 SHOT'; badgeCls = 'text-slate-500';
+        }
+        const taskHeader = `<div class="col-span-full text-xs font-bold ${badgeCls} mb-1 mt-2">${badge}: SHOT_${String(m.shotId).padStart(3, '0')} / task_id=${m.taskId} (${m.data.comments.length}件)</div>`;
+        const cards = m.data.comments.map(c => `
+          <div class="bg-white/80 rounded-2xl shadow-md overflow-hidden">
+            <div class="aspect-video relative bg-gradient-to-br from-slate-700 to-slate-900">
+              ${c.paint ? `<img src="${c.paint}" class="absolute inset-0 w-full h-full object-cover" />` : ''}
+              <div class="absolute top-2 left-2 bg-rose-500 text-white font-black rounded px-2 py-1 text-xs">⏱ ${c.tc}</div>
+            </div>
+            <div class="p-3">
+              <p class="text-sm text-slate-700">${c.comment ? c.comment.replace(/[<>&]/g, ch => ({'<':'&lt;','>':'&gt;','&':'&amp;'}[ch])) : '<span class="text-slate-400 italic">コメント未記入</span>'}</p>
+            </div>
+          </div>
+        `).join('');
+        return taskHeader + cards;
+      }).join('');
+    }
+
+    // 初回実行
+    _renderRetakeRecords();
+
+    // 🧪 test data inject — display logic 検証用
+    function _injectTestPaint() {
+      const key = `score_retake_paint_${_SHOT_ID}_${_TASK_ID || '12'}`;
+      // 簡易 PNG dataURL (赤い○ 50x30px)
+      const c = document.createElement('canvas');
+      c.width = 100; c.height = 60;
+      const ctx = c.getContext('2d');
+      ctx.strokeStyle = '#ef4444'; ctx.lineWidth = 4; ctx.lineCap = 'round';
+      ctx.beginPath(); ctx.arc(50, 30, 15, 0, Math.PI * 2); ctx.stroke();
+      ctx.beginPath(); ctx.moveTo(20, 50); ctx.lineTo(80, 50); ctx.stroke();
+      const paintDataURL = c.toDataURL('image/png');
+      const testData = {
+        shot_id: _SHOT_ID, task_id: _TASK_ID || '12',
+        saved_at: new Date().toISOString(),
+        comments: [
+          {mid: 1, tc: '00:01:23', comment: 'TEST: リムライトをもう一段強く', paint: paintDataURL},
+          {mid: 2, tc: '00:02:45', comment: 'TEST: 色温度を寒色寄りに', paint: paintDataURL},
+        ],
+      };
+      localStorage.setItem(key, JSON.stringify(testData));
+      _renderRetakeRecords();
+      alert('🧪 test data 挿入完了 → ' + key);
+    }
+  </script>
+
+</div>
+{% endblock %}

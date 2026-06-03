@@ -1,0 +1,92 @@
+{% extends "base.html" %}
+
+{% block title %}Score — 制作進捗トラッカー{% endblock %}
+
+{% block content %}
+<div class="min-h-screen w-full bg-gradient-to-br from-[#0f172a] via-[#1e293b] to-[#0f172a] text-white p-8">
+
+  <!-- Header -->
+  <div class="mb-8">
+    <h1 class="text-3xl font-black tracking-tight">📊 制作進捗トラッカー</h1>
+    <p class="text-slate-400 text-sm mt-1">プロジェクト ID: {{ project_id }} — ショット軸の詳細進捗・リテイク・トラブル状況</p>
+  </div>
+
+  {% if tracker %}
+
+  <!-- Shots Progress -->
+  {% if tracker.shots %}
+  <section class="mb-8">
+    <h2 class="text-lg font-black text-slate-200 mb-4">🎬 ショット進捗</h2>
+    <div class="grid grid-cols-1 md:grid-cols-3 gap-4">
+      {% for shot in tracker.shots %}
+      <div class="bg-white/10 backdrop-blur-xl border border-white/20 rounded-3xl p-5 hover:bg-white/15 transition-all">
+        <div class="flex items-center gap-3 mb-3">
+          <div class="w-10 h-10 rounded-2xl bg-indigo-500/30 flex items-center justify-center text-xl">🎞️</div>
+          <div>
+            <h3 class="text-sm font-black text-white truncate" translate="no">{{ shot.name if shot.name is defined else shot }}</h3>
+            <p class="text-xs text-slate-400">{{ shot.seq_code if shot.seq_code is defined else '' }}</p>
+          </div>
+        </div>
+        <span class="inline-block px-3 py-1 bg-indigo-500/40 text-indigo-200 text-xs font-bold rounded-full">
+          {{ shot.status if shot.status is defined else '—' }}
+        </span>
+      </div>
+      {% endfor %}
+    </div>
+  </section>
+  {% endif %}
+
+  <!-- Retakes -->
+  {% if tracker.retakes %}
+  <section class="mb-8">
+    <h2 class="text-lg font-black text-slate-200 mb-4">🔁 リテイク状況</h2>
+    <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
+      {% for retake in tracker.retakes %}
+      <div class="bg-white/10 backdrop-blur-xl border border-white/20 rounded-3xl p-5 hover:bg-white/15 transition-all">
+        <div class="flex items-start justify-between mb-2">
+          <div>
+            <h3 class="text-sm font-black text-white" translate="no">{{ retake.shot_name if retake.shot_name is defined else 'ショット不明' }}</h3>
+            <p class="text-xs text-slate-400 mt-1">{{ retake.note if retake.note is defined else '' }}</p>
+          </div>
+          <span class="px-3 py-1 bg-amber-500/30 text-amber-300 text-xs font-bold rounded-full">リテイク</span>
+        </div>
+      </div>
+      {% endfor %}
+    </div>
+  </section>
+  {% endif %}
+
+  <!-- Troubles -->
+  {% if tracker.troubles %}
+  <section>
+    <h2 class="text-lg font-black text-slate-200 mb-4">⚠️ トラブル状況</h2>
+    <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
+      {% for trouble in tracker.troubles %}
+      <div class="bg-white/10 backdrop-blur-xl border border-white/20 rounded-3xl p-5 hover:bg-white/15 transition-all">
+        <div class="flex items-start justify-between mb-2">
+          <div>
+            <h3 class="text-sm font-black text-white" translate="no">{{ trouble.title if trouble.title is defined else 'トラブル' }}</h3>
+            <p class="text-xs text-slate-400 mt-1">{{ trouble.description if trouble.description is defined else '' }}</p>
+          </div>
+          <span class="inline-block px-3 py-1 text-xs font-bold rounded-full
+            {% if trouble.resolved %}bg-emerald-500/30 text-emerald-300{% else %}bg-red-500/30 text-red-300{% endif %}">
+            {{ '解決済' if trouble.resolved else '未解決' }}
+          </span>
+        </div>
+      </div>
+      {% endfor %}
+    </div>
+  </section>
+  {% endif %}
+
+  {% else %}
+  <!-- No data (Mock phase) -->
+  <div class="bg-white/10 backdrop-blur-xl border border-white/20 rounded-3xl p-8 text-center">
+    <div class="text-4xl mb-4">🚧</div>
+    <p class="text-slate-300 font-bold">制作進捗データは Phase 6 以降で実装予定です</p>
+    <p class="text-slate-500 text-sm mt-2">プロジェクト ID: {{ project_id }}</p>
+  </div>
+  {% endif %}
+
+</div>
+{% endblock %}

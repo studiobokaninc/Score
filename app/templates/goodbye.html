@@ -1,0 +1,78 @@
+{% extends "base.html" %}
+
+{% block title %}お疲れ様でした — Score{% endblock %}
+
+{% block content %}
+<style>
+  body { background: linear-gradient(135deg, #E0F2FE 0%, #F3E8FF 50%, #FCE7F3 100%); }
+</style>
+<div class="min-h-screen flex items-center justify-center p-6 text-slate-800">
+  <div class="bg-white/40 backdrop-blur-xl border border-white/60 rounded-3xl shadow-xl p-10 max-w-lg w-full">
+
+    <div class="text-6xl text-center mb-4">🌙</div>
+
+    <h1 class="text-3xl font-black text-slate-800 text-center mb-2">お疲れ様でした、<span translate="no">{{ user.name or 'ユーザ' }}</span>！</h1>
+
+    <p class="text-slate-500 text-center text-sm mb-8">退勤打刻完了</p>
+
+    <div class="bg-white/60 rounded-2xl p-6 mb-6">
+      <h2 class="text-sm font-bold text-slate-700 mb-4">✨ 本日の達成事項</h2>
+      <ul class="space-y-3">
+        <li class="flex items-center gap-2 text-sm text-slate-700">
+          <span>✅</span>
+          <span><span translate="no">SHOT_001</span> <span translate="no">Comp_v04</span> 提出（<span translate="no">Reviewing</span>）</span>
+        </li>
+        <li class="flex items-center gap-2 text-sm text-slate-700">
+          <span>✅</span>
+          <span><span translate="no">Project Beta</span> <span translate="no">SHOT_B_007</span> <span translate="no">Adopt</span>対応・v01提出</span>
+        </li>
+        <li class="flex items-center gap-2 text-sm text-slate-700">
+          <span>✅</span>
+          <span>変更申請送信（<span translate="no">SHOT_001</span> 〆切調整）</span>
+        </li>
+        <li class="flex items-center gap-2 text-sm text-slate-700">
+          <span>✅</span>
+          <span><span translate="no">MattePaint</span> <span translate="no">Approved</span> 確認・バージョン比較完了</span>
+        </li>
+      </ul>
+    </div>
+
+    <div class="flex items-end justify-center gap-2 mb-8">
+      <span class="text-slate-500 text-sm">本日の完了タスク</span>
+      <span class="text-4xl font-black text-indigo-600 leading-none">{{ completed_count or 0 }}</span>
+      <span class="text-slate-500 text-lg leading-tight">件</span>
+    </div>
+
+    <p class="text-slate-500 text-sm text-center italic mb-8">
+      「{{ greeting_message or '嵐の日も、あなたは最善を尽くしました。ゆっくり休んでください。' }}」
+    </p>
+
+    <div class="space-y-3">
+      <a href="/login"
+         class="block bg-white/60 border border-white/60 text-slate-600 text-center font-semibold rounded-2xl px-6 py-3 hover:bg-white/80 transition-colors">
+        ↩️ ログアウト
+      </a>
+    </div>
+
+  </div>
+</div>
+
+
+
+<!-- Language Modal -->
+<div id="language-modal" class="hidden fixed inset-0 bg-black/30 backdrop-blur-sm flex items-center justify-center z-50">
+  <div class="bg-white/90 backdrop-blur-xl border border-white/60 rounded-3xl shadow-2xl p-8 max-w-sm w-full mx-4 flex flex-col gap-4">
+    <h3 class="font-black text-slate-800 text-lg text-center">🌐 言語を選択</h3>
+    <button class="w-full py-3 bg-white border border-slate-200 rounded-2xl font-bold text-slate-700 hover:bg-slate-50 transition-all">繁體中文</button>
+    <button class="w-full py-3 bg-indigo-600 text-white rounded-2xl font-bold transition-all">日本語（現在）</button>
+    <button class="w-full py-3 bg-white border border-slate-200 rounded-2xl font-bold text-slate-700 hover:bg-slate-50 transition-all">English</button>
+    <p class="text-center text-xs text-slate-400">段階的に拡張中</p>
+    <button onclick="closeLanguageModal()" class="w-full py-2.5 bg-slate-100 hover:bg-slate-200 text-slate-600 font-bold rounded-2xl transition-all">閉じる</button>
+  </div>
+</div>
+
+<script>
+function openLanguageModal() { document.getElementById('language-modal').classList.remove('hidden'); }
+function closeLanguageModal() { document.getElementById('language-modal').classList.add('hidden'); }
+</script>
+{% endblock %}

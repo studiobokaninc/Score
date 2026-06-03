@@ -1,0 +1,235 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>QC レビュー — SHOT_001 v04 / Score</title>
+  <script src="https://cdn.tailwindcss.com"></script>
+</head>
+<body class="h-screen w-full bg-gradient-to-br from-[#E0F2FE] via-[#F3E8FF] to-[#FCE7F3] font-sans text-slate-800 flex overflow-hidden">
+{% if demo_mode %}
+<div style="background:#f39c12;color:#fff;text-align:center;padding:6px 12px;font-size:12px;font-weight:bold;position:fixed;top:0;left:0;right:0;z-index:9999;letter-spacing:0.05em;">
+  ⚠️ DEMO DATA — 本番データではありません
+</div>
+{% endif %}
+{% include '_sidemenu.html' %}
+
+  <!-- Main Content (sidemenu fixed ゆえ ml-24 で offset) -->
+  <div class="flex-1 ml-24 flex flex-col overflow-hidden">
+
+    <!-- Sticky Header -->
+    <header class="bg-white/30 backdrop-blur-xl border-b border-white/60 px-8 py-4 flex-shrink-0">
+      <nav class="flex items-center gap-1.5 text-sm text-slate-500 mb-2 flex-wrap">
+        <a href="/projects" class="hover:text-purple-600 transition-colors">プロジェクト一覧</a>
+        <span class="text-slate-300">›</span>
+        <a href="/project_detail/{{ project_id or 33 }}" class="hover:text-purple-600 transition-colors"><span translate="no">{{ project_name or 'Ramps' }}</span></a>
+        <span class="text-slate-300">›</span>
+        <a href="/project_detail/{{ project_id or 33 }}" class="hover:text-purple-600 transition-colors" translate="no">{{ seq_code or 'SEQ01' }}</a>
+        <span class="text-slate-300">›</span>
+        <a href="/shot/{{ shot_id or 1 }}" class="hover:text-purple-600 transition-colors" translate="no">SHOT_{{ shot_id or 1 }}</a>
+        <span class="text-slate-300">›</span>
+        <span class="font-semibold text-purple-600 bg-purple-50 px-2 py-0.5 rounded-lg"><span translate="no">QC</span>レビュー</span>
+      </nav>
+      <h1 class="text-2xl font-black text-purple-800">🔍 <span translate="no">QC</span> レビュー — <span translate="no">SHOT_001 v04</span></h1>
+    </header>
+
+    <!-- Scrollable Content -->
+    <div class="flex-1 overflow-y-auto p-8">
+      <div class="flex gap-6 items-start">
+
+        <!-- Left: Preview + 3 Action Buttons -->
+        <div class="flex-1 flex flex-col gap-6">
+
+          <!-- Preview Card -->
+          <div class="bg-white/40 backdrop-blur-xl border border-white/60 rounded-3xl shadow-xl p-6">
+            <div class="bg-gradient-to-br from-amber-300 to-rose-500 w-full h-64 rounded-3xl flex items-end p-4 relative overflow-hidden">
+              <div class="absolute inset-0 flex items-center justify-center">
+                <span class="text-white font-black text-5xl opacity-20">📽️</span>
+              </div>
+              <span class="relative bg-black/40 text-white text-sm font-bold px-3 py-1.5 rounded-xl backdrop-blur-sm">
+                v04 — 2026-05-10 19:30 提出
+              </span>
+            </div>
+          </div>
+
+          <!-- 3 Action Buttons Card -->
+          <div class="bg-white/40 backdrop-blur-xl border border-white/60 rounded-3xl shadow-xl p-6">
+            <h2 class="font-black text-slate-800 text-base mb-4">QC アクション</h2>
+            <div class="flex gap-4">
+              <!-- ScoreUserRole(user_id, project_id, role)経由で書込み権限を確認してから実行（殿御裁定④ 2026-05-14） -->
+              <button onclick="showApproveModal()"
+                class="flex-1 bg-emerald-500 hover:bg-emerald-600 text-white font-black rounded-2xl py-3.5 transition-all">
+                ✅ <span translate="no">Approve</span>
+              </button>
+              <a href="/director_retake_input"
+                class="flex-1 text-center bg-purple-600 hover:bg-purple-700 text-white font-black rounded-2xl py-3.5 transition-all">
+                ✏️ <span translate="no">Retake</span>を発行する
+              </a>
+              <button onclick="showCommentModal()"
+                class="flex-1 bg-white/60 hover:bg-white/80 text-slate-700 font-black rounded-2xl py-3.5 border border-white/60 transition-all">
+                💬 コメント
+              </button>
+            </div>
+          </div>
+
+        </div>
+
+        <!-- Right: Version History -->
+        <div class="w-72 flex-shrink-0">
+          <div class="bg-white/40 backdrop-blur-xl border border-white/60 rounded-3xl shadow-xl p-5">
+            <h2 class="font-bold text-slate-800 mb-4">📋 バージョン履歴</h2>
+            <div class="space-y-2">
+
+              <!-- v01 -->
+              <div class="flex items-center justify-between p-3 rounded-2xl hover:bg-purple-50 transition-colors cursor-pointer">
+                <div class="flex items-center gap-2">
+                  <div class="w-14 h-9 rounded-xl bg-gradient-to-br from-blue-200 to-indigo-300 flex-shrink-0 relative overflow-hidden">
+                    <span class="absolute bottom-0.5 left-0.5 text-white text-[8px] font-bold bg-black/30 rounded px-1" translate="no">v01</span>
+                  </div>
+                  <div>
+                    <div class="text-sm font-medium text-slate-700" translate="no">v01</div>
+                    <div class="text-xs text-slate-400">2026-05-01</div>
+                  </div>
+                </div>
+                <span class="text-[10px] bg-emerald-100 text-emerald-700 font-bold px-2 py-0.5 rounded-full" translate="no">Approved</span>
+              </div>
+
+              <!-- v02 -->
+              <div class="flex items-center justify-between p-3 rounded-2xl hover:bg-purple-50 transition-colors cursor-pointer">
+                <div class="flex items-center gap-2">
+                  <div class="w-14 h-9 rounded-xl bg-gradient-to-br from-sky-200 to-blue-300 flex-shrink-0 relative overflow-hidden">
+                    <span class="absolute bottom-0.5 left-0.5 text-white text-[8px] font-bold bg-black/30 rounded px-1" translate="no">v02</span>
+                  </div>
+                  <div>
+                    <div class="text-sm font-medium text-slate-700" translate="no">v02</div>
+                    <div class="text-xs text-slate-400">2026-05-08</div>
+                  </div>
+                </div>
+                <span class="text-[10px] bg-emerald-100 text-emerald-700 font-bold px-2 py-0.5 rounded-full" translate="no">Approved</span>
+              </div>
+
+              <!-- v03 -->
+              <div class="flex flex-col p-3 rounded-2xl hover:bg-rose-50 transition-colors cursor-pointer">
+                <div class="flex items-center justify-between">
+                  <div class="flex items-center gap-2">
+                    <div class="w-14 h-9 rounded-xl bg-gradient-to-br from-amber-200 to-rose-300 border border-rose-300 flex-shrink-0 relative overflow-hidden">
+                      <span class="absolute bottom-0.5 left-0.5 text-white text-[8px] font-bold bg-black/30 rounded px-1" translate="no">v03</span>
+                    </div>
+                    <div>
+                      <div class="text-sm font-medium text-slate-700" translate="no">v03</div>
+                      <div class="text-xs text-slate-400">2026-05-09 23:45</div>
+                    </div>
+                  </div>
+                  <span class="text-[10px] bg-rose-100 text-rose-700 font-bold px-2 py-0.5 rounded-full" translate="no">Retake</span>
+                </div>
+                <div class="mt-1.5 text-[10px] text-rose-600 bg-rose-50 rounded-xl px-2 py-1">💬 「空気感をもっと夕方に」</div>
+              </div>
+
+              <!-- v04 (選択中) -->
+              <div class="flex items-center justify-between p-3 rounded-2xl bg-purple-100 border border-purple-200 cursor-pointer">
+                <div class="flex items-center gap-2">
+                  <div class="w-14 h-9 rounded-xl bg-gradient-to-br from-amber-300 to-rose-500 flex-shrink-0 relative overflow-hidden">
+                    <span class="absolute bottom-0.5 left-0.5 text-white text-[8px] font-bold bg-black/30 rounded px-1" translate="no">v04</span>
+                  </div>
+                  <div>
+                    <div class="text-sm font-bold text-purple-700" translate="no">v04 <span class="font-normal text-purple-500">【選択中】</span></div>
+                    <div class="text-xs text-slate-400">2026-05-10 19:30</div>
+                  </div>
+                </div>
+                <span class="text-[10px] bg-amber-100 text-amber-700 font-bold px-2 py-0.5 rounded-full" translate="no">Reviewing</span>
+              </div>
+
+              <!-- v05 (最新・Approved) -->
+              <div class="flex items-center justify-between p-3 rounded-2xl hover:bg-purple-50 transition-colors cursor-pointer">
+                <div class="flex items-center gap-2">
+                  <div class="w-14 h-9 rounded-xl bg-gradient-to-br from-amber-300 to-rose-500 flex-shrink-0 relative overflow-hidden">
+                    <span class="absolute bottom-0.5 left-0.5 text-white text-[8px] font-bold bg-black/30 rounded px-1" translate="no">v05</span>
+                  </div>
+                  <div>
+                    <div class="text-sm font-medium text-slate-700" translate="no">v05</div>
+                    <div class="text-xs text-slate-400">2026-05-10 18:30</div>
+                  </div>
+                </div>
+                <span class="text-[10px] bg-emerald-100 text-emerald-700 font-bold px-2 py-0.5 rounded-full" translate="no">Approved</span>
+              </div>
+
+            </div>
+          </div>
+        </div>
+
+      </div>
+    </div>
+  </div>
+
+  <!-- Approve 確認モーダル -->
+  <div id="approveModal" class="hidden fixed inset-0 bg-black/30 backdrop-blur-sm flex items-center justify-center z-50">
+    <div class="bg-white/90 backdrop-blur-xl rounded-3xl shadow-2xl p-8 max-w-sm w-full mx-4 text-center">
+      <div class="text-5xl mb-4">✅</div>
+      <h2 class="text-xl font-black text-slate-800 mb-2"><span translate="no">Approve</span> 完了</h2>
+      <p class="text-sm text-slate-500 mb-6"><span translate="no">v04</span> を <span translate="no">Approve</span> しました。<br><span translate="no">Sato</span> さんに通知されます。</p>
+      <a href="/director_dashboard"
+         class="inline-block bg-purple-600 text-white font-black rounded-2xl px-6 py-3 text-sm transition-all hover:bg-purple-700">
+        ダッシュボードへ戻る
+      </a>
+    </div>
+  </div>
+
+  <!-- コメントモーダル -->
+  <div id="commentModal" class="hidden fixed inset-0 bg-black/30 backdrop-blur-sm flex items-center justify-center z-50">
+    <div class="bg-white/90 backdrop-blur-xl rounded-3xl shadow-2xl p-8 max-w-sm w-full mx-4">
+      <h2 class="text-lg font-black text-slate-800 mb-4">💬 コメントを送信</h2>
+      <textarea id="commentText" rows="4"
+        class="w-full border border-white/60 bg-white/60 rounded-2xl px-4 py-3 text-sm text-slate-700 focus:outline-none focus:ring-2 focus:ring-purple-300 resize-none mb-4"
+        placeholder="フィードバックを入力..."></textarea>
+      <div class="flex gap-3">
+        <button onclick="closeCommentModal()"
+          class="flex-1 bg-slate-100 hover:bg-slate-200 text-slate-600 font-bold rounded-2xl py-2.5 text-sm transition-all">
+          キャンセル
+        </button>
+        <button onclick="submitComment()"
+          class="flex-1 bg-purple-600 hover:bg-purple-700 text-white font-bold rounded-2xl py-2.5 text-sm transition-all">
+          送信
+        </button>
+      </div>
+    </div>
+  </div>
+
+  <!-- mini-footer -->
+  <footer class="fixed bottom-0 left-0 right-0 bg-white/60 backdrop-blur-md border-t border-white/60 flex items-center justify-end px-6 py-1.5 z-30">
+    <button onclick="openLanguageModal()" class="text-xs text-slate-400 hover:text-slate-600 flex items-center gap-1 transition-colors">🌐Language</button>
+  </footer>
+
+  <!-- language-modal -->
+  <div id="language-modal" class="hidden fixed inset-0 bg-black/30 backdrop-blur-sm flex items-center justify-center z-50">
+    <div class="bg-white/90 backdrop-blur-xl border border-white/60 rounded-3xl shadow-2xl p-8 flex flex-col items-center gap-4 min-w-[280px]">
+      <h2 class="font-black text-slate-800 text-lg">🌐 言語切替</h2>
+      <div class="flex flex-col gap-3 w-full">
+        <button class="w-full bg-slate-100 hover:bg-slate-200 text-slate-700 font-bold rounded-2xl py-2.5 text-sm transition-all">繁體中文</button>
+        <button class="w-full bg-purple-600 text-white font-bold rounded-2xl py-2.5 text-sm">日本語（現在）</button>
+        <button class="w-full bg-slate-100 hover:bg-slate-200 text-slate-700 font-bold rounded-2xl py-2.5 text-sm transition-all">English</button>
+      </div>
+      <p class="text-xs text-slate-400">段階的に拡張中</p>
+      <button onclick="document.getElementById('language-modal').classList.add('hidden')" class="text-xs text-slate-400 hover:text-slate-600 transition-colors">閉じる</button>
+    </div>
+  </div>
+
+  <script>
+    function openLanguageModal() {
+      document.getElementById('language-modal').classList.remove('hidden');
+    }
+    function showApproveModal() {
+      document.getElementById('approveModal').classList.remove('hidden');
+    }
+    function showCommentModal() {
+      document.getElementById('commentModal').classList.remove('hidden');
+    }
+    function closeCommentModal() {
+      document.getElementById('commentModal').classList.add('hidden');
+    }
+    function submitComment() {
+      document.getElementById('commentText').value = '';
+      document.getElementById('commentModal').classList.add('hidden');
+    }
+  </script>
+</body>
+</html>

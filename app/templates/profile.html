@@ -1,0 +1,528 @@
+{% extends "base.html" %}
+
+{% block title %}プロフィール設定 — Score{% endblock %}
+
+{% block content %}
+{% if demo_mode %}
+<div style="background:#f39c12;color:#fff;text-align:center;padding:6px 12px;font-size:12px;font-weight:bold;position:fixed;top:0;left:0;right:0;z-index:9999;">
+  ⚠️ DEMO DATA — 本番データではありません
+</div>
+{% endif %}
+
+<div class="min-h-screen bg-gradient-to-br from-[#E0F2FE] via-[#F3E8FF] to-[#FCE7F3] flex">
+  {% include '_sidemenu.html' %}
+
+  <main class="flex-1 ml-24 p-8 max-w-4xl mx-auto">
+    <nav class="text-xs text-slate-500 mb-4">
+      <a href="/dashboard" class="hover:text-indigo-600">ホーム</a>
+      <span class="text-slate-300 mx-1">›</span>
+      <span class="text-indigo-600 font-bold">プロフィール設定</span>
+    </nav>
+
+    <h1 class="text-2xl font-black text-slate-800 mb-6">👤 プロフィール設定</h1>
+
+    <!-- profile card -->
+    <div class="bg-white/60 backdrop-blur-xl border border-white/60 rounded-3xl shadow-xl p-6 mb-6">
+      <div class="flex items-start gap-6">
+        <!-- avatar -->
+        <div class="shrink-0">
+          <div id="avatar-display" class="w-24 h-24 rounded-full bg-gradient-to-br from-indigo-400 to-purple-500 flex items-center justify-center text-white text-3xl font-black shadow-lg overflow-hidden bg-no-repeat bg-cover">
+            {{ (user.name or '?')[0] }}
+          </div>
+          <button onclick="_openAvatarModal()" class="mt-2 text-xs text-indigo-600 hover:text-indigo-800 font-bold w-full">
+            🖼 アバター変更
+          </button>
+          <input type="file" id="avatar-input" accept="image/*" class="hidden" onchange="_onAvatarChange(event)">
+          <input type="file" id="avatar-file" accept="image/png,image/jpeg,image/webp" class="hidden" onchange="submitAvatar(event)">
+          <button onclick="document.getElementById('avatar-file').click()" class="bg-indigo-600 hover:bg-indigo-700 text-white font-bold rounded-2xl px-6 py-2.5 text-sm">📷 画像変更</button>
+        </div>
+        <!-- info -->
+        <div class="flex-1">
+          <div class="grid grid-cols-2 gap-4">
+            <div>
+              <label class="block text-xs font-bold text-slate-500 mb-1">氏名</label>
+              <input type="text" id="profile-name" value="{{ profile.name or user.name or '' }}" class="w-full bg-white/80 border border-slate-200 rounded-xl px-3 py-2 text-sm focus:ring-2 focus:ring-indigo-300 outline-none">
+            </div>
+            <div>
+              <label class="block text-xs font-bold text-slate-500 mb-1">🎂 誕生日</label>
+              <input type="date" id="profile-birthday" value="{{ profile.birthday or '' }}" class="w-full bg-white/80 border border-slate-200 rounded-xl px-3 py-2 text-sm focus:ring-2 focus:ring-indigo-300 outline-none">
+            </div>
+            <div>
+              <label class="block text-xs font-bold text-slate-500 mb-1">Email <span class="text-[10px] text-slate-400">(変更不可)</span></label>
+              <input type="text" value="{{ user.email or '' }}" readonly class="w-full bg-slate-50 border border-slate-200 rounded-xl px-3 py-2 text-sm text-slate-500 cursor-not-allowed" translate="no">
+            </div>
+            <div>
+              <label class="block text-xs font-bold text-slate-500 mb-1">ロール <span class="text-[10px] text-slate-400">(変更不可)</span></label>
+              <input type="text" value="{{ user.role or '' }}" readonly class="w-full bg-slate-50 border border-slate-200 rounded-xl px-3 py-2 text-sm text-slate-500 cursor-not-allowed" translate="no">
+            </div>
+            <div class="col-span-2">
+              <label class="block text-xs font-bold text-slate-500 mb-1">💬 自己紹介 / ステータスメッセージ</label>
+              <textarea id="profile-bio" rows="2" placeholder="例: Composite 担当 / Maya・Nuke 主・SHOT_001-005 担当中"
+                class="w-full bg-white/80 border border-slate-200 rounded-xl px-3 py-2 text-sm focus:ring-2 focus:ring-indigo-300 outline-none resize-none">{{ profile.bio or '' }}</textarea>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- Google アカウント連携 -->
+    <div class="bg-white/60 backdrop-blur-xl border border-white/60 rounded-3xl shadow-xl p-6 mb-6">
+      <h2 class="text-base font-black text-slate-800 mb-4">🔗 Google アカウント連携</h2>
+      <div class="bg-gradient-to-br from-blue-50 to-purple-50 border border-blue-100 rounded-2xl p-4 mb-3">
+        <div class="flex items-center gap-3">
+          <div class="w-10 h-10 rounded-full bg-white shadow flex items-center justify-center text-xl">🔑</div>
+          <div class="flex-1">
+            <p class="text-sm font-bold text-slate-700">連携状態: <span id="google-link-status" class="{% if profile.google_linked %}text-emerald-600{% else %}text-amber-600{% endif %}">{% if profile.google_linked %}✅ 連携済 ({{ profile.google_email or '' }}){% else %}未連携{% endif %}</span></p>
+            <p class="text-xs text-slate-500 mt-0.5">Calendar / Drive 連携で利便性向上</p>
+          </div>
+          <button onclick="_linkGoogle()" id="google-link-btn" class="{% if profile.google_linked %}bg-rose-500 hover:bg-rose-600{% else %}bg-blue-600 hover:bg-blue-700{% endif %} text-white text-xs font-bold rounded-xl px-4 py-2">
+            {% if profile.google_linked %}解除{% else %}Google でログイン{% endif %}
+          </button>
+        </div>
+      </div>
+      <div class="grid grid-cols-1 md:grid-cols-2 gap-3">
+        <label class="flex items-center gap-2 cursor-pointer bg-white/60 border border-slate-200 rounded-xl px-3 py-2">
+          <input type="checkbox" id="google-calendar-sync" class="rounded" checked>
+          <span class="text-sm text-slate-700">📅 Google Calendar と双方向同期</span>
+        </label>
+        <label class="flex items-center gap-2 cursor-pointer bg-white/60 border border-slate-200 rounded-xl px-3 py-2">
+          <input type="checkbox" id="google-drive-sync" class="rounded">
+          <span class="text-sm text-slate-700">📁 Google Drive 参考資料リンク</span>
+        </label>
+      </div>
+      <p class="text-[10px] text-slate-400 mt-2">※ 本式 OAuth 連携は Calendar 側 GCP 設定後(発注書 v3 §4 — B 案 採用予定)</p>
+    </div>
+
+    <!-- 連絡先・勤務情報 -->
+    <div class="bg-white/60 backdrop-blur-xl border border-white/60 rounded-3xl shadow-xl p-6 mb-6">
+      <h2 class="text-base font-black text-slate-800 mb-4">📞 連絡先・勤務情報</h2>
+      <div class="grid grid-cols-2 gap-4">
+        <div>
+          <label class="block text-xs font-bold text-slate-500 mb-1">緊急連絡先(電話) <span class="text-[10px] text-rose-500 font-normal">🔒 個人情報・一般公開なし</span></label>
+          <input type="tel" id="profile-phone" value="{{ profile.phone or '' }}" placeholder="090-XXXX-XXXX" class="w-full bg-white/80 border border-slate-200 rounded-xl px-3 py-2 text-sm">
+          <p class="text-[10px] text-slate-400 mt-1">※ 電話番号は個人情報のため一般には公開されません。PM/管理者・緊急時のみ参照可</p>
+        </div>
+        <div>
+          <label class="block text-xs font-bold text-slate-500 mb-1">LINE ID</label>
+          <input type="text" id="profile-chat-id" value="{{ profile.line_id or '' }}" placeholder="例: ryoji_bokan" class="w-full bg-white/80 border border-slate-200 rounded-xl px-3 py-2 text-sm">
+        </div>
+        <div>
+          <label class="block text-xs font-bold text-slate-500 mb-1">勤務開始時刻</label>
+          <input type="time" id="profile-work-start" value="{{ profile.work_start_time or '10:00' }}" class="w-full bg-white/80 border border-slate-200 rounded-xl px-3 py-2 text-sm">
+        </div>
+        <div>
+          <label class="block text-xs font-bold text-slate-500 mb-1">勤務終了時刻</label>
+          <input type="time" id="profile-work-end" value="{{ profile.work_end_time or '19:00' }}" class="w-full bg-white/80 border border-slate-200 rounded-xl px-3 py-2 text-sm">
+        </div>
+        <div class="col-span-2">
+          <label class="block text-xs font-bold text-slate-500 mb-1">🛠️ 得意スキル(複数選択)</label>
+          <div class="flex flex-wrap gap-2 mt-1">
+            {% set _saved_skills = profile.skills or [] %}
+            {% for skill in ['Maya','Nuke','Houdini','Blender','3ds Max','Photoshop','After Effects','Substance','RV','Mari','ZBrush','Cinema 4D'] %}
+            <label class="cursor-pointer">
+              <input type="checkbox" name="skill" value="{{ skill }}" class="hidden peer"{% if skill in _saved_skills %} checked{% endif %}>
+              <span class="inline-block bg-white/80 border border-slate-200 rounded-full px-3 py-1 text-xs font-bold text-slate-700 peer-checked:bg-indigo-600 peer-checked:text-white peer-checked:border-indigo-600 transition-all" translate="no">{{ skill }}</span>
+            </label>
+            {% endfor %}
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- 通知設定 -->
+    <div class="bg-white/60 backdrop-blur-xl border border-white/60 rounded-3xl shadow-xl p-6 mb-6">
+      <h2 class="text-base font-black text-slate-800 mb-4">🔔 通知設定</h2>
+      <div class="space-y-3">
+        <label class="flex items-center gap-3 cursor-pointer">
+          <input type="checkbox" id="notify-mention" class="rounded" checked>
+          <span class="text-sm text-slate-700">@mention 受信時に通知 (Discord 風 mention)</span>
+        </label>
+        <label class="flex items-center gap-3 cursor-pointer">
+          <input type="checkbox" id="notify-retake" class="rounded" checked>
+          <span class="text-sm text-slate-700">Retake 発令時に通知</span>
+        </label>
+        <label class="flex items-center gap-3 cursor-pointer">
+          <input type="checkbox" id="notify-trouble" class="rounded" checked>
+          <span class="text-sm text-slate-700">技術トラブル報告時に通知</span>
+        </label>
+        <label class="flex items-center gap-3 cursor-pointer">
+          <input type="checkbox" id="notify-distribution" class="rounded">
+          <span class="text-sm text-slate-700">Look 配布通知を受け取る</span>
+        </label>
+        <label class="flex items-center gap-3 cursor-pointer">
+          <input type="checkbox" id="notify-meetings" class="rounded" checked>
+          <span class="text-sm text-slate-700">議事録 AI 解析完了時に通知</span>
+        </label>
+      </div>
+    </div>
+
+    <!-- 表示設定 -->
+    <div class="bg-white/60 backdrop-blur-xl border border-white/60 rounded-3xl shadow-xl p-6 mb-6">
+      <h2 class="text-base font-black text-slate-800 mb-4">🌐 表示設定</h2>
+      <div class="grid grid-cols-2 gap-4">
+        <div>
+          <label class="block text-xs font-bold text-slate-500 mb-1">言語</label>
+          <select id="profile-lang" class="w-full bg-white/80 border border-slate-200 rounded-xl px-3 py-2 text-sm">
+            <option value="ja">日本語</option>
+            <option value="en">English</option>
+            <option value="zh">中文</option>
+            <option value="ko">한국어</option>
+          </select>
+        </div>
+        <div>
+          <label class="block text-xs font-bold text-slate-500 mb-1">テーマ</label>
+          <select id="profile-theme" class="w-full bg-white/80 border border-slate-200 rounded-xl px-3 py-2 text-sm">
+            <option value="auto">自動 (システム)</option>
+            <option value="light">Light</option>
+            <option value="dark">Dark</option>
+          </select>
+        </div>
+        <div>
+          <label class="block text-xs font-bold text-slate-500 mb-1">タイムゾーン</label>
+          <select id="profile-tz" class="w-full bg-white/80 border border-slate-200 rounded-xl px-3 py-2 text-sm">
+            <option value="Asia/Tokyo">Asia/Tokyo (UTC+9)</option>
+            <option value="Asia/Seoul">Asia/Seoul (UTC+9)</option>
+            <option value="UTC">UTC</option>
+          </select>
+        </div>
+        <div>
+          <label class="block text-xs font-bold text-slate-500 mb-1">日付フォーマット</label>
+          <select id="profile-dateformat" class="w-full bg-white/80 border border-slate-200 rounded-xl px-3 py-2 text-sm">
+            <option value="YYYY-MM-DD">YYYY-MM-DD</option>
+            <option value="YYYY/MM/DD">YYYY/MM/DD</option>
+            <option value="MM/DD/YYYY">MM/DD/YYYY</option>
+          </select>
+        </div>
+      </div>
+    </div>
+
+    <!-- 保存 / cancel -->
+    <div class="flex justify-end gap-3 mb-8">
+      <a href="/dashboard" class="bg-white/60 hover:bg-white/80 text-slate-700 font-bold rounded-2xl px-6 py-3 text-sm">キャンセル</a>
+      <button onclick="_saveProfile()" class="bg-indigo-600 hover:bg-indigo-700 text-white font-black rounded-2xl px-8 py-3 text-sm shadow-lg">💾 保存</button>
+    </div>
+
+    <p class="text-[10px] text-slate-400 mt-4">※ 本式実装は Calendar 側 users.{name,title,avatar_url,settings_json} schema 拡張要(発注書 v3 §3 参照)。現在は localStorage 保存で demo 動作。</p>
+  </main>
+</div>
+
+<!-- アバター編集 modal -->
+<div id="avatar-modal" class="hidden fixed inset-0 bg-black/40 backdrop-blur-sm flex items-center justify-center z-50" onclick="if(event.target.id==='avatar-modal')_closeAvatarModal()">
+  <div class="bg-white rounded-3xl shadow-2xl p-6 w-[28rem] max-w-full" onclick="event.stopPropagation()">
+    <div class="flex items-center justify-between mb-4">
+      <h3 class="text-lg font-black text-slate-800">🖼 アバター編集</h3>
+      <button onclick="_closeAvatarModal()" class="text-slate-400 hover:text-slate-600 text-xl leading-none">×</button>
+    </div>
+    <!-- preview area (大きめ) -->
+    <div class="flex justify-center mb-4">
+      <div id="avatar-preview" class="w-40 h-40 rounded-full bg-gradient-to-br from-indigo-400 to-purple-500 flex items-center justify-center text-white text-5xl font-black shadow-lg overflow-hidden bg-no-repeat bg-cover ring-4 ring-indigo-200">
+        {{ (user.name or '?')[0] }}
+      </div>
+    </div>
+    <!-- 画像未 upload 時 -->
+    <div id="avatar-upload-prompt" class="text-center mb-4">
+      <button onclick="document.getElementById('avatar-input').click()" class="bg-indigo-600 hover:bg-indigo-700 text-white font-bold rounded-2xl px-6 py-2.5 text-sm">📷 画像を選択</button>
+      <p class="text-[10px] text-slate-400 mt-2">jpg / png / gif 等 — upload 後 ズーム/位置 調整可</p>
+    </div>
+    <!-- 編集 controls (upload 後表示)-->
+    <div id="avatar-modal-controls" class="hidden space-y-3 mb-4">
+      <div>
+        <label class="text-xs font-bold text-slate-600 flex justify-between mb-1">
+          <span>🔍 ズーム</span>
+          <span id="avatar-zoom-val">100%</span>
+        </label>
+        <input type="range" id="avatar-zoom" min="100" max="300" value="100" step="5" oninput="_updateAvatar()" class="w-full accent-indigo-600">
+      </div>
+      <div>
+        <label class="text-xs font-bold text-slate-600 flex justify-between mb-1">
+          <span>↔ 横位置</span>
+          <span id="avatar-x-val">50%</span>
+        </label>
+        <input type="range" id="avatar-x" min="0" max="100" value="50" oninput="_updateAvatar()" class="w-full accent-indigo-600">
+      </div>
+      <div>
+        <label class="text-xs font-bold text-slate-600 flex justify-between mb-1">
+          <span>↕ 縦位置</span>
+          <span id="avatar-y-val">50%</span>
+        </label>
+        <input type="range" id="avatar-y" min="0" max="100" value="50" oninput="_updateAvatar()" class="w-full accent-indigo-600">
+      </div>
+      <div class="flex gap-2">
+        <button onclick="document.getElementById('avatar-input').click()" class="flex-1 text-xs bg-slate-100 hover:bg-slate-200 rounded-xl py-2 font-bold">📷 別画像を選択</button>
+        <button onclick="_resetAvatar()" class="flex-1 text-xs bg-slate-100 hover:bg-slate-200 rounded-xl py-2 font-bold">🔄 リセット</button>
+      </div>
+    </div>
+    <!-- footer -->
+    <div class="flex gap-2 pt-3 border-t border-slate-200">
+      <button id="avatar-remove-btn" onclick="_removeAvatar()" class="hidden text-xs text-rose-600 hover:bg-rose-50 rounded-xl px-3 py-2 font-bold">🗑 削除</button>
+      <button onclick="_closeAvatarModal()" class="ml-auto text-sm text-slate-600 hover:bg-slate-100 rounded-xl px-4 py-2">キャンセル</button>
+      <button id="avatar-save-btn" onclick="_confirmAvatar()" class="bg-indigo-600 hover:bg-indigo-700 text-white font-bold rounded-xl px-5 py-2 text-sm">✓ 確定</button>
+    </div>
+  </div>
+</div>
+
+<script>
+const _USER_ID = "{{ user.user_id }}";
+function _profKey(k){ return `score_profile_${_USER_ID}_${k}`; }
+async function _saveProfile() {
+  const selectedSkills = Array.from(document.querySelectorAll('input[name="skill"]:checked')).map(i => i.value);
+  // settings_json 集約 (Calendar 側 schema 準拠)
+  const settings_json = {
+    lang: document.getElementById('profile-lang').value,
+    theme: document.getElementById('profile-theme').value,
+    tz: document.getElementById('profile-tz').value,
+    dateformat: document.getElementById('profile-dateformat').value,
+    notify_mention: document.getElementById('notify-mention').checked,
+    notify_retake: document.getElementById('notify-retake').checked,
+    notify_trouble: document.getElementById('notify-trouble').checked,
+    notify_distribution: document.getElementById('notify-distribution').checked,
+    notify_meetings: document.getElementById('notify-meetings').checked,
+    google_calendar_sync: document.getElementById('google-calendar-sync').checked,
+    google_drive_sync: document.getElementById('google-drive-sync').checked,
+  };
+  const body = {
+    name: document.getElementById('profile-name').value,
+    birthday: document.getElementById('profile-birthday').value || null,
+    bio: document.getElementById('profile-bio').value,
+    phone: document.getElementById('profile-phone').value,
+    line_id: document.getElementById('profile-chat-id').value,
+    work_start_time: document.getElementById('profile-work-start').value,
+    work_end_time: document.getElementById('profile-work-end').value,
+    skills: selectedSkills,
+    settings_json: settings_json,
+  };
+  // Calendar /api/me/profile への BFF passthrough
+  try {
+    const resp = await fetch('/api/bff/profile', {
+      method: 'PATCH',
+      credentials: 'include',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(body),
+    });
+    const data = await resp.json();
+    if (data.ok) {
+      // localStorage にも fallback として残す (誕生日 banner 連携 + 別 browser でも見える demo 対応)
+      localStorage.setItem(_profKey('birthday'), body.birthday || '');
+      localStorage.setItem(_profKey('settings_json'), JSON.stringify(settings_json));
+      if (body.birthday) {
+        let registry = {};
+        try { registry = JSON.parse(localStorage.getItem('score_birthdays_registry') || '{}'); } catch(e) {}
+        registry[_USER_ID] = { name: body.name, birthday: body.birthday };
+        localStorage.setItem('score_birthdays_registry', JSON.stringify(registry));
+      }
+      alert('✅ プロフィール設定を保存しました\n(Calendar /api/me/profile 経由で永続化)');
+    } else {
+      alert('⚠️ 保存失敗: ' + (data.error || 'unknown error'));
+    }
+  } catch (e) {
+    alert('❌ 通信失敗: ' + e.message);
+  }
+}
+function _loadProfile() {
+  // 優先順位 1: server context (Calendar /api/me/profile 経由) — 既に template の value="{{ profile.X }}" で反映済
+  // 優先順位 2: localStorage fallback (Calendar 接続不可時 / 他 browser 用 fallback)
+  const fieldMap = {
+    'name': 'name', 'birthday': 'birthday', 'bio': 'bio',
+    'phone': 'phone', 'chat-id': 'line_id',
+    'work-start': 'work_start_time', 'work-end': 'work_end_time',
+  };
+  for (const [inputId, storeKey] of Object.entries(fieldMap)) {
+    const v = localStorage.getItem(_profKey(storeKey));
+    const el = document.getElementById('profile-' + inputId);
+    if (el && !el.value && v) el.value = v;
+  }
+  // settings_json 展開 (lang / theme / tz / dateformat / notify_*)
+  const settingsRaw = localStorage.getItem(_profKey('settings_json'));
+  if (settingsRaw) {
+    try {
+      const s = JSON.parse(settingsRaw);
+      ['lang','theme','tz','dateformat'].forEach(k => {
+        const el = document.getElementById('profile-' + k);
+        if (el && s[k]) el.value = s[k];
+      });
+    } catch(e) {}
+  }
+  // skills (JSON array)
+  const skillsRaw = localStorage.getItem(_profKey('skills'));
+  if (skillsRaw) {
+    try {
+      const arr = JSON.parse(skillsRaw);
+      document.querySelectorAll('input[name="skill"]').forEach(i => { i.checked = arr.includes(i.value); });
+    } catch(e) {}
+  }
+  ['notify-mention','notify-retake','notify-trouble','notify-distribution','notify-meetings','google-calendar-sync','google-drive-sync'].forEach(id => {
+    const v = localStorage.getItem(_profKey(id.replace(/-/g, '_')));
+    const el = document.getElementById(id);
+    if (el && v !== null) el.checked = v === 'true';
+  });
+  // Google 連携状態
+  const googleLinked = localStorage.getItem(_profKey('google_linked')) === 'true';
+  const statusEl = document.getElementById('google-link-status');
+  const btnEl = document.getElementById('google-link-btn');
+  if (googleLinked) {
+    if (statusEl) { statusEl.textContent = '✅ 連携済 ({{ user.email or "" }})'; statusEl.className = 'text-emerald-600'; }
+    if (btnEl) { btnEl.textContent = '解除'; btnEl.className = 'bg-rose-500 hover:bg-rose-600 text-white text-xs font-bold rounded-xl px-4 py-2'; }
+  }
+}
+function _linkGoogle() {
+  const isLinked = localStorage.getItem(_profKey('google_linked')) === 'true';
+  if (isLinked) {
+    if (confirm('Google 連携を解除しますか?')) {
+      localStorage.removeItem(_profKey('google_linked'));
+      location.reload();
+    }
+  } else {
+    // 本式 OAuth は将来実装(発注書 v3 §4 B 案)・demo は stub
+    alert('🔑 Google OAuth flow stub:\n本式は Calendar 側 GCP 設定後\n(発注書 v3 §4 B 案 — Score 独立 client_id 取得)\n\n本 demo では連携済とみなして保存します。');
+    localStorage.setItem(_profKey('google_linked'), 'true');
+    location.reload();
+  }
+}
+function _onAvatarChange(ev) {
+  const f = ev.target.files[0];
+  if (!f) return;
+  const reader = new FileReader();
+  reader.onload = function(e){
+    // 一時 stash (確定するまで本 storage に書き込まない)
+    _pendingAvatar = e.target.result;
+    _setAvatarControls(100, 50, 50);
+    document.getElementById('avatar-upload-prompt').classList.add('hidden');
+    document.getElementById('avatar-modal-controls').classList.remove('hidden');
+    _updateAvatar();
+  };
+  reader.readAsDataURL(f);
+}
+
+let _pendingAvatar = null;  // modal 内で編集中の画像
+
+function _openAvatarModal() {
+  const modal = document.getElementById('avatar-modal');
+  modal.classList.remove('hidden');
+  const saved = localStorage.getItem(_profKey('avatar'));
+  if (saved) {
+    // 既存アバターあり → 直接編集
+    _pendingAvatar = saved;
+    document.getElementById('avatar-upload-prompt').classList.add('hidden');
+    document.getElementById('avatar-modal-controls').classList.remove('hidden');
+    document.getElementById('avatar-remove-btn').classList.remove('hidden');
+    let tf = {zoom: 100, x: 50, y: 50};
+    try {
+      const stored = localStorage.getItem(_profKey('avatar_transform'));
+      if (stored) tf = JSON.parse(stored);
+    } catch(e) {}
+    _setAvatarControls(tf.zoom, tf.x, tf.y);
+    _updateAvatar();
+  } else {
+    // 新規 → upload prompt
+    _pendingAvatar = null;
+    document.getElementById('avatar-upload-prompt').classList.remove('hidden');
+    document.getElementById('avatar-modal-controls').classList.add('hidden');
+    document.getElementById('avatar-remove-btn').classList.add('hidden');
+  }
+}
+function _closeAvatarModal() {
+  document.getElementById('avatar-modal').classList.add('hidden');
+  _pendingAvatar = null;
+  // preview を 元 saved state に戻す
+  const saved = localStorage.getItem(_profKey('avatar'));
+  if (saved) {
+    let tf = {zoom: 100, x: 50, y: 50};
+    try { const s = localStorage.getItem(_profKey('avatar_transform')); if (s) tf = JSON.parse(s); } catch(e) {}
+    _applyAvatarToDisplay(document.getElementById('avatar-display'), saved, tf);
+  }
+}
+function _confirmAvatar() {
+  if (_pendingAvatar) {
+    localStorage.setItem(_profKey('avatar'), _pendingAvatar);
+    const zoom = document.getElementById('avatar-zoom').value;
+    const x = document.getElementById('avatar-x').value;
+    const y = document.getElementById('avatar-y').value;
+    localStorage.setItem(_profKey('avatar_transform'), JSON.stringify({zoom, x, y}));
+    // メイン display にも適用
+    _applyAvatarToDisplay(document.getElementById('avatar-display'), _pendingAvatar, {zoom, x, y});
+  }
+  document.getElementById('avatar-modal').classList.add('hidden');
+}
+function _applyAvatarToDisplay(el, dataURL, tf) {
+  if (!el) return;
+  el.innerHTML = '';
+  el.style.backgroundImage = `url('${dataURL}')`;
+  el.style.backgroundSize = tf.zoom + '%';
+  el.style.backgroundPosition = `${tf.x}% ${tf.y}%`;
+}
+function _setAvatarControls(zoom, x, y) {
+  const z = document.getElementById('avatar-zoom');
+  const xs = document.getElementById('avatar-x');
+  const ys = document.getElementById('avatar-y');
+  if (z) z.value = zoom;
+  if (xs) xs.value = x;
+  if (ys) ys.value = y;
+  document.getElementById('avatar-zoom-val').textContent = zoom + '%';
+  document.getElementById('avatar-x-val').textContent = x + '%';
+  document.getElementById('avatar-y-val').textContent = y + '%';
+}
+function _updateAvatar() {
+  if (!_pendingAvatar) return;
+  const preview = document.getElementById('avatar-preview');
+  const zoom = document.getElementById('avatar-zoom').value;
+  const x = document.getElementById('avatar-x').value;
+  const y = document.getElementById('avatar-y').value;
+  _applyAvatarToDisplay(preview, _pendingAvatar, {zoom, x, y});
+  document.getElementById('avatar-zoom-val').textContent = zoom + '%';
+  document.getElementById('avatar-x-val').textContent = x + '%';
+  document.getElementById('avatar-y-val').textContent = y + '%';
+}
+function _resetAvatar() {
+  _setAvatarControls(100, 50, 50);
+  _updateAvatar();
+}
+function _removeAvatar() {
+  if (!confirm('アバター画像を削除しますか?')) return;
+  localStorage.removeItem(_profKey('avatar'));
+  localStorage.removeItem(_profKey('avatar_transform'));
+  const display = document.getElementById('avatar-display');
+  display.innerHTML = '{{ (user.name or "?")[0] }}';
+  display.style.backgroundImage = '';
+  _closeAvatarModal();
+}
+
+function submitAvatar(ev) {
+  const f = ev.target.files[0];
+  if (!f) return;
+  if (f.size > 5 * 1024 * 1024) {
+    alert('5MB 以下の画像を選択してください');
+    return;
+  }
+  const allowed = ['image/png', 'image/jpeg', 'image/webp'];
+  if (!allowed.includes(f.type)) {
+    alert('PNG・JPEG・WebP 形式の画像を選択してください');
+    return;
+  }
+  const fd = new FormData();
+  fd.append('file', f);
+  fetch('/api/bff/me/avatar', {method: 'POST', body: fd})
+    .then(r => r.json())
+    .then(data => {
+      if (data.avatar_url) {
+        const display = document.getElementById('avatar-display');
+        display.style.backgroundImage = `url('${data.avatar_url}?t=${Date.now()}')`;
+        display.innerHTML = '';
+      }
+    })
+    .catch(err => console.error('avatar upload error', err));
+}
+
+window.addEventListener('DOMContentLoaded', function(){
+  _loadProfile();
+  const avatar = localStorage.getItem(_profKey('avatar'));
+  if (avatar) {
+    let tf = {zoom: 100, x: 50, y: 50};
+    try {
+      const stored = localStorage.getItem(_profKey('avatar_transform'));
+      if (stored) tf = JSON.parse(stored);
+    } catch(e) {}
+    _applyAvatarToDisplay(document.getElementById('avatar-display'), avatar, tf);
+  }
+});
+</script>
+{% endblock %}

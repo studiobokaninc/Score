@@ -1,0 +1,98 @@
+{% if demo_mode %}
+<style>
+  /* DEMO banner (fixed top:0, ~30px) 対応:
+     - body padding-top で content を 30px 下げる
+     - sidemenu top:30px で banner を避ける
+     - h-screen / min-h-screen クラスを (100vh-30px) に縮めて余白 scroll 防止
+     - 長コンテンツ template (shot_detail 等) は内部要素 height が calc 越えるゆえ body scroll 機能維持 */
+  body { padding-top: 30px; }
+  aside.score-sidemenu { top: 30px !important; height: calc(100vh - 30px) !important; }
+  .h-screen { height: calc(100vh - 30px) !important; }
+  .min-h-screen { min-height: calc(100vh - 30px) !important; }
+</style>
+{% endif %}
+<script>
+/* scroll 復元: standalone 系 template 用 — base.html 同 logic (二重登録防止 guard 付) */
+(function(){
+  if (window._scoreScrollRestoreLoaded) return;
+  window._scoreScrollRestoreLoaded = true;
+  const KEY = 'score_scroll:' + location.pathname + location.search;
+  function selectScrollables(){ return Array.from(document.querySelectorAll('.overflow-y-auto, main')); }
+  window.addEventListener('pageshow', function(){
+    const raw = sessionStorage.getItem(KEY);
+    if (!raw) return;
+    try {
+      const data = JSON.parse(raw);
+      if (data.body !== undefined) window.scrollTo(0, data.body);
+      const els = selectScrollables();
+      if (data.inner) els.forEach(function(el, i){ if (data.inner[i] !== undefined) el.scrollTop = data.inner[i]; });
+    } catch(e) {}
+  });
+  function save(){
+    const data = { body: window.scrollY, inner: selectScrollables().map(function(el){ return el.scrollTop; }) };
+    try { sessionStorage.setItem(KEY, JSON.stringify(data)); } catch(e) {}
+  }
+  window.addEventListener('beforeunload', save);
+  window.addEventListener('pagehide', save);
+})();
+</script>
+<aside class="score-sidemenu fixed top-0 left-0 w-24 h-screen bg-white/30 backdrop-blur-xl border-r border-white/60 flex flex-col items-center py-4 gap-1 flex-shrink-0 z-20">
+  <img src="/static/splash.png" alt="Score" class="w-16 h-auto mb-1 select-none" draggable="false" onerror="this.style.display='none';this.nextElementSibling && this.nextElementSibling.style.removeProperty('display');">
+  <div class="text-2xl mb-1" style="display:none;">🎬</div>
+  <p class="text-[9px] font-black text-indigo-600 tracking-widest mb-3" translate="no">Score</p>
+  <nav class="flex flex-col items-center gap-1 w-full px-2 flex-1">
+    <a href="/dashboard" class="flex flex-col items-center gap-0.5 py-2.5 w-full rounded-2xl {% if active == 'dashboard' %}bg-indigo-100 text-indigo-600 font-bold{% else %}text-slate-500 hover:bg-white/40{% endif %} text-xs transition-all">
+      <span class="text-xl">🏠</span><span>ダッシュボード</span></a>
+    <a href="/projects" class="flex flex-col items-center gap-0.5 py-2.5 w-full rounded-2xl {% if active == 'project' %}bg-indigo-100 text-indigo-600 font-bold{% else %}text-slate-500 hover:bg-white/40{% endif %} text-xs transition-all">
+      <span class="text-xl">🎞️</span><span>Project</span></a>
+    <a href="/calendar" class="flex flex-col items-center gap-0.5 py-2.5 w-full rounded-2xl {% if active == 'calendar' %}bg-indigo-100 text-indigo-600 font-bold{% else %}text-slate-500 hover:bg-white/40{% endif %} text-xs transition-all">
+      <span class="text-xl">📅</span><span>Calendar</span></a>
+    <a href="/messages" class="flex flex-col items-center gap-0.5 py-2.5 w-full rounded-2xl {% if active == 'messages' %}bg-indigo-100 text-indigo-600 font-bold{% else %}text-slate-500 hover:bg-white/40{% endif %} text-xs transition-all">
+      <span class="text-xl">💬</span><span>Messages</span></a>
+    <a href="/notification_center" class="relative flex flex-col items-center gap-0.5 py-2.5 w-full rounded-2xl {% if active == 'notifications' %}bg-indigo-100 text-indigo-600 font-bold{% else %}text-slate-500 hover:bg-white/40{% endif %} text-xs transition-all">
+      <span class="text-xl">🔔</span>
+      <span>通知</span></a>
+    <a href="/exit_report" class="flex flex-col items-center gap-0.5 py-2.5 w-full rounded-2xl {% if active == 'exit_report' %}bg-indigo-100 text-indigo-600 font-bold{% else %}text-slate-500 hover:bg-white/40{% endif %} text-xs transition-all">
+      <span class="text-xl">🚪</span><span>退勤</span></a>
+  </nav>
+  <!-- 言語切替 button (sidemenu 内部に統合) -->
+  <button onclick="openLanguageModalSidemenu()" title="言語切替" class="mt-2 flex flex-col items-center gap-0.5 py-1.5 w-full rounded-2xl text-slate-500 hover:bg-white/40 text-[9px] transition-all">
+    <span class="text-lg">🌐</span>
+    <span>Lang</span>
+  </button>
+  <!-- user icon = /profile への 設定 入口 -->
+  <a href="/profile" title="プロフィール設定" class="mt-2 flex flex-col items-center gap-1 group">
+    <div class="w-10 h-10 rounded-full overflow-hidden bg-indigo-600 text-white flex items-center justify-center font-black group-hover:ring-2 group-hover:ring-indigo-400 transition-all relative">
+      {% if user and user.icon_url %}
+      <img src="{{ user.icon_url }}" alt="{{ user.name or 'user' }}" class="w-full h-full object-cover" onerror="this.style.display='none';this.nextElementSibling.style.display='flex';">
+      <span class="hidden w-full h-full items-center justify-center" translate="no">{{ (user.name or 'U')[:1] | upper }}</span>
+      {% else %}
+      <span translate="no">{{ (user.name or 'U')[:1] | upper if user else 'U' }}</span>
+      {% endif %}
+      {% if active == 'profile' %}<span class="absolute -bottom-1 -right-1 w-3 h-3 bg-emerald-400 border-2 border-white rounded-full"></span>{% endif %}
+    </div>
+    {% if user %}
+    <p class="text-[9px] text-slate-500 group-hover:text-indigo-600" translate="no">{{ user.name or 'ユーザ' }}</p>
+    {% endif %}
+    <p class="text-[8px] text-slate-400">⚙️ 設定</p>
+  </a>
+</aside>
+
+<!-- 言語切替 modal (sidemenu 内蔵・全 page 共通) -->
+<div id="language-modal-sidemenu" class="hidden fixed inset-0 bg-black/30 backdrop-blur-sm flex items-center justify-center z-[999]"
+  onclick="if (event.target.id === 'language-modal-sidemenu') closeLanguageModalSidemenu()">
+  <div class="bg-white/90 backdrop-blur-xl border border-white/60 rounded-3xl shadow-2xl p-8 w-80 text-center" onclick="event.stopPropagation()">
+    <h3 class="text-lg font-black text-slate-800 mb-6">🌐 言語を選択</h3>
+    <div class="flex flex-col gap-3">
+      <button class="w-full py-3 bg-slate-100 hover:bg-slate-200 text-slate-600 font-bold rounded-2xl text-sm transition-all">繁體中文</button>
+      <button class="w-full py-3 bg-indigo-600 text-white font-bold rounded-2xl text-sm cursor-default">日本語（現在）</button>
+      <button class="w-full py-3 bg-slate-100 hover:bg-slate-200 text-slate-600 font-bold rounded-2xl text-sm transition-all">English</button>
+    </div>
+    <p class="text-xs text-slate-400 mt-4">段階的に拡張中</p>
+    <button onclick="closeLanguageModalSidemenu()" class="mt-4 text-xs text-slate-400 hover:text-slate-600">閉じる</button>
+  </div>
+</div>
+<script>
+function openLanguageModalSidemenu() { document.getElementById('language-modal-sidemenu').classList.remove('hidden'); }
+function closeLanguageModalSidemenu() { document.getElementById('language-modal-sidemenu').classList.add('hidden'); }
+</script>

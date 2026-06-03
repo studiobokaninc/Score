@@ -1,0 +1,21 @@
+# Python
+__pycache__/
+*.pyc
+*.pyo
+.venv/
+*.egg-info/
+dist/
+build/
+
+# Mock state (demo runtime state)
+app/data/score_mock_state.yaml
+
+# 機密 (殿御命: 2026-06-03 - secrets 絶対 commit 禁止)
+.env
+.env.local
+*.key
+*credentials*
+
+# noise files
+=2.8.0
+=*

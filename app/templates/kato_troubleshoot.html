@@ -1,0 +1,277 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>トラブル報告リスト — Score (Kato / Lighting Lead)</title>
+  <script src="https://cdn.tailwindcss.com"></script>
+  <style>
+    .custom-scrollbar::-webkit-scrollbar { width: 6px; }
+    .custom-scrollbar::-webkit-scrollbar-track { background: transparent; }
+    .custom-scrollbar::-webkit-scrollbar-thumb { background: rgba(0,0,0,0.05); border-radius: 10px; }
+    .custom-scrollbar::-webkit-scrollbar-thumb:hover { background: rgba(0,0,0,0.1); }
+  </style>
+</head>
+<body class="h-screen bg-gradient-to-br from-[#E0F2FE] via-[#F3E8FF] to-[#FCE7F3] flex overflow-hidden font-sans">
+{% if demo_mode %}
+<div style="background:#f39c12;color:#fff;text-align:center;padding:6px 12px;font-size:12px;font-weight:bold;position:fixed;top:0;left:0;right:0;z-index:9999;letter-spacing:0.05em;">
+  ⚠️ DEMO DATA — 本番データではありません
+</div>
+{% endif %}
+{% include '_sidemenu.html' %}
+
+  <!-- メインエリア -->
+  <main class="flex-1 ml-24 flex flex-col relative overflow-hidden">
+
+    <!-- スクロールコンテンツ -->
+    <div class="flex-1 overflow-y-auto custom-scrollbar p-8 space-y-6">
+
+      <!-- パンくず -->
+      <nav class="text-xs text-slate-500 flex items-center gap-1 flex-wrap">
+        <a href="/lead_dashboard" class="hover:text-amber-600 transition-colors">🏠 ホーム</a>
+        <span class="text-slate-300">›</span>
+        <a href="/lead_dashboard" class="hover:text-amber-600 transition-colors">💡<span translate="no">Lighting Lead</span></a>
+        <span class="text-slate-300">›</span>
+        <span class="font-bold text-amber-700">🚨 トラブル報告リスト</span>
+      </nav>
+
+      <!-- タイトル + サブ説明文 (scope label 反映) -->
+      <div>
+        <h1 class="text-2xl font-black text-amber-800">🚨 技術トラブル — {{ scope_label or '受信インボックス' }} 管轄</h1>
+        <p class="text-xs text-amber-600 bg-amber-50 border border-amber-200 rounded-xl px-3 py-1.5 inline-block mt-2">
+          /shot/{id} 「🚨 技術トラブル報告」ボタンからの報告が自動追加されます (scope: {{ scope_label or '-' }})
+        </p>
+      </div>
+
+      <!-- 2カラムレイアウト -->
+      <div class="grid grid-cols-1 lg:grid-cols-2 gap-6">
+
+        <!-- 左カラム: 受信報告 (動的: state.troubles loop) -->
+        <section>
+          <h2 class="font-black text-slate-800 text-base mb-4">📋 受信報告 ({{ troubles|length if troubles else 0 }}件)</h2>
+          <div class="flex flex-col gap-4">
+
+            {% for tr in (troubles or []) %}
+            {% set _open = (tr.status == 'open') %}
+            {% set _inv  = (tr.status == 'investigating') %}
+            {% set _res  = (tr.status == 'resolved') %}
+            {# SHOT_NNN を title から抽出 (Jinja loop scope のため namespace() 使用) #}
+            {% set _ns = namespace(shot=None) %}
+            {% for token in tr.title.split() %}
+              {% if token.startswith('SHOT_') %}
+                {% set _ns.shot = token %}
+              {% endif %}
+            {% endfor %}
+            {% set _shot_match = _ns.shot %}
+            <div class="bg-white/40 backdrop-blur-xl border border-white/60 rounded-3xl shadow-xl p-5 flex flex-col gap-3">
+              <div class="flex items-start justify-between gap-2">
+                <div>
+                  <h3 class="font-black text-slate-800 text-base">{{ tr.title }}</h3>
+                  <p class="text-xs text-slate-500 mt-0.5">報告時刻: {{ tr.reported_at or tr.created_at or '-' }} / 担当: user_id {{ tr.assignee_id or '-' }} / 報告者: user_id {{ tr.actor_id or '-' }}</p>
+                </div>
+                {% if _open %}
+                <span class="shrink-0 px-2.5 py-1 bg-rose-100 text-rose-700 text-xs font-black rounded-full">🔴 未対応</span>
+                {% elif _inv %}
+                <span class="shrink-0 px-2.5 py-1 bg-amber-100 text-amber-700 text-xs font-black rounded-full">🟡 調査中</span>
+                {% else %}
+                <span class="shrink-0 px-2.5 py-1 bg-emerald-100 text-emerald-700 text-xs font-black rounded-full">✅ 解決済</span>
+                {% endif %}
+              </div>
+              <p class="text-xs text-slate-600 bg-amber-50/60 border border-amber-100 rounded-2xl px-3 py-2 leading-relaxed">
+                id={{ tr.id }}: {{ tr.title }}
+              </p>
+              {# 関連 task link (router 側で解決済 tr.related_task ベース) #}
+              {% if tr.related_task %}
+              <a href="/task/{{ tr.related_task.task_id }}" class="text-xs font-bold text-indigo-600 hover:underline">
+                🎯 関連 task: <span translate="no">{{ _shot_match or '' }}</span> <span translate="no">{{ tr.related_task.type }}</span> (status: <span translate="no">{{ tr.related_task.status }}</span>) →
+              </a>
+              {% elif _shot_match %}
+              {% set _shot_num = _shot_match.replace('SHOT_', '').lstrip('0') or '0' %}
+              <a href="/shot/{{ _shot_num }}" class="text-xs font-bold text-indigo-600 hover:underline">
+                🎬 関連 SHOT: <span translate="no">{{ _shot_match }}</span> 詳細を見る →
+              </a>
+              {% endif %}
+              <div class="flex gap-2">
+                {% if _open %}
+                <button onclick="startTrouble(this, '{{ tr.id }}')"
+                  class="flex-1 py-2 bg-indigo-500 hover:bg-indigo-600 text-white font-bold rounded-2xl text-sm transition-all">
+                  ⚙️ 対応開始
+                </button>
+                <button onclick="resolveTrouble(this, '{{ tr.id }}')"
+                  class="flex-1 py-2 bg-emerald-600 hover:bg-emerald-700 text-white font-bold rounded-2xl text-sm transition-all">
+                  ✅ 解決済みにする
+                </button>
+                {% elif _inv %}
+                <button disabled
+                  class="flex-1 py-2 bg-slate-300 text-slate-500 font-bold rounded-2xl text-sm cursor-not-allowed">
+                  🔍 対応中
+                </button>
+                <button onclick="resolveTrouble(this, '{{ tr.id }}')"
+                  class="flex-1 py-2 bg-emerald-600 hover:bg-emerald-700 text-white font-bold rounded-2xl text-sm transition-all">
+                  ✅ 解決済みにする
+                </button>
+                {% else %}
+                <button disabled class="flex-1 py-2 bg-slate-300 text-slate-500 font-bold rounded-2xl text-sm cursor-not-allowed">✅ 解決済</button>
+                {% endif %}
+              </div>
+            </div>
+            {% else %}
+            <div class="bg-emerald-50 border border-emerald-200 rounded-2xl p-5 text-sm text-emerald-700">
+              ✅ 現時点で未対応トラブルはなし
+            </div>
+            {% endfor %}
+
+          </div>
+        </section>
+
+        <!-- 右カラム: 対応ログ -->
+        <section class="flex flex-col gap-4">
+
+          <!-- 対応ログ -->
+          <div class="bg-white/40 backdrop-blur-xl border border-white/60 rounded-3xl shadow-xl p-5">
+            <h2 class="font-black text-slate-800 text-base mb-3">📝 対応ログ</h2>
+            <div class="bg-slate-900 text-green-400 font-mono text-xs rounded-2xl p-4 leading-relaxed">
+              <p>[10:15:22] REPORT: <span translate="no">SHOT_005</span> scene_corruption by <span translate="no">Suzuki</span></p>
+              <p>[10:15:22] STATUS: auto-added to troubleshoot inbox</p>
+              <p>[11:30:05] REPORT: <span translate="no">SHOT_001</span> lighting_noise by <span translate="no">Sato</span></p>
+              <p>[11:30:05] INFO: 過去類似SHOT傾向あり、ライティング確認推奨</p>
+            </div>
+          </div>
+
+          <!-- 対応メモ (localStorage 保存・将来 state.troubles.notes として永続化発注予定) -->
+          <div class="bg-white/40 backdrop-blur-xl border border-white/60 rounded-3xl shadow-xl p-5 flex flex-col gap-3">
+            <h2 class="font-black text-slate-800 text-base">📝 対応メモ</h2>
+            <textarea id="trouble-memo" rows="4" placeholder="対応内容・メモを入力"
+              class="w-full bg-white/60 border border-white/60 rounded-2xl p-3 text-sm text-slate-700 resize-none focus:outline-none focus:ring-2 focus:ring-amber-300"></textarea>
+            <div class="flex gap-2">
+              <button onclick="saveMemo()" id="memo-save-btn"
+                class="flex-1 py-2.5 bg-amber-600 hover:bg-amber-700 text-white font-black rounded-2xl text-sm transition-all">
+                💾 メモを保存
+              </button>
+              <button onclick="clearMemo()" title="メモを削除"
+                class="px-4 py-2.5 bg-slate-200 hover:bg-slate-300 text-slate-600 font-bold rounded-2xl text-sm transition-all">
+                🗑
+              </button>
+            </div>
+            <p id="memo-status" class="text-xs text-slate-400"></p>
+          </div>
+
+          <script>
+          /* 対応メモ — localStorage で保存・将来は state.troubles.notes として 2nd 将軍永続化発注 */
+          const MEMO_KEY = 'kato_troubleshoot_memo_' + (location.pathname || '/troubleshoot');
+          (function(){
+            const ta = document.getElementById('trouble-memo');
+            const st = document.getElementById('memo-status');
+            if (!ta) return;
+            const saved = localStorage.getItem(MEMO_KEY);
+            if (saved) {
+              ta.value = saved;
+              st.textContent = '💾 前回保存メモを復元 (localStorage)';
+            }
+          })();
+          function saveMemo() {
+            const ta = document.getElementById('trouble-memo');
+            const st = document.getElementById('memo-status');
+            const btn = document.getElementById('memo-save-btn');
+            if (!ta) return;
+            localStorage.setItem(MEMO_KEY, ta.value);
+            const orig = btn.textContent;
+            btn.textContent = '✅ 保存完了';
+            st.textContent = '💾 保存日時: ' + new Date().toLocaleString('ja-JP');
+            setTimeout(() => { btn.textContent = orig; }, 1500);
+          }
+          function clearMemo() {
+            if (!confirm('保存したメモを削除しますか?')) return;
+            const ta = document.getElementById('trouble-memo');
+            ta.value = '';
+            localStorage.removeItem(MEMO_KEY);
+            document.getElementById('memo-status').textContent = '🗑 メモを削除しました';
+          }
+          </script>
+
+        </section>
+
+      </div>
+    </div>
+  </main>
+
+  <!-- 解決モーダル -->
+  <div id="modal-resolve" class="fixed inset-0 bg-black/30 backdrop-blur-sm flex items-center justify-center z-50 hidden">
+    <div class="bg-white/80 backdrop-blur-xl border border-white/60 rounded-3xl shadow-2xl p-8 max-w-sm w-full mx-4 flex flex-col gap-4 text-center">
+      <span class="text-4xl">✅</span>
+      <h3 class="font-black text-amber-800 text-lg">トラブルを解決済みとして記録しました</h3>
+      <a href="/lead_dashboard"
+        class="w-full bg-amber-500 hover:bg-amber-600 text-white font-black rounded-2xl py-3 text-center transition-all">
+        lead_dashboard.html へ
+      </a>
+      <button onclick="closeModal()"
+        class="w-full bg-white/60 hover:bg-white/80 border border-slate-200 text-slate-600 font-bold rounded-2xl py-3 transition-all">
+        閉じる
+      </button>
+    </div>
+  </div>
+
+  <script>
+    function startTrouble(btn, shot) {
+      // 「対応開始」 → 「🔍 対応中」 (slate, disabled) に変更・遷移なし
+      btn.disabled = true;
+      btn.textContent = '🔍 対応中';
+      btn.className = 'flex-1 py-2 bg-slate-300 text-slate-500 font-bold rounded-2xl text-sm cursor-not-allowed';
+      // status badge も「🟡 調査中」に変更
+      const card = btn.closest('.flex.flex-col.gap-3');
+      if (card) {
+        const badge = card.querySelector('.bg-rose-100');
+        if (badge) {
+          badge.textContent = '🟡 調査中';
+          badge.className = 'shrink-0 px-2.5 py-1 bg-amber-100 text-amber-700 text-xs font-black rounded-full';
+        }
+      }
+    }
+    function resolveTrouble(btn, shot) {
+      // 「✅ 解決済みにする」 → 「✅ 解決済み」 (slate, disabled) に変更・遷移なし
+      btn.disabled = true;
+      btn.textContent = '✅ 解決済み';
+      btn.className = 'flex-1 py-2 bg-slate-300 text-slate-500 font-bold rounded-2xl text-sm cursor-not-allowed';
+      // 隣のボタン (対応開始/対応中) も disable
+      const card = btn.closest('.flex.flex-col.gap-3');
+      if (card) {
+        const otherBtn = card.querySelectorAll('button')[0];
+        if (otherBtn && otherBtn !== btn) {
+          otherBtn.disabled = true;
+          otherBtn.className = 'flex-1 py-2 bg-slate-200 text-slate-400 font-bold rounded-2xl text-sm cursor-not-allowed';
+        }
+        // status badge を「✅ 解決済」に
+        const badge = card.querySelector('.rounded-full.text-xs.font-black');
+        if (badge) {
+          badge.textContent = '✅ 解決済';
+          badge.className = 'shrink-0 px-2.5 py-1 bg-emerald-100 text-emerald-700 text-xs font-black rounded-full';
+        }
+      }
+    }
+    function closeModal() {
+      document.getElementById('modal-resolve').classList.add('hidden');
+    }
+    function openLanguageModal() {
+      document.getElementById('language-modal').classList.remove('hidden');
+    }
+    function closeLanguageModal() {
+      document.getElementById('language-modal').classList.add('hidden');
+    }
+  </script>
+
+  <!-- 🌐Language mini-footer -->
+  
+
+  <!-- Language Modal -->
+  <div id="language-modal" class="hidden fixed inset-0 bg-black/30 backdrop-blur-sm flex items-center justify-center z-50">
+    <div class="bg-white/90 backdrop-blur-xl border border-white/60 rounded-3xl shadow-2xl p-8 max-w-sm w-full mx-4 flex flex-col gap-4">
+      <h3 class="font-black text-slate-800 text-lg text-center">🌐 言語を選択</h3>
+      <button class="w-full py-3 bg-white border border-slate-200 rounded-2xl font-bold text-slate-700 hover:bg-slate-50 transition-all">繁體中文</button>
+      <button class="w-full py-3 bg-indigo-600 text-white rounded-2xl font-bold transition-all">日本語（現在）</button>
+      <button class="w-full py-3 bg-white border border-slate-200 rounded-2xl font-bold text-slate-700 hover:bg-slate-50 transition-all">English</button>
+      <p class="text-center text-xs text-slate-400">段階的に拡張中</p>
+      <button onclick="closeLanguageModal()" class="w-full py-2.5 bg-slate-100 hover:bg-slate-200 text-slate-600 font-bold rounded-2xl transition-all">閉じる</button>
+    </div>
+  </div>
+</body>
+</html>

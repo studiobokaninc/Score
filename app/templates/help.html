@@ -1,0 +1,158 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Score — ヘルプ</title>
+  <script src="https://cdn.tailwindcss.com"></script>
+</head>
+<body class="h-screen bg-gradient-to-br from-[#E0F2FE] via-[#F3E8FF] to-[#FCE7F3] text-slate-800 flex overflow-hidden">
+{% if demo_mode %}
+<div style="background:#f39c12;color:#fff;text-align:center;padding:6px 12px;font-size:12px;font-weight:bold;position:fixed;top:0;left:0;right:0;z-index:9999;letter-spacing:0.05em;">
+  ⚠️ DEMO DATA — 本番データではありません
+</div>
+{% endif %}
+
+{% include '_sidemenu.html' %}
+
+<main class="flex-1 ml-24 overflow-y-auto p-8">
+  <nav class="text-xs text-slate-500 mb-4">
+    <span class="text-indigo-600 font-bold">ヘルプ</span>
+  </nav>
+
+  <h1 class="text-2xl font-black text-slate-800 mb-6">📖 ヘルプ</h1>
+
+  <!-- 概要 -->
+  <section class="bg-white/40 backdrop-blur-xl border border-white/60 rounded-3xl shadow-xl p-6 mb-6">
+    <h2 class="text-lg font-bold text-slate-800 mb-3">Score とは</h2>
+    <p class="text-sm text-slate-700 leading-relaxed">
+      Score は CG/VFX 制作ワークフロー向けクリエイター用フロントエンドです。Calendar アプリと連携し、
+      自分の SHOT・タスク・スケジュール・通知を一元管理できます。
+    </p>
+  </section>
+
+  <!-- よくある質問 -->
+  <section class="bg-white/40 backdrop-blur-xl border border-white/60 rounded-3xl shadow-xl p-6 mb-6">
+    <h2 class="text-lg font-bold text-slate-800 mb-3">よくある質問</h2>
+    <div class="space-y-4">
+      <div>
+        <h3 class="text-sm font-bold text-slate-700">Q. ログインメールアドレスは?</h3>
+        <p class="text-sm text-slate-600 mt-1">A. 会社で支給された <span translate="no">@studiobokan.com</span> メールアドレスを使用します。Calendar アプリと同じアカウントです。</p>
+      </div>
+      <div>
+        <h3 class="text-sm font-bold text-slate-700">Q. リテイク指示は何処で確認できますか?</h3>
+        <p class="text-sm text-slate-600 mt-1">A. ダッシュボード上部の「🔔 通知 & アラート」または 通知センター(サイドメニュー 🔔)で確認できます。</p>
+      </div>
+      <div>
+        <h3 class="text-sm font-bold text-slate-700">Q. SHOT のバージョン履歴は何処で見られますか?</h3>
+        <p class="text-sm text-slate-600 mt-1">A. 各 SHOT 詳細ページ(`/shot/{id}`)の中央「🎬 アセット履歴」セクションに表示されます。クリックで QC ビューアへ。</p>
+      </div>
+      <div>
+        <h3 class="text-sm font-bold text-slate-700">Q. 退勤打刻はどこから?</h3>
+        <p class="text-sm text-slate-600 mt-1">A. サイドメニュー「🚪 退勤」から退勤報告フォームへ。本日 or 前日(遡及)を選択可能です。</p>
+      </div>
+      <div>
+        <h3 class="text-sm font-bold text-slate-700">Q. メッセージ通知が来ない</h3>
+        <p class="text-sm text-slate-600 mt-1">A. 現在 push 通知は未実装(将来対応)。サイドメニュー 💬 Messages を定期的に御確認ください。緊急時は DM で直接連絡をお願いします。</p>
+      </div>
+    </div>
+  </section>
+
+  <!-- 更新履歴 -->
+  <section class="bg-white/40 backdrop-blur-xl border border-white/60 rounded-3xl shadow-xl p-6 mb-6">
+    <h2 class="text-lg font-bold text-slate-800 mb-3">📋 更新履歴</h2>
+    <ul class="space-y-2 text-sm text-slate-700">
+      <li><span class="font-bold text-slate-800">2026-05-21</span> — QC ビューアの比較機能を強化・通知センターのリアルタイム配信遅延を改善・Calendar 連携 API の安定性向上</li>
+      <li><span class="font-bold text-slate-800">2026-05-20</span> — 多言語対応 (日本語 / English) 拡張・サイドメニュー DRY 化</li>
+      <li><span class="font-bold text-slate-800">2026-05-19</span> — Score Backend per-user 認可解決・BUG-448 修正</li>
+    </ul>
+  </section>
+
+  <!-- バグ報告 -->
+  <section class="bg-white/40 backdrop-blur-xl border border-white/60 rounded-3xl shadow-xl p-6 mb-6">
+    <h2 class="text-lg font-bold text-slate-800 mb-1">🐞 バグ報告 / 改善要望</h2>
+    <p class="text-xs text-slate-500 mb-4">送信内容は開発チームに FB され、Score の改善に活用されます(DB 記録)。</p>
+
+    {% if submitted %}
+    <div class="bg-emerald-50 border border-emerald-200 rounded-2xl p-3 mb-4 text-sm text-emerald-700">
+      ✅ ご報告 #{{ submitted }} を受け付けました。ご協力ありがとうございます。
+    </div>
+    {% endif %}
+
+    <form method="post" action="/api/bug_reports" class="space-y-3">
+      <div>
+        <label class="text-xs font-bold text-slate-600 mb-1 block">件名 <span class="text-rose-500">*</span></label>
+        <input type="text" name="title" required maxlength="200" placeholder="例: ダッシュボードでスクロールすると下に余白が出る"
+          class="w-full bg-white/70 border border-white/80 rounded-xl px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-indigo-300">
+      </div>
+      <div>
+        <label class="text-xs font-bold text-slate-600 mb-1 block">詳細(再現手順・期待動作・実際の動作) <span class="text-rose-500">*</span></label>
+        <textarea name="description" required rows="5" maxlength="5000"
+          placeholder="1. /dashboard を開く&#10;2. 下にスクロール&#10;3. 期待: スクロールしない / 実際: 余白が見える"
+          class="w-full bg-white/70 border border-white/80 rounded-xl px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-indigo-300"></textarea>
+      </div>
+      <div class="grid grid-cols-2 gap-3">
+        <div>
+          <label class="text-xs font-bold text-slate-600 mb-1 block">重大度</label>
+          <select name="severity"
+            class="w-full bg-white/70 border border-white/80 rounded-xl px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-indigo-300">
+            <option value="low">低 — 軽微</option>
+            <option value="medium" selected>中 — 通常</option>
+            <option value="high">高 — 業務影響</option>
+            <option value="critical">緊急 — 業務停止</option>
+          </select>
+        </div>
+        <div>
+          <label class="text-xs font-bold text-slate-600 mb-1 block">発生 URL (任意)</label>
+          <input type="text" name="page_url" maxlength="500" placeholder="例: /dashboard"
+            class="w-full bg-white/70 border border-white/80 rounded-xl px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-indigo-300">
+        </div>
+      </div>
+      <div class="flex justify-end">
+        <button type="submit" class="bg-indigo-600 hover:bg-indigo-700 text-white text-sm font-bold rounded-xl px-6 py-2 transition-colors">
+          🚀 送信
+        </button>
+      </div>
+    </form>
+
+    {% if recent_reports %}
+    <div class="mt-6">
+      <h3 class="text-sm font-bold text-slate-700 mb-2">📋 直近の報告(全ユーザ・最新 5 件)</h3>
+      <ul class="space-y-2 text-xs">
+        {% for r in recent_reports %}
+        <li class="bg-white/50 border border-white/60 rounded-xl p-3">
+          <div class="flex items-center justify-between mb-1">
+            <span class="font-bold text-slate-800">#{{ r.id }} {{ r.title }}</span>
+            <span class="px-2 py-0.5 rounded-full text-[10px] font-bold
+              {% if r.severity == 'critical' %}bg-rose-100 text-rose-700
+              {% elif r.severity == 'high' %}bg-amber-100 text-amber-700
+              {% elif r.severity == 'medium' %}bg-slate-100 text-slate-600
+              {% else %}bg-slate-50 text-slate-500{% endif %}">
+              {{ r.severity }}
+            </span>
+          </div>
+          <p class="text-slate-500 truncate">{{ r.description[:120] }}</p>
+          <p class="text-[10px] text-slate-400 mt-1">
+            <span translate="no">{{ r.reporter_name or '匿名' }}</span> / {{ r.created_at.strftime('%Y-%m-%d %H:%M') if r.created_at else '' }}
+            / status: <span class="font-bold">{{ r.status }}</span>
+          </p>
+        </li>
+        {% endfor %}
+      </ul>
+    </div>
+    {% endif %}
+  </section>
+
+  <!-- サポート連絡先 -->
+  <section class="bg-white/40 backdrop-blur-xl border border-white/60 rounded-3xl shadow-xl p-6 mb-6">
+    <h2 class="text-lg font-bold text-slate-800 mb-3">💬 サポート連絡先</h2>
+    <ul class="space-y-2 text-sm text-slate-700">
+      <li>📧 メール: <a href="mailto:support@score.local" class="text-indigo-600 hover:underline" translate="no">support@score.local</a></li>
+      <li>💬 メッセージ: 「Score Admin」スレッドへ問い合わせ</li>
+      <li>📞 緊急時: PM Tanaka 内線 #1234</li>
+    </ul>
+  </section>
+</main>
+
+</body>
+</html>

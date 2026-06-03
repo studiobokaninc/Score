@@ -1,0 +1,376 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>ダッシュボード — Score (Lighting Lead)</title>
+  <script src="https://cdn.tailwindcss.com"></script>
+  <style>
+    .custom-scrollbar::-webkit-scrollbar { width: 6px; }
+    .custom-scrollbar::-webkit-scrollbar-track { background: transparent; }
+    .custom-scrollbar::-webkit-scrollbar-thumb { background: rgba(0,0,0,0.05); border-radius: 10px; }
+    .custom-scrollbar::-webkit-scrollbar-thumb:hover { background: rgba(0,0,0,0.1); }
+    /* details/summary を SEQ accordion 同 UX に統一 — 三角形を 90deg 回転で開閉表現 */
+    details > summary { list-style: none; }
+    details > summary::-webkit-details-marker { display: none; }
+    details[open] > summary .section-arrow { transform: rotate(90deg); }
+  </style>
+</head>
+<body class="h-screen bg-gradient-to-br from-[#E0F2FE] via-[#F3E8FF] to-[#FCE7F3] flex overflow-hidden font-sans">
+{% if demo_mode %}
+<div style="background:#f39c12;color:#fff;text-align:center;padding:6px 12px;font-size:12px;font-weight:bold;position:fixed;top:0;left:0;right:0;z-index:9999;letter-spacing:0.05em;">
+  ⚠️ DEMO DATA — 本番データではありません
+</div>
+{% endif %}
+{% include '_sidemenu.html' %}
+
+  <!-- メインエリア -->
+  <main class="flex-1 ml-24 flex flex-col relative overflow-hidden">
+
+    <!-- (1) ヘッダー: 日付 + おはよう + 本日の予定 + 🎂 誕生日 -->
+    <div class="px-8 pt-6 pb-2">
+      <p class="text-sm text-slate-500">{{ today_str }} {{ today_weekday_jp }}</p>
+      <h1 class="text-2xl font-black text-slate-800">☀️ おはよう、<span translate="no">{{ user.name if user else 'ユーザ' }}</span> さん</h1>
+      <p class="text-sm text-slate-500 mt-1">
+        本日の予定:
+        {% if today_events %}
+          {% for ev in today_events %}{% if ev.display_time %}{{ ev.display_time }} {% endif %}{{ ev.title }}{% if not loop.last %} / {% endif %}{% endfor %}
+        {% else %}
+          予定なし
+        {% endif %}
+      </p>
+      {% include '_birthday_banner.html' %}
+    </div>
+
+    <!-- スクロールコンテンツ -->
+    <div class="flex-1 overflow-y-auto custom-scrollbar p-8 space-y-6">
+
+      <!-- (2) 朝会 MTG カード — 動的化: 直近 today_events 内の MTG を表示 (なければ section 非表示) -->
+      {% set _live_mtg = none %}
+      {% if today_events %}
+        {% for ev in today_events %}
+          {% if ev.get('title') and ('MTG' in ev.title or '朝会' in ev.title or 'review' in ev.title.lower()) and _live_mtg is none %}
+            {% set _live_mtg = ev %}
+          {% endif %}
+        {% endfor %}
+      {% endif %}
+      {% if _live_mtg %}
+      <div class="bg-rose-50 border border-rose-200 rounded-3xl p-6 flex flex-col gap-4 shadow-lg">
+        <div class="flex items-start justify-between">
+          <div>
+            <h2 class="text-xl font-black text-rose-700">📅 {{ _live_mtg.get('time', '') }} {{ _live_mtg.title }}</h2>
+            <p class="text-sm text-rose-500 font-semibold mt-1">{{ _live_mtg.get('date', '') }}</p>
+          </div>
+        </div>
+        {% if _live_mtg.get('meeting_url') %}
+        <div class="flex items-center gap-4">
+          <a href="{{ _live_mtg.meeting_url }}" target="_blank" class="px-5 py-2.5 bg-rose-500 hover:bg-rose-600 text-white font-black rounded-2xl shadow-md transition-all flex items-center gap-2">📹 参加(Zoom/Meet)</a>
+        </div>
+        {% endif %}
+      </div>
+      {% endif %}
+
+      <!-- (3) 重要通知 (動的: state.troubles loop・max 5 件 + scroll) -->
+      <section>
+        <h2 class="font-black text-slate-800 text-base mb-3">🔔 重要通知 ({{ troubles|length if troubles else 0 }} 件{% if troubles and troubles|length > 5 %} ・上位 5 件表示 + scroll{% endif %})</h2>
+        <div class="space-y-3 max-h-[26rem] overflow-y-auto pr-1 custom-scrollbar">
+          {% for tr in (troubles or []) %}
+          {% set _icon = '🔴' if tr.status == 'open' else ('🟡' if tr.status == 'investigating' else '✅') %}
+          <div class="bg-amber-50 border border-amber-200 rounded-2xl p-4 flex items-start gap-3">
+            <span class="text-2xl">{{ _icon }}</span>
+            <div class="flex-1">
+              <p class="font-black text-amber-800 text-sm">{{ tr.title }}</p>
+              <p class="text-xs text-amber-600 mt-1">status: <span translate="no">{{ tr.status }}</span> / 報告: {{ tr.reported_at or '-' }}</p>
+            </div>
+            {% if tr.status != 'resolved' %}
+            <a href="/troubleshoot" class="text-xs bg-amber-500 hover:bg-amber-600 text-white font-black rounded-xl px-3 py-1.5 transition-all shrink-0">対応する →</a>
+            {% endif %}
+          </div>
+          {% else %}
+          <div class="bg-emerald-50 border border-emerald-200 rounded-2xl p-4 text-sm text-emerald-700">✅ 重要通知 なし</div>
+          {% endfor %}
+        </div>
+      </section>
+
+      <!-- (4) AI 提案 — 朝会議事録 (Calendar /projects/{id}/meetings) ベース・開閉可 -->
+      {% if meetings %}
+      <section>
+        <details class="bg-white/40 backdrop-blur-md border border-slate-200 rounded-3xl shadow">
+          <summary class="cursor-pointer p-4 flex items-center gap-2 select-none">
+            <span class="text-base">🤖</span>
+            <span class="font-black text-slate-800 text-base">AI 提案 — 議事録より自動抽出</span>
+            <span class="ml-2 text-xs bg-indigo-100 text-indigo-700 rounded-full px-2 py-0.5 font-bold">{{ meetings|length }} 件</span>
+            <span class="ml-auto text-slate-500 transition-transform section-arrow">▶</span>
+          </summary>
+          <div class="px-4 pb-4 border-t border-slate-200">
+            {% set _proj_name_map = {} %}
+            {% for p in (projects_list or []) %}{% if p.get('id') and p.get('name') %}{% set _ = _proj_name_map.update({p['id']: p['name']}) %}{% endif %}{% endfor %}
+            {% for mtg in meetings[:5] %}
+            {% set _proj = _proj_name_map.get(mtg.get('project_id'), 'project_' ~ (mtg.get('project_id') or '?')) %}
+            {% set _date = (mtg.get('date') or '')[:16].replace('T', ' ') %}
+            <div class="mt-4 first:mt-3 bg-white/60 rounded-2xl p-3 border border-slate-100">
+              <div class="flex items-center justify-between flex-wrap gap-2 mb-2">
+                <div class="flex-1 min-w-0">
+                  <h3 class="font-black text-slate-800 text-sm truncate"><span translate="no">{{ _proj }}</span> · {{ mtg.title }}</h3>
+                  <p class="text-[10px] text-slate-500 mt-0.5">📅 {{ _date or '(date 未設定)' }}{% if mtg.get('attendees') %} · 👥 {{ mtg.attendees|length }} 名{% endif %}</p>
+                </div>
+                {% if mtg.get('id') %}
+                <a href="/meetings/{{ mtg.id }}" class="text-[11px] bg-indigo-600 hover:bg-indigo-700 text-white font-bold rounded-lg px-3 py-1">📋 議事録を開く →</a>
+                {% endif %}
+              </div>
+
+              {% if mtg.get('audio_url') %}
+              <audio controls class="w-full mb-2 h-10">
+                <source src="{{ mtg.audio_url }}" type="audio/mpeg">音声未対応 browser
+              </audio>
+              {% endif %}
+              {% if mtg.get('video_url') %}
+              <video controls class="w-full max-h-48 rounded-lg mb-2 bg-slate-800">
+                <source src="{{ mtg.video_url }}" type="video/mp4">動画未対応 browser
+              </video>
+              {% endif %}
+
+              {% if mtg.tasks %}
+              <p class="text-[11px] font-bold text-emerald-700 mt-2 mb-1">📌 提案タスク ({{ mtg.tasks|length }}):</p>
+              <ul class="space-y-1 text-[11px] text-slate-700">
+                {% for tk in mtg.tasks[:3] %}
+                <li class="bg-emerald-50 border border-emerald-100 rounded px-2 py-1">▶ {{ tk }}</li>
+                {% endfor %}
+              </ul>
+              {% endif %}
+              {% if mtg.decisions %}
+              <p class="text-[11px] font-bold text-blue-700 mt-2 mb-1">✅ 決定事項 ({{ mtg.decisions|length }}):</p>
+              <ul class="space-y-1 text-[11px] text-slate-700">
+                {% for dc in mtg.decisions[:3] %}
+                <li class="bg-blue-50 border border-blue-100 rounded px-2 py-1">{{ dc }}</li>
+                {% endfor %}
+              </ul>
+              {% endif %}
+              {% if mtg.deadlines %}
+              <p class="text-[11px] font-bold text-rose-700 mt-2 mb-1">⏰ 期限 ({{ mtg.deadlines|length }}):</p>
+              <ul class="space-y-1 text-[11px] text-slate-700">
+                {% for dl in mtg.deadlines[:2] %}
+                <li class="bg-rose-50 border border-rose-100 rounded px-2 py-1">{{ dl }}</li>
+                {% endfor %}
+              </ul>
+              {% endif %}
+            </div>
+            {% endfor %}
+            <p class="text-[10px] text-slate-400 mt-3">※ Calendar 側 AI 議事録解析(transcript / decisions / tasks)から自動抽出</p>
+          </div>
+        </details>
+      </section>
+      {% endif %}
+
+      {% set _retake_shots_l = [] %}
+      {% for t in (team_retakes or []) %}{% if _retake_shots_l.append(t) %}{% endif %}{% endfor %}
+      {% if _retake_shots_l %}
+      <section>
+        <h2 class="font-black text-slate-800 text-base mb-3">⚠️ 傾向注意 ({{ _retake_shots_l|length }} 件{% if _retake_shots_l|length > 5 %} ・上位 5 件表示 + scroll{% endif %})</h2>
+        <div class="bg-white/40 backdrop-blur-md border border-slate-200 rounded-3xl p-4">
+          <div class="flex items-center justify-between mb-3">
+            <h3 class="font-black text-slate-700">⚠️ 部署内 Retake 中タスク</h3>
+            <button onclick="restoreAllAlerts()" title="非表示にした通知を全て復元" class="text-xs text-slate-500 hover:text-slate-700 font-bold bg-slate-100 hover:bg-slate-200 rounded-full px-3 py-1 transition-colors">
+              🔄 復元
+            </button>
+          </div>
+          <div class="max-h-[24rem] overflow-y-auto pr-1 custom-scrollbar">
+          {% for t in _retake_shots_l %}
+          <div id="ai-alert-{{ t.task_id }}" class="bg-amber-50 border border-amber-200 rounded-2xl p-3 mb-3 flex items-start gap-2"
+            data-localstorage-key="ai_alert_dismissed_{{ t.task_id }}">
+            <div class="flex-1">
+              <p class="text-sm font-black text-slate-800">対象: <span translate="no">{{ t.shot_code }}</span> <span translate="no">{{ t.task_type }}</span></p>
+              <p class="text-sm text-slate-600 mt-1">status=<span translate="no">{{ t.status }}</span> / task_id={{ t.task_id }} / 早期確認推奨</p>
+            </div>
+            <button onclick="dismissAlert('{{ t.task_id }}')" title="チェック済み・非表示" class="text-xs text-amber-700 hover:text-amber-900 font-bold bg-amber-100 hover:bg-amber-200 rounded-full px-2 py-0.5 transition-colors whitespace-nowrap">
+              ✅ チェック済
+            </button>
+          </div>
+          {% endfor %}
+          </div><!-- /max-h scroll wrapper -->
+          <script>
+          /* localStorage で AI 提案 alert の dismiss 状態を覚える */
+          (function(){
+            document.querySelectorAll('[data-localstorage-key]').forEach(function(el){
+              const key = el.dataset.localstorageKey;
+              if (localStorage.getItem(key) === 'dismissed') el.style.display = 'none';
+            });
+          })();
+          function dismissAlert(taskId) {
+            const el = document.getElementById('ai-alert-' + taskId);
+            if (!el) return;
+            el.style.display = 'none';
+            localStorage.setItem('ai_alert_dismissed_' + taskId, 'dismissed');
+          }
+          function restoreAllAlerts() {
+            // localStorage の AI alert dismiss key を全削除 + DOM display 復帰
+            const keys = [];
+            for (let i = 0; i < localStorage.length; i++) {
+              const k = localStorage.key(i);
+              if (k && k.indexOf('ai_alert_dismissed_') === 0) keys.push(k);
+            }
+            keys.forEach(k => localStorage.removeItem(k));
+            document.querySelectorAll('[data-localstorage-key]').forEach(el => {
+              el.style.display = '';
+            });
+            alert(`✅ ${keys.length} 件の通知を復元しました`);
+          }
+          </script>
+          <p class="text-xs text-slate-500">※ 本表示は state.tasks の status='retake' 集計に基づく注意喚起・未来予測ではありません</p>
+        </div>
+      </section>
+      {% endif %}
+
+      <!-- (5a) 自分の作業タスク — project > seq > shot > task 階層表示・開閉可 -->
+      {% if my_tasks %}
+      <section>
+        <details open class="bg-white/40 backdrop-blur-xl border border-white/60 rounded-3xl shadow-xl">
+          <summary class="cursor-pointer p-4 flex items-center gap-2 select-none">
+            <span class="text-base">👤</span>
+            <span class="font-black text-slate-800 text-base">自分の作業タスク</span>
+            <span class="ml-2 text-xs bg-indigo-100 text-indigo-700 rounded-full px-2 py-0.5 font-bold">{{ my_tasks|length }} 件</span>
+            {% if my_tasks|length > 5 %}<span class="text-[10px] text-slate-400">上位 5 + scroll</span>{% endif %}
+            <span class="ml-auto text-slate-500 transition-transform section-arrow">▶</span>
+          </summary>
+          <div class="px-4 pb-4 border-t border-slate-200">
+          <ol class="space-y-2 max-h-[22rem] overflow-y-auto pr-1 custom-scrollbar mt-3">
+            {% set _proj_name_map = {} %}
+            {% for p in (projects_list or []) %}{% if p.get('id') and p.get('name') %}{% set _ = _proj_name_map.update({p['id']: p['name']}) %}{% endif %}{% endfor %}
+            {% for tk in my_tasks %}
+            {% set _type = (tk.task_type or tk.type or '') %}
+            {% set _icon = '🎨' if _type == 'Composite' else ('💡' if _type in ('Lighting','Look','lighting','light') else ('🖼️' if _type == 'MattePaint' else ('✨' if _type in ('FX','fx') else ('📐' if _type == 'layout' else '🎬')))) %}
+            {% set _proj_name = _proj_name_map.get(tk.project_id, ('project_' ~ tk.project_id) if tk.project_id else '') %}
+            {% set _seq = tk.seq_code or tk.seqID or '' %}
+            {% set _shot = tk.shot_code or tk.shotID or '' %}
+            {% set _task_label = tk.name or _type or 'task' %}
+            <li>
+              <a href="/task/{{ tk.task_id or tk.id }}" class="flex items-center gap-3 p-3 rounded-2xl hover:bg-white/60 transition-all">
+                <span class="text-lg font-black text-indigo-500 w-5 text-center shrink-0">{{ loop.index }}</span>
+                <span class="text-lg shrink-0">{{ _icon }}</span>
+                <div class="flex-1 min-w-0">
+                  {# 階層 breadcrumb: project > seq > shot > task #}
+                  <p class="text-[10px] text-slate-400 truncate">
+                    {% if _proj_name %}<span translate="no">{{ _proj_name }}</span>{% endif %}
+                    {% if _seq %} › <span translate="no">{{ _seq }}</span>{% endif %}
+                    {% if _shot %} › <span translate="no">{{ _shot }}</span>{% endif %}
+                  </p>
+                  <p class="text-sm font-bold text-slate-800 truncate"><span translate="no">{{ _task_label }}</span>{% if _type and _type != _task_label %} <span class="text-[10px] font-normal text-slate-400 bg-slate-100 rounded-full px-1.5 py-0.5" translate="no">{{ _type }}</span>{% endif %}</p>
+                </div>
+                {% if tk.status == 'retake' %}<span class="text-[10px] font-bold bg-rose-100 text-rose-700 rounded-full px-2 py-0.5 shrink-0">🔴 Retake</span>
+                {% elif tk.status == 'reviewing' %}<span class="text-[10px] font-bold bg-amber-100 text-amber-700 rounded-full px-2 py-0.5 shrink-0">⚠️ Reviewing</span>
+                {% elif tk.status in ('open','todo') %}<span class="text-[10px] font-bold bg-slate-100 text-slate-600 rounded-full px-2 py-0.5 shrink-0">⏳ Open</span>
+                {% elif tk.status == 'in_progress' %}<span class="text-[10px] font-bold bg-blue-100 text-blue-700 rounded-full px-2 py-0.5 shrink-0">🔧 進行中</span>
+                {% elif tk.status in ('completed','approved','done') %}<span class="text-[10px] font-bold bg-emerald-100 text-emerald-700 rounded-full px-2 py-0.5 shrink-0">✅ 完了</span>
+                {% else %}<span class="text-[10px] font-bold bg-slate-100 text-slate-600 rounded-full px-2 py-0.5 shrink-0" translate="no">{{ tk.status or '?' }}</span>
+                {% endif %}
+                <span class="text-slate-400 shrink-0">›</span>
+              </a>
+            </li>
+            {% endfor %}
+          </ol>
+          <p class="text-[10px] text-slate-400 mt-2">※ Retake > Reviewing > Open > 進行中 の優先度 sort・階層: project › seq › shot › task</p>
+          </div>
+        </details>
+      </section>
+      {% endif %}
+
+      <!-- (5b) 部署 oversight タスクリスト — 開閉可・初期 open -->
+      {# 件数 = 実 task 件数 (team_retakes + troubles + review_targets)・emerald/常時 card は数えない #}
+      {% set _oversight_total = (team_retakes|length if team_retakes else 0) + (troubles|length if troubles else 0) + (review_targets|length if review_targets else 0) %}
+      <section>
+        <details open class="bg-white/40 backdrop-blur-xl border border-white/60 rounded-3xl shadow-xl">
+          <summary class="cursor-pointer p-4 flex items-center gap-2 select-none">
+            <span class="text-base">👥</span>
+            <span class="font-black text-slate-800 text-base">部署 oversight タスク</span>
+            <span class="ml-2 text-xs bg-indigo-100 text-indigo-700 rounded-full px-2 py-0.5 font-bold">{{ _oversight_total }} 件</span>
+            {% if _oversight_total > 5 %}<span class="text-[10px] text-slate-400">上位 5 + scroll</span>{% endif %}
+            <span class="ml-auto text-slate-500 transition-transform section-arrow">▶</span>
+          </summary>
+          <div class="p-4 border-t border-slate-200 flex flex-col gap-3 max-h-[24rem] overflow-y-auto custom-scrollbar">
+
+          <!-- 部署 oversight: Retake 中タスク (動的 loop) -->
+          {% set _scope_label = 'Lighting/Look' if role in ('lighting_lead','kato') else 'プロジェクト全体' %}
+          {% if team_retakes %}
+          <div class="bg-rose-50 border border-rose-200 rounded-2xl px-3 py-2">
+            <p class="text-xs font-black text-rose-700 mb-2">🔴 部署 Retake 対応中 ({{ team_retakes|length }} 件・scope: {{ _scope_label }})</p>
+            <div class="space-y-2">
+              {% for r in team_retakes %}
+              <a href="/task/{{ r.task_id }}" class="block bg-white/60 border border-rose-100 rounded-xl px-3 py-2 hover:bg-white/80 transition-all">
+                <div class="flex items-center justify-between">
+                  <span class="font-bold text-slate-800 text-sm">🔴 <span translate="no">{{ r.shot_code }}</span> <span translate="no">{{ r.task_type }}</span> <span translate="no">Retake</span></span>
+                  <span class="text-xs bg-rose-500 text-white font-black rounded-full px-2 py-0.5"><span translate="no">Director</span>指示</span>
+                </div>
+                <p class="text-xs text-slate-500 mt-0.5">担当 user_id: {{ r.assignee_id }} / Lead 監督: 進捗確認推奨</p>
+              </a>
+              {% endfor %}
+            </div>
+          </div>
+          {% else %}
+          <div class="bg-emerald-50 border border-emerald-200 rounded-2xl px-3 py-2 text-xs text-emerald-700">
+            ✅ {{ _scope_label }} の Retake は現時点なし
+          </div>
+          {% endif %}
+
+          <!-- 🔧 トラブル対応 (動的件数: troubles|length) -->
+          <a href="/troubleshoot" class="flex items-center gap-3 p-3 rounded-2xl bg-amber-50 border border-amber-100 hover:bg-amber-100 transition-all">
+            <span class="text-xl">🔧</span>
+            <div class="flex-1">
+              <p class="text-sm font-black text-slate-700">トラブル対応（{{ troubles|length if troubles else 0 }}件）</p>
+              <p class="text-xs text-slate-400 mt-0.5">
+              {% if troubles %}
+                {% for t in troubles[:2] %}{{ t.title }}{% if not loop.last %} / {% endif %}{% endfor %}
+              {% else %}
+                現時点で未対応のトラブルなし
+              {% endif %}
+              </p>
+            </div>
+            <span class="text-xs text-amber-600 font-bold bg-amber-100 px-2 py-0.5 rounded-full shrink-0">🔧 急</span>
+          </a>
+
+          <!-- 後輩レビュー (動的: review_targets loop で表示) -->
+          {% set _names_l = {1:'Tanaka',10:'Yamada',20:'Kato',30:'Sato',40:'Suzuki',99:'Ryoji'} %}
+          {% for r in (review_targets or []) %}
+          <a href="/qc/{{ r.shot_id }}?task_id={{ r.task_id }}" class="flex items-center gap-3 p-3 rounded-2xl bg-white/60 border border-white/60 hover:bg-white/80 transition-all">
+            <span class="text-xl">👁</span>
+            <div class="flex-1">
+              <p class="text-sm font-black text-slate-700">後輩 <span translate="no">{{ _names_l.get(r.assignee_id, 'user_' + (r.assignee_id|string)) }}</span> の <span translate="no">{{ r.task_type }}</span> レビュー</p>
+              <p class="text-xs text-slate-400 mt-0.5"><span translate="no">{{ r.shot_code }}</span> <span translate="no">{{ r.task_type }}</span> v04 (task #{{ r.task_id }})</p>
+            </div>
+            <span class="text-xs text-amber-600 font-bold bg-amber-50 px-2 py-0.5 rounded-full">本日中</span>
+          </a>
+          {% endfor %}
+
+          </div>
+        </details>
+      </section>
+
+    </div>
+    <!-- End Scrollable Content -->
+
+  </main>
+
+  <!-- 🌐Language mini-footer -->
+  
+
+  <!-- Language Modal -->
+  <div id="language-modal" class="hidden fixed inset-0 bg-black/30 backdrop-blur-sm flex items-center justify-center z-50">
+    <div class="bg-white/90 backdrop-blur-xl border border-white/60 rounded-3xl shadow-2xl p-8 max-w-sm w-full mx-4 flex flex-col gap-4">
+      <h3 class="font-black text-slate-800 text-lg text-center">🌐 言語を選択</h3>
+      <button class="w-full py-3 bg-white border border-slate-200 rounded-2xl font-bold text-slate-700 hover:bg-slate-50 transition-all">繁體中文</button>
+      <button class="w-full py-3 bg-indigo-600 text-white rounded-2xl font-bold transition-all">日本語（現在）</button>
+      <button class="w-full py-3 bg-white border border-slate-200 rounded-2xl font-bold text-slate-700 hover:bg-slate-50 transition-all">English</button>
+      <p class="text-center text-xs text-slate-400">段階的に拡張中</p>
+      <button onclick="closeLanguageModal()" class="w-full py-2.5 bg-slate-100 hover:bg-slate-200 text-slate-600 font-bold rounded-2xl transition-all">閉じる</button>
+    </div>
+  </div>
+
+  <script>
+  function openLanguageModal() {
+    document.getElementById('language-modal').classList.remove('hidden');
+  }
+  function closeLanguageModal() {
+    document.getElementById('language-modal').classList.add('hidden');
+  }
+  </script>
+</body>
+</html>

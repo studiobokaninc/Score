@@ -1,0 +1,226 @@
+{% extends "base.html" %}
+
+{% block title %}Score — {{ user.name or "Score ユーザ" }} Dashboard{% endblock %}
+
+{% block content %}
+{% if demo_mode %}
+<div style="background:#f39c12;color:#fff;text-align:center;padding:6px 12px;font-size:12px;font-weight:bold;position:sticky;top:0;z-index:9999;letter-spacing:0.05em;">
+  ⚠️ DEMO DATA — 本番データではありません
+</div>
+{% endif %}
+<div class="h-screen w-full bg-gradient-to-br from-[#E0F2FE] via-[#F3E8FF] to-[#FCE7F3] text-slate-800 flex overflow-hidden">
+
+  <!-- Sidebar -->
+  {% include '_sidemenu.html' %}
+
+  <!-- Main Content (sidemenu fixed ゆえ ml-24 で offset) -->
+  <main class="flex-1 ml-24 flex flex-col relative overflow-hidden">
+
+    <!-- Header -->
+    <div class="px-8 pt-6 pb-2">
+      <p class="text-xs text-slate-500">{{ today_str }} {{ today_weekday_jp }}</p>
+      <h1 class="text-2xl font-black text-slate-800">{{ greeting_emoji if greeting_emoji is defined else '☀️' }} {{ t(greeting_key, trans, name=(user.name or 'ユーザ')) if (trans is defined and greeting_key is defined) else 'おはよう、' + (user.name or 'ユーザ') + ' さん' }}</h1>
+      <p class="text-sm text-slate-500 mt-1">本日の action item を全プロジェクト横断で表示しております</p>
+      {% include '_birthday_banner.html' %}
+    </div>
+
+
+    <!-- Scrollable Content -->
+    <div class="flex-1 overflow-y-auto p-10 space-y-6">
+
+      {% set _empty = (today_events|length == 0 and my_tasks|length == 0 and qc_requests|length == 0 and troubles|length == 0 and my_retakes|length == 0 and upcoming_milestones|length == 0) %}
+      {% if _empty %}
+      <section class="bg-emerald-50 border border-emerald-200 rounded-3xl p-8 text-center">
+        <p class="text-4xl mb-3">✨</p>
+        <p class="text-lg font-black text-emerald-800">本日の action item はございませぬ</p>
+        <p class="text-sm text-emerald-700 mt-2">ゆっくり休憩 or <a href="/calendar" class="underline">カレンダー御確認</a></p>
+      </section>
+      {% endif %}
+
+      {# === 本日の予定 / 次の予定 === #}
+      {% if today_events %}
+      <section>
+        <h2 class="font-black text-slate-800 text-base mb-3 flex items-center gap-2">
+          📅 本日の予定 <span class="text-xs bg-indigo-100 text-indigo-700 rounded-full px-2 py-0.5 font-bold">{{ today_events|length }}</span>
+        </h2>
+        <div class="bg-white/40 backdrop-blur-xl border border-white/60 rounded-2xl p-4">
+          <ul class="space-y-2">
+            {% for ev in today_events %}
+            <li class="flex items-start gap-3 text-sm">
+              <span class="font-mono text-indigo-700 font-bold shrink-0 w-12">{{ ev.display_time or '終日' }}</span>
+              <span class="flex-1 text-slate-800" translate="no">{{ ev.title }}</span>
+              {% if ev.project_name %}<span class="text-[10px] text-slate-500 bg-slate-100 rounded px-1.5 py-0.5 shrink-0" translate="no">{{ ev.project_name }}</span>{% endif %}
+            </li>
+            {% endfor %}
+          </ul>
+        </div>
+      </section>
+      {% elif next_event %}
+      <section>
+        <h2 class="font-black text-slate-800 text-base mb-3 flex items-center gap-2">
+          📅 次の予定
+        </h2>
+        <div class="bg-white/40 backdrop-blur-xl border border-white/60 rounded-2xl p-4">
+          <ul class="space-y-2">
+            <li class="flex items-start gap-3 text-sm">
+              <span class="font-mono text-indigo-700 font-bold shrink-0 w-16">{{ (next_event.date or next_event.start_time or '')[:10] }}</span>
+              <span class="flex-1 text-slate-800" translate="no">{{ next_event.title }}</span>
+              {% if next_event.project_name %}<span class="text-[10px] text-slate-500 bg-slate-100 rounded px-1.5 py-0.5 shrink-0" translate="no">{{ next_event.project_name }}</span>{% endif %}
+            </li>
+          </ul>
+        </div>
+      </section>
+      {% endif %}
+
+      {# === QC 依頼 (retake/reviewing) === #}
+      {% if qc_requests %}
+      <section>
+        <h2 class="font-black text-slate-800 text-base mb-3 flex items-center gap-2">
+          🔴 QC 依頼 <span class="text-xs bg-rose-100 text-rose-700 rounded-full px-2 py-0.5 font-bold">{{ qc_requests_total }}</span>
+        </h2>
+        <div class="space-y-2">
+          {% for tk in qc_requests %}
+          <a href="/task/{{ tk.task_id }}" class="block bg-rose-50 hover:bg-rose-100 border border-rose-200 rounded-2xl p-3 transition-all">
+            <div class="flex items-center justify-between gap-3">
+              <div class="flex-1 min-w-0">
+                <p class="text-sm font-bold text-rose-900 truncate"><span translate="no">{{ tk.shot_code }}</span> <span translate="no">{{ tk.task_type }}</span></p>
+                <p class="text-[10px] text-rose-700 mt-0.5"><span translate="no">{{ tk.project_name }}</span>{% if tk.due_date %} · 期日 {{ tk.due_date }}{% endif %}</p>
+              </div>
+              <span class="text-[10px] font-black bg-rose-500 text-white rounded-full px-2 py-0.5 shrink-0" translate="no">{{ tk.status }}</span>
+            </div>
+          </a>
+          {% endfor %}
+          {% if qc_requests_total > qc_requests|length %}<p class="text-xs text-slate-400 mt-1">他 {{ qc_requests_total - qc_requests|length }} 件</p>{% endif %}
+        </div>
+      </section>
+      {% endif %}
+
+      {# === トラブル対応 === #}
+      {% if troubles %}
+      <section>
+        <h2 class="font-black text-slate-800 text-base mb-3 flex items-center gap-2">
+          🔧 トラブル対応 <span class="text-xs bg-amber-100 text-amber-700 rounded-full px-2 py-0.5 font-bold">{{ troubles_total }}</span>
+        </h2>
+        <div class="space-y-2">
+          {% for tr in troubles %}
+          <a href="/troubleshoot" class="block bg-amber-50 hover:bg-amber-100 border border-amber-200 rounded-2xl p-3 transition-all">
+            <div class="flex items-center justify-between gap-3">
+              <p class="text-sm font-bold text-amber-900 truncate" translate="no">{{ tr.title }}</p>
+              {% if tr.project_name %}<span class="text-[10px] text-amber-700 bg-white/60 rounded px-1.5 py-0.5 shrink-0" translate="no">{{ tr.project_name }}</span>{% endif %}
+            </div>
+          </a>
+          {% endfor %}
+          {% if troubles_total > troubles|length %}<p class="text-xs text-slate-400 mt-1">他 {{ troubles_total - troubles|length }} 件</p>{% endif %}
+        </div>
+      </section>
+      {% endif %}
+
+      {# === 後輩レビュー (Calendar /api/me/retakes 自然発生・lead/director 時のみ表示) === #}
+      {% if my_retakes %}
+      <section>
+        <h2 class="font-black text-slate-800 text-base mb-3 flex items-center gap-2">
+          👥 後輩レビュー <span class="text-xs bg-violet-100 text-violet-700 rounded-full px-2 py-0.5 font-bold">{{ my_retakes_total }}</span>
+        </h2>
+        <div class="space-y-2">
+          {% for r in my_retakes %}
+          <a href="/task/{{ r.task_id }}" class="block bg-violet-50 hover:bg-violet-100 border border-violet-200 rounded-2xl p-3 transition-all">
+            <p class="text-sm font-bold text-violet-900 truncate"><span translate="no">{{ r.shot_code }}</span> <span translate="no">{{ r.task_type }}</span></p>
+            <p class="text-[10px] text-violet-700 mt-0.5"><span translate="no">{{ r.project_name }}</span>{% if r.assignee_id %} · 担当 user_{{ r.assignee_id }}{% endif %}</p>
+          </a>
+          {% endfor %}
+        </div>
+      </section>
+      {% endif %}
+
+      {# === 本日やるべきタスク (my_tasks) === #}
+      <section>
+        <h2 class="font-black text-slate-800 text-base mb-3 flex items-center gap-2">
+          📋 本日やるべきタスク <span class="text-xs bg-indigo-100 text-indigo-700 rounded-full px-2 py-0.5 font-bold">{{ my_tasks_total }}</span>
+        </h2>
+        <div class="bg-white/40 backdrop-blur-xl border border-white/60 rounded-3xl shadow-xl p-6">
+          {% if my_tasks %}
+          <ol class="space-y-2">
+            {% for t in my_tasks[:5] %}
+            {% set _icon = '🎨' if t.task_type == 'Composite' else ('💡' if t.task_type in ('Lighting','Look') else ('🖼️' if t.task_type == 'MattePaint' else ('✨' if t.task_type == 'FX' else '🎬'))) %}
+            <li>
+              <a href="/task/{{ t.task_id }}" class="flex items-center gap-3 p-3 rounded-2xl hover:bg-white/60 transition-all">
+                <span class="text-xl font-black text-indigo-500 w-6 text-center">{{ loop.index }}</span>
+                <span class="text-xl">{{ _icon }}</span>
+                <div class="flex-1 min-w-0">
+                  <p class="text-sm font-bold text-slate-800"><span translate="no">{{ t.shot_code }}</span> <span translate="no">{{ t.task_type }}</span></p>
+                  <p class="text-xs text-slate-500">
+                    {% if t.status == 'retake' %}🔴 Retake 修正待ち(最優先)
+                    {% elif t.status == 'reviewing' %}⚠️ Reviewing(レビュー対応推奨)
+                    {% elif t.status == 'open' %}⏳ Open(本日着手)
+                    {% elif t.status == 'in_progress' %}🔧 進行中
+                    {% else %}{{ t.status | capitalize }}{% endif %}
+                  </p>
+                </div>
+                {% if t.status == 'retake' %}
+                <span class="text-xs font-bold bg-rose-100 text-rose-700 rounded-full px-2 py-0.5"><span translate="no">Retake</span></span>
+                {% elif t.status == 'reviewing' %}
+                <span class="text-xs font-bold bg-amber-100 text-amber-700 rounded-full px-2 py-0.5"><span translate="no">Reviewing</span></span>
+                {% elif t.status == 'open' %}
+                <span class="text-xs font-bold bg-slate-100 text-slate-600 rounded-full px-2 py-0.5"><span translate="no">Open</span></span>
+                {% endif %}
+                <span class="text-slate-400">›</span>
+              </a>
+            </li>
+            {% endfor %}
+          </ol>
+          <p class="text-xs text-slate-400 mt-3">※ Retake > Reviewing > Open > 進行中 > Approved の優先度で sort 表示</p>
+          {% else %}
+          <p class="text-xs text-slate-500">本日のアサインなし。お休みください、または PM に新規 task の問合せをどうぞ。</p>
+          {% endif %}
+        </div>
+      </section>
+
+      {# === 直近 30 日 マイルストーン === #}
+      {% if upcoming_milestones %}
+      <section>
+        <h2 class="font-black text-slate-800 text-base mb-3 flex items-center gap-2">
+          📅 マイルストーン (直近 30 日) <span class="text-xs bg-amber-100 text-amber-800 rounded-full px-2 py-0.5 font-bold">{{ upcoming_milestones|length }}</span>
+        </h2>
+        <div class="bg-amber-50 border border-amber-200 rounded-2xl p-4">
+          <ul class="space-y-2">
+            {% for m in upcoming_milestones %}
+            <li class="flex items-center gap-3 text-sm">
+              <span class="font-mono text-amber-800 font-bold shrink-0 w-12">{{ m.date_short or (m.date or '')[5:10] }}</span>
+              <span class="flex-1 text-slate-800" translate="no">{{ m.title }}</span>
+              {% if m.project_name %}<span class="text-[10px] text-slate-500 bg-white/60 rounded px-1.5 py-0.5 shrink-0" translate="no">{{ m.project_name }}</span>{% endif %}
+            </li>
+            {% endfor %}
+          </ul>
+        </div>
+      </section>
+      {% endif %}
+
+    </div>
+    <!-- End Scrollable Content -->
+
+  </main>
+
+  <!-- mini-footer Language button -->
+  
+
+  <!-- language-modal -->
+  <div id="language-modal" class="hidden fixed inset-0 bg-black/30 backdrop-blur-sm flex items-center justify-center z-[999]" onclick="document.getElementById('language-modal').classList.add('hidden')">
+    <div class="bg-white/90 backdrop-blur-xl border border-white/60 rounded-3xl shadow-2xl p-8 w-80 text-center" onclick="event.stopPropagation()">
+      <h3 class="text-lg font-black text-slate-800 mb-6">🌐 言語を選択</h3>
+      <div class="flex flex-col gap-3">
+        <button class="w-full py-3 bg-slate-100 hover:bg-slate-200 text-slate-600 font-bold rounded-2xl text-sm transition-all">繁體中文</button>
+        <button class="w-full py-3 bg-indigo-600 text-white font-bold rounded-2xl text-sm cursor-default">日本語（現在）</button>
+        <button class="w-full py-3 bg-slate-100 hover:bg-slate-200 text-slate-600 font-bold rounded-2xl text-sm transition-all">English</button>
+      </div>
+      <p class="text-xs text-slate-400 mt-4">段階的に拡張中</p>
+    </div>
+  </div>
+
+  <script>
+  function openLanguageModal() {
+    document.getElementById('language-modal').classList.remove('hidden');
+  }
+  </script>
+
+</div>
+{% endblock %}

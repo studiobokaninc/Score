@@ -1,0 +1,308 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Score — Calendar</title>
+  <script src="https://cdn.tailwindcss.com"></script>
+</head>
+<body class="h-screen bg-gradient-to-br from-[#E0F2FE] via-[#F3E8FF] to-[#FCE7F3] flex overflow-hidden">
+{% if demo_mode %}
+<div style="background:#f39c12;color:#fff;text-align:center;padding:6px 12px;font-size:12px;font-weight:bold;position:fixed;top:0;left:0;right:0;z-index:9999;letter-spacing:0.05em;">
+  ⚠️ DEMO DATA — 本番データではありません
+</div>
+{% endif %}
+{% include '_sidemenu.html' %}
+
+  <!-- メインエリア (sidemenu fixed ゆえ ml-24 で offset) -->
+  <main class="flex-1 ml-24 overflow-y-auto p-8">
+
+    <!-- Google 同期エリア -->
+    <div class="flex items-center gap-3 mb-4">
+      <button onclick="syncGoogle()" class="flex items-center gap-2 bg-white/50 backdrop-blur-xl border border-white/60 rounded-2xl px-4 py-2 text-sm font-bold text-slate-700 hover:bg-white/70 shadow transition-all">
+        📤 Google カレンダーへエクスポート
+      </button>
+      <p class="text-xs text-slate-500">Google: 接続済 ✅ sato@gmail.com <span class="ml-1 text-slate-400">前回: 2026-05-10 19:30</span></p>
+    </div>
+
+    <!-- タイトル -->
+    <div class="mb-6">
+      <h1 class="text-2xl font-black text-slate-800">📅 {{ (user.name if user and user.name else (user.email.split('@')[0] if user and user.email else 'ユーザ')) }} のスケジュール<span class="text-xs bg-slate-100 text-slate-500 px-2 py-0.5 rounded-full font-bold ml-2">🔒 自分の予定のみ（Score API 経由）</span></h1>
+      <p class="text-sm text-slate-500 mt-1">{{ week_range_str }} <span class="ml-2 text-xs font-bold text-indigo-600">({{ week_label }})</span></p>
+    </div>
+
+    <!-- 週ナビゲーション (殿御命 2026-06-01: 1 週ずつ前後送り) -->
+    <div class="mb-4 flex items-center gap-2">
+      <a href="/calendar?week_offset={{ week_offset - 1 }}"
+         class="px-3 py-1.5 bg-white/60 hover:bg-white/80 border border-white/60 rounded-xl text-xs font-bold text-slate-700 transition-all flex items-center gap-1">
+        ← 前週
+      </a>
+      {% if week_offset != 0 %}
+      <a href="/calendar"
+         class="px-3 py-1.5 bg-indigo-600 hover:bg-indigo-700 text-white rounded-xl text-xs font-bold transition-all">
+        今週へ戻る
+      </a>
+      {% endif %}
+      <a href="/calendar?week_offset={{ week_offset + 1 }}"
+         class="ml-auto px-3 py-1.5 bg-white/60 hover:bg-white/80 border border-white/60 rounded-xl text-xs font-bold text-slate-700 transition-all flex items-center gap-1">
+        次週 →
+      </a>
+    </div>
+
+    <!-- type 凡例 (殿御命 2026-06-01: 種類で色分け) -->
+    <div class="mb-3 flex flex-wrap items-center gap-1.5 text-[10px]">
+      <span class="text-slate-400 font-bold mr-1">type:</span>
+      <span class="px-2 py-0.5 bg-indigo-50 text-indigo-700 border border-indigo-100 rounded-full font-bold">Meeting</span>
+      <span class="px-2 py-0.5 bg-amber-50 text-amber-800 border border-amber-200 rounded-full font-bold">Milestone</span>
+      <span class="px-2 py-0.5 bg-rose-50 text-rose-700 border border-rose-100 rounded-full font-bold">Deadline</span>
+      <span class="px-2 py-0.5 bg-emerald-50 text-emerald-700 border border-emerald-100 rounded-full font-bold">Workshop</span>
+      <span class="px-2 py-0.5 bg-sky-50 text-sky-700 border border-sky-100 rounded-full font-bold">Task</span>
+      <span class="px-2 py-0.5 bg-slate-50 text-slate-700 border border-slate-100 rounded-full font-bold">Generic</span>
+    </div>
+
+    <!-- 動的週ビュー: 先週・今週・来週 (3 週分) — 前後週は薄目で表示 -->
+    {% macro week_row(week, label, dim) -%}
+      {% if week %}
+      <div class="mb-4 {% if dim %}opacity-50{% endif %}">
+        <p class="text-[11px] font-black {% if dim %}text-slate-400{% else %}text-indigo-700{% endif %} uppercase tracking-widest mb-2">{{ label }}</p>
+        <div class="grid grid-cols-7 gap-2">
+          {% for day in week %}
+          <div>
+            <div class="{% if day.is_today %}bg-indigo-100{% elif day.is_holiday %}bg-rose-100{% else %}bg-white/40 backdrop-blur-xl border border-white/60{% endif %} rounded-2xl px-2 py-2 text-center mb-2">
+              <p class="text-xs font-bold {% if day.is_holiday %}text-rose-500{% else %}text-slate-500{% endif %}">{{ day.weekday }}</p>
+              {% if day.is_today %}
+              <div class="w-8 h-8 rounded-full bg-indigo-600 text-white flex items-center justify-center font-black text-sm mx-auto">{{ day.day }}</div>
+              {% else %}
+              <p class="text-lg font-black {% if day.is_holiday %}text-rose-400{% else %}text-slate-700{% endif %}">{{ day.day }}</p>
+              {% endif %}
+              {% if day.holiday_name %}<span class="text-[9px] bg-rose-100 text-rose-600 font-bold rounded px-1 mt-0.5 inline-block">{{ day.holiday_name }}</span>{% endif %}
+            </div>
+            <div class="bg-white/40 backdrop-blur-xl border border-white/60 rounded-2xl p-2 {% if dim %}min-h-24{% else %}min-h-40{% endif %} flex flex-col gap-1">
+              {% if day.events %}
+              {% for ev in day.events[:5] %}
+              {% set _time = ev.get('display_time') or '' %}
+              {% set _t = (ev.type or '').lower() %}
+              {% set _ev_class = (
+                'bg-indigo-50 hover:bg-indigo-100 text-indigo-700 border border-indigo-100' if _t == 'meeting' else (
+                'bg-amber-50 hover:bg-amber-100 text-amber-800 border border-amber-200' if _t == 'milestone' else (
+                'bg-rose-50 hover:bg-rose-100 text-rose-700 border border-rose-100' if _t == 'deadline' else (
+                'bg-emerald-50 hover:bg-emerald-100 text-emerald-700 border border-emerald-100' if _t == 'workshop' else (
+                'bg-sky-50 hover:bg-sky-100 text-sky-700 border border-sky-100' if _t == 'task' else
+                'bg-slate-50 hover:bg-slate-100 text-slate-700 border border-slate-100'
+                ))))
+              ) %}
+              <button
+                type="button"
+                onclick='openEventModal({{ ev|tojson|safe }})'
+                class="w-full text-left {{ _ev_class }} rounded-xl px-2 py-1 text-xs transition-colors truncate"
+                title="{{ ev.title }} [{{ ev.type or 'Event' }}]">
+                {% if _time %}{{ _time }} {% endif %}<span translate="no">{{ ev.title }}</span>
+              </button>
+              {% endfor %}
+              {% if day.events|length > 5 %}<p class="text-[9px] text-slate-400">他 {{ day.events|length - 5 }} 件</p>{% endif %}
+              {% else %}
+              <p class="text-slate-300 italic text-[10px] mt-2">{% if day.is_holiday %}休日{% else %}予定なし{% endif %}</p>
+              {% endif %}
+            </div>
+          </div>
+          {% endfor %}
+        </div>
+      </div>
+      {% endif %}
+    {%- endmacro %}
+
+    {% if this_week or week_grid %}
+    {{ week_row(last_week, '先週', true) }}
+    {{ week_row(this_week or week_grid, '今週', false) }}
+    {{ week_row(next_week, '来週', true) }}
+    {% else %}
+    <div class="bg-amber-50 border border-amber-200 rounded-2xl px-4 py-6 text-center">
+      <p class="text-sm text-amber-700">📡 今週の Calendar イベントは見つかりませんでした</p>
+      <p class="text-[10px] text-slate-400 mt-1">上の動的イベント一覧では他期間の events が表示されている場合があります</p>
+    </div>
+    {% endif %}
+  </main>
+
+  <!-- 旧 demo storyline modal + JS dict は削除 (2026-05-27 動的化完了) -->
+
+  <!-- Google 同期モーダル -->
+  <div id="modal-sync" class="fixed inset-0 bg-black/30 backdrop-blur-sm flex items-center justify-center z-50 hidden">
+    <div class="bg-white/80 backdrop-blur-xl border border-white/60 rounded-3xl shadow-xl p-8 w-80 text-center">
+      <div id="sync-progress">
+        <p class="text-lg font-black text-slate-800 mb-3">📤 Google カレンダーへエクスポート中…</p>
+        <div class="w-full bg-slate-200 rounded-full h-2 mb-2"><div id="sync-bar" class="bg-indigo-500 h-2 rounded-full w-4/5"></div></div>
+        <p class="text-xs text-slate-500">80%</p>
+      </div>
+      <div id="sync-done" class="hidden">
+        <p class="text-lg font-black text-emerald-700 mb-3">✅ エクスポート完了</p>
+        <ul class="text-sm text-slate-600 text-left mb-4 space-y-1">
+          <li>• 5 件を Google カレンダーへエクスポート</li>
+          <li>• 1 件のエクスポートが完了</li>
+        </ul>
+        <button onclick="closeSyncModal()" class="bg-indigo-600 text-white rounded-2xl px-6 py-2 font-bold text-sm hover:bg-indigo-700 transition-all">閉じる</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- mini-footer Language button -->
+  
+
+  <!-- language-modal -->
+  <div id="language-modal" class="hidden fixed inset-0 bg-black/30 backdrop-blur-sm flex items-center justify-center z-[999]" onclick="document.getElementById('language-modal').classList.add('hidden')">
+    <div class="bg-white/90 backdrop-blur-xl border border-white/60 rounded-3xl shadow-2xl p-8 w-80 text-center" onclick="event.stopPropagation()">
+      <h3 class="text-lg font-black text-slate-800 mb-6">🌐 言語を選択</h3>
+      <div class="flex flex-col gap-3">
+        <button class="w-full py-3 bg-slate-100 hover:bg-slate-200 text-slate-600 font-bold rounded-2xl text-sm transition-all">繁體中文</button>
+        <button class="w-full py-3 bg-indigo-600 text-white font-bold rounded-2xl text-sm cursor-default">日本語（現在）</button>
+        <button class="w-full py-3 bg-slate-100 hover:bg-slate-200 text-slate-600 font-bold rounded-2xl text-sm transition-all">English</button>
+      </div>
+      <p class="text-xs text-slate-400 mt-4">段階的に拡張中</p>
+    </div>
+  </div>
+
+  <!-- Event 詳細モーダル (殿御命 2026-06-01) -->
+  <div id="event-modal" class="hidden fixed inset-0 bg-black/40 backdrop-blur-sm flex items-center justify-center z-[1000]" onclick="if(event.target.id==='event-modal') closeEventModal()">
+    <div class="bg-white/95 backdrop-blur-xl border border-white/60 rounded-3xl shadow-2xl p-6 max-w-md w-full mx-4 relative">
+      <button onclick="closeEventModal()" class="absolute top-3 right-3 w-8 h-8 rounded-full bg-slate-100 hover:bg-slate-200 text-slate-500 flex items-center justify-center font-bold transition-all">×</button>
+
+      <div class="flex items-center gap-2 mb-3">
+        <span id="ev-modal-type-badge" class="text-[10px] font-black uppercase tracking-widest bg-indigo-100 text-indigo-700 rounded-full px-2.5 py-0.5">Event</span>
+        <span id="ev-modal-allday-badge" class="hidden text-[10px] font-black bg-amber-100 text-amber-700 rounded-full px-2 py-0.5">終日</span>
+      </div>
+      <h3 id="ev-modal-title" translate="no" class="text-xl font-black text-slate-800 mb-3 break-words">Event title</h3>
+
+      <div class="space-y-2 text-sm">
+        <div class="flex items-center gap-2 text-slate-700">
+          <span class="text-base shrink-0">📅</span>
+          <span id="ev-modal-date" class="font-mono"></span>
+          <span id="ev-modal-time" class="font-mono text-indigo-600 font-bold"></span>
+        </div>
+        <div id="ev-modal-project-row" class="hidden flex items-center gap-2 text-slate-600">
+          <span class="text-base shrink-0">🎬</span>
+          <span class="text-xs">プロジェクト: <span id="ev-modal-project" class="font-bold text-slate-800" translate="no"></span></span>
+        </div>
+        <div id="ev-modal-participants-row" class="hidden flex items-start gap-2 text-slate-600">
+          <span class="text-base shrink-0">👥</span>
+          <span id="ev-modal-participants" class="text-xs break-words"></span>
+        </div>
+        <div id="ev-modal-userids-row" class="hidden flex items-start gap-2 text-slate-600">
+          <span class="text-base shrink-0">🔖</span>
+          <span class="text-xs">user_ids: <span id="ev-modal-userids" class="font-mono"></span></span>
+        </div>
+        <div id="ev-modal-location-row" class="hidden flex items-start gap-2 text-slate-700">
+          <span class="text-base shrink-0">📍</span>
+          <span id="ev-modal-location" class="text-sm break-words"></span>
+        </div>
+        <div id="ev-modal-description-row" class="hidden bg-slate-50 rounded-xl px-3 py-2 text-xs text-slate-700 break-words"></div>
+      </div>
+
+      <div id="ev-modal-meeting-links" class="hidden mt-4 flex flex-col gap-2"></div>
+    </div>
+  </div>
+
+  <script>
+    function openLanguageModal() {
+      document.getElementById('language-modal').classList.remove('hidden');
+    }
+    function syncGoogle() {
+      document.getElementById('modal-sync').classList.remove('hidden');
+      document.getElementById('sync-progress').classList.remove('hidden');
+      document.getElementById('sync-done').classList.add('hidden');
+      setTimeout(function() {
+        document.getElementById('sync-progress').classList.add('hidden');
+        document.getElementById('sync-done').classList.remove('hidden');
+      }, 2000);
+    }
+    function closeSyncModal() {
+      document.getElementById('modal-sync').classList.add('hidden');
+    }
+
+    function openEventModal(ev) {
+      function setText(id, text) { document.getElementById(id).textContent = text || ''; }
+      function setHidden(id, hidden) {
+        const el = document.getElementById(id);
+        if (!el) return;
+        if (hidden) el.classList.add('hidden'); else el.classList.remove('hidden');
+      }
+      // title + type badge (色も type で動的)
+      setText('ev-modal-title', ev.title || '(無題)');
+      const tBadge = document.getElementById('ev-modal-type-badge');
+      const t = (ev.type || 'Event').toLowerCase();
+      tBadge.textContent = ev.type || 'Event';
+      const _typeColorMap = {
+        meeting:   'bg-indigo-100 text-indigo-700',
+        milestone: 'bg-amber-100 text-amber-800',
+        deadline:  'bg-rose-100 text-rose-700',
+        workshop:  'bg-emerald-100 text-emerald-700',
+        task:      'bg-sky-100 text-sky-700',
+        generic:   'bg-slate-100 text-slate-700',
+      };
+      // reset class & apply color
+      tBadge.className = 'text-[10px] font-black uppercase tracking-widest rounded-full px-2.5 py-0.5 ' + (_typeColorMap[t] || 'bg-slate-100 text-slate-700');
+      // allDay badge
+      setHidden('ev-modal-allday-badge', !ev.allDay);
+      // date + time
+      const dateStr = (ev.date || (ev.start_time || '').substring(0, 10)) || '';
+      setText('ev-modal-date', dateStr);
+      setText('ev-modal-time', (ev.allDay ? '' : (ev.display_time || (ev.start_time ? ev.start_time.substring(11, 16) : ''))));
+      // project (name 優先・なければ id fallback)
+      if (ev.project_name || ev.project_id != null) {
+        const label = ev.project_name ? ev.project_name : ('project_id: ' + ev.project_id);
+        setText('ev-modal-project', label);
+        setHidden('ev-modal-project-row', false);
+      } else { setHidden('ev-modal-project-row', true); }
+      // participants (normalize 済 list "user_31" 等を join)
+      const parts = Array.isArray(ev.participant_names) ? ev.participant_names : [];
+      if (parts.length > 0) {
+        setText('ev-modal-participants', parts.join(', '));
+        setHidden('ev-modal-participants-row', false);
+      } else { setHidden('ev-modal-participants-row', true); }
+      // user_ids
+      if (Array.isArray(ev.user_ids) && ev.user_ids.length > 0) {
+        setText('ev-modal-userids', '[' + ev.user_ids.join(', ') + ']');
+        setHidden('ev-modal-userids-row', false);
+      } else { setHidden('ev-modal-userids-row', true); }
+      // location (場所・Calendar 独立 field)
+      const locEl = document.getElementById('ev-modal-location-row');
+      const locText = document.getElementById('ev-modal-location');
+      if (ev.location) { locText.textContent = ev.location; locEl.classList.remove('hidden'); }
+      else { locEl.classList.add('hidden'); }
+      // description / memo (任意)
+      const desc = ev.description || ev.memo || ev.body;
+      const descEl = document.getElementById('ev-modal-description-row');
+      if (desc) { descEl.textContent = desc; descEl.classList.remove('hidden'); }
+      else { descEl.classList.add('hidden'); }
+      // meeting_links (meeting_url + description 内 URL 抽出済・複数対応)
+      const linksContainer = document.getElementById('ev-modal-meeting-links');
+      linksContainer.innerHTML = '';
+      const links = Array.isArray(ev.meeting_links) ? ev.meeting_links : (ev.meeting_url ? [ev.meeting_url] : []);
+      if (links.length > 0) {
+        links.forEach(function(url) {
+          let icon = '🔗', label = url.length > 50 ? url.substring(0, 50) + '...' : url;
+          const u = url.toLowerCase();
+          if (u.includes('zoom.us')) { icon = '🎥'; label = 'Zoom を開く'; }
+          else if (u.includes('meet.google.com')) { icon = '📹'; label = 'Google Meet を開く'; }
+          else if (u.includes('teams.microsoft.com')) { icon = '💬'; label = 'Teams を開く'; }
+          else if (u.includes('webex.com')) { icon = '🌐'; label = 'Webex を開く'; }
+          const a = document.createElement('a');
+          a.href = url; a.target = '_blank'; a.rel = 'noopener';
+          a.className = 'w-full py-3 bg-indigo-600 hover:bg-indigo-700 text-white font-bold rounded-xl text-center transition-all flex items-center justify-center gap-2 break-all';
+          a.innerHTML = '<span class="text-base">' + icon + '</span><span>' + label + '</span>';
+          linksContainer.appendChild(a);
+        });
+        linksContainer.classList.remove('hidden');
+      } else {
+        linksContainer.classList.add('hidden');
+      }
+      // open
+      document.getElementById('event-modal').classList.remove('hidden');
+    }
+    function closeEventModal() {
+      document.getElementById('event-modal').classList.add('hidden');
+    }
+    document.addEventListener('keydown', function(e) {
+      if (e.key === 'Escape') closeEventModal();
+    });
+  </script>
+</body>
+</html>

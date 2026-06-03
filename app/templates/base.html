@@ -1,0 +1,48 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>{% block title %}Score{% endblock %}</title>
+  <script src="https://cdn.tailwindcss.com"></script>
+  <style>
+    body {
+      background: linear-gradient(135deg, #0f172a 0%, #1e293b 100%);
+      min-height: 100vh;
+    }
+  </style>
+</head>
+<body class="text-slate-800 font-sans">
+  <div class="min-h-screen">
+    {% block content %}{% endblock %}
+  </div>
+  <script>
+  /* scroll 復元: 内部 overflow-y-auto コンテナ + body の scroll 位置を
+     sessionStorage に保存し pageshow (bfcache 含む) で復元 */
+  (function(){
+    const KEY = 'score_scroll:' + location.pathname + location.search;
+    function selectScrollables(){
+      return Array.from(document.querySelectorAll('.overflow-y-auto, main'));
+    }
+    window.addEventListener('pageshow', function(){
+      const raw = sessionStorage.getItem(KEY);
+      if (!raw) return;
+      try {
+        const data = JSON.parse(raw);
+        if (data.body !== undefined) window.scrollTo(0, data.body);
+        const els = selectScrollables();
+        if (data.inner) {
+          els.forEach(function(el, i){ if (data.inner[i] !== undefined) el.scrollTop = data.inner[i]; });
+        }
+      } catch(e) {}
+    });
+    function save(){
+      const data = { body: window.scrollY, inner: selectScrollables().map(function(el){ return el.scrollTop; }) };
+      try { sessionStorage.setItem(KEY, JSON.stringify(data)); } catch(e) {}
+    }
+    window.addEventListener('beforeunload', save);
+    window.addEventListener('pagehide', save);
+  })();
+  </script>
+</body>
+</html>

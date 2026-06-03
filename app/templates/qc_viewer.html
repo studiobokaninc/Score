@@ -1,0 +1,697 @@
+{% extends "base.html" %}
+
+{% block title %}QC ビューア — Score{% endblock %}
+
+{% block content %}
+{% if demo_mode %}
+<div style="background:#f39c12;color:#fff;text-align:center;padding:6px 12px;font-size:12px;font-weight:bold;position:sticky;top:0;z-index:9999;letter-spacing:0.05em;">
+  ⚠️ DEMO DATA — 本番データではありません
+</div>
+{% endif %}
+{# 殿御命 2026-06-03: 前回見た目 復元 — Phase B 上部 bar+player+modal は削除・既存 mock viewer 構造保持
+   real asset 連動は cmd_475 (軍師処理中) で正規実装予定 #}
+<div class="min-h-screen bg-gradient-to-br from-[#E0F2FE] via-[#F3E8FF] to-[#FCE7F3] font-sans text-slate-800" lang="ja">
+
+  <!-- スライドインチャット撤去 — /messages に統合 (task/SHOT 別 thread) -->
+
+
+  <!-- サイドバー -->
+  {% include '_sidemenu.html' %}
+
+  <!-- メインコンテンツ -->
+  <div class="ml-24 flex flex-col min-h-screen">
+    <!-- ヘッダー -->
+    <header class="px-8 py-4 bg-white/40 backdrop-blur-xl border-b border-white/60 sticky top-0 z-30">
+      <nav class="flex items-center gap-2 text-sm text-slate-500 mb-2">
+        <a href="/projects" class="hover:text-indigo-600 transition-colors">プロジェクト一覧</a>
+        <span class="text-slate-300">›</span>
+        <a href="/project_detail/{{ project_id or 33 }}" class="hover:text-indigo-600 transition-colors"><span translate="no">{{ project_name or '-' }}</span></a>
+        <span class="text-slate-300">›</span>
+        <a href="/project_detail/{{ project_id or 33 }}" class="hover:text-indigo-600 transition-colors"><span translate="no">{{ seq_code or 'SEQ01' }}</span></a>
+        <span class="text-slate-300">›</span>
+        <a href="/shot/{{ shot_id }}" class="hover:text-indigo-600 transition-colors"><span translate="no">{{ shot_code or ('SHOT_' + (shot_id|string)) }}</span></a>
+        <span class="text-slate-300">›</span>
+        {% if task_name %}
+        <a href="/task/{{ task_id }}" class="hover:text-indigo-600 transition-colors" translate="no">{{ task_name }}</a>
+        <span class="text-slate-300">›</span>
+        {% endif %}
+        <span class="font-semibold text-indigo-600 bg-indigo-50 px-2 py-0.5 rounded-lg">QC確認</span>
+      </nav>
+      <div class="flex items-center justify-between">
+        <h1 class="font-bold text-slate-800 text-lg">🎯 <span translate="no">QC</span> ビューア — <span translate="no">{{ shot_code or ('SHOT_' + (shot_id|string)) }}</span>{% if task_name %} <span translate="no">{{ task_name }}</span>{% endif %}</h1>
+        {% if task_id %}
+        <a href="/messages?thread=task{{ task_id }}" title="この task の thread を開く (関係者全員)" class="flex items-center gap-2 bg-white/60 hover:bg-white/80 border border-white/60 rounded-xl px-3 py-1.5 text-sm text-slate-600 hover:text-indigo-600 transition-colors">
+          <span class="text-lg">💬</span><span class="text-xs font-medium" translate="no">{{ task_name or 'task' }} thread</span>
+        </a>
+        {% else %}
+        <a href="/messages?thread=shot{{ '%03d' % shot_id }}" title="この SHOT の thread を開く" class="flex items-center gap-2 bg-white/60 hover:bg-white/80 border border-white/60 rounded-xl px-3 py-1.5 text-sm text-slate-600 hover:text-indigo-600 transition-colors">
+          <span class="text-lg">💬</span><span class="text-xs font-medium" translate="no">SHOT_{{ '%03d' % shot_id }} thread</span>
+        </a>
+        {% endif %}
+      </div>
+    </header>
+
+    <!-- コンテンツエリア -->
+    <main class="flex-1 flex gap-6 p-8">
+
+      <!-- 左: プレビュー領域 -->
+      <div class="flex-1 flex flex-col gap-4">
+
+        <!-- モード切替ボタン -->
+        <div class="flex justify-end">
+          <button id="mode-toggle-btn" onclick="toggleMode()" class="bg-indigo-600 hover:bg-indigo-700 text-white text-xs font-bold rounded-xl px-4 py-2 transition-colors">
+            📊 比較モードに切替
+          </button>
+        </div>
+
+        <!-- real asset main player (cmd_475 Phase A) -->
+        <div id="normal-mode" class="bg-white/40 backdrop-blur-xl border border-white/60 rounded-3xl shadow-xl p-4">
+          <div class="bg-slate-900 rounded-2xl overflow-hidden">
+            <div id="main-player" class="flex items-center justify-center min-h-[60vh] p-4">
+              {% if asset_list %}
+              {% set _a0 = asset_list[0] %}
+              {% set _bn0 = (_a0.file_path or '').split('/')[-1] %}
+              {% set _ext0 = _bn0.lower().split('.')[-1] if '.' in _bn0 else '' %}
+              {% set _url0 = 'http://192.168.44.253:8001/static/assets/' ~ _bn0 %}
+              {% if _ext0 in ['png','jpg','jpeg','webp','gif'] %}
+                <img src="{{ _url0 }}" alt="{{ _bn0 }}" class="max-w-full max-h-[60vh] object-contain">
+              {% elif _ext0 in ['mp4','mov','webm','m4v'] %}
+                <video src="{{ _url0 }}" controls autoplay class="max-w-full max-h-[60vh]"></video>
+              {% elif _ext0 == 'exr' %}
+                <div class="text-center text-white p-8"><div class="text-6xl mb-4">🎞️</div><p class="text-lg font-bold">EXR ブラウザ表示不可</p><p class="text-sm mt-2 opacity-70">cmd_474 で proxy mov 自動生成予定</p></div>
+              {% else %}
+                <div class="text-center text-white p-8"><div class="text-6xl mb-4">📦</div><p class="text-lg font-bold">提出物を選択してください</p></div>
+              {% endif %}
+              {% else %}
+                <div class="text-center text-white p-8"><div class="text-6xl mb-4">📭</div><p class="text-lg font-bold text-slate-300">提出物がありません</p></div>
+              {% endif %}
+            </div>
+            <div class="px-4 py-2 bg-slate-800 text-slate-300 text-xs font-mono flex items-center justify-between">
+              <span id="player-meta">{% if asset_list %}{{ asset_list[0].version or '?' }} — {{ (asset_list[0].file_path or '').split('/')[-1] }}{% else %}提出物なし{% endif %}</span>
+              {% if asset_list %}
+              <a id="player-download" href="http://192.168.44.253:8001/static/assets/{{ (asset_list[0].file_path or '').split('/')[-1] }}" download
+                 class="bg-indigo-600 hover:bg-indigo-700 text-white px-3 py-1 rounded-lg">⬇️ ダウンロード</a>
+              {% endif %}
+            </div>
+          </div>
+        </div>
+
+        <!-- 比較モード (default 非表示・ボタンで切替) -->
+        <div id="compare-mode" class="hidden bg-white/40 backdrop-blur-xl border border-white/60 rounded-3xl shadow-xl p-4">
+          <!-- アセット選択 dropdown + 全画面ボタン -->
+          <div class="flex items-center gap-3 mb-3">
+            <label class="text-xs font-bold text-slate-600 whitespace-nowrap">📽️ 並べて比較するアセット:</label>
+            <select id="compare-asset-select" onchange="updateCompareAsset(this.value)"
+              class="flex-1 bg-white border border-slate-300 rounded-lg px-3 py-1.5 text-sm" translate="no">
+              {% for a in asset_list %}
+              {% set _bn = (a.file_path or '').split('/')[-1] %}
+              <option value="{{ a.id }}">{{ a.version or '?' }} — {{ _bn }} ({{ (a.created_at or '')[:10] }})</option>
+              {% endfor %}
+              {% if not asset_list %}
+              <option value="">提出物なし</option>
+              {% endif %}
+            </select>
+            <button onclick="toggleFullscreen('compare-mode')" title="全画面で比較"
+              class="flex items-center gap-1 bg-indigo-600 hover:bg-indigo-700 text-white text-xs font-bold rounded-lg px-3 py-1.5 transition-colors whitespace-nowrap">
+              ⛶ 全画面
+            </button>
+          </div>
+          {# 殿御命 2026-06-03: モード切替タブ (並列 / Before-After overlay) #}
+          <div class="flex gap-1 mb-3">
+            <button onclick="setCompareMode('split')" id="tab-split" class="bg-indigo-600 text-white text-xs font-bold rounded px-3 py-1.5">📊 並列比較</button>
+            <button onclick="setCompareMode('ba')" id="tab-ba" class="bg-slate-200 hover:bg-slate-300 text-slate-700 text-xs font-bold rounded px-3 py-1.5">↔ Before-After overlay</button>
+          </div>
+          {# 殿御命 2026-06-03: 比較モードを real asset_list 連動に変更 #}
+          {% set _aR = asset_list[0] if asset_list else None %}
+          {% set _aL = asset_list[1] if asset_list and asset_list|length > 1 else None %}
+          {% set _bnR = (_aR.file_path or '').split('/')[-1] if _aR else '' %}
+          {% set _bnL = (_aL.file_path or '').split('/')[-1] if _aL else '' %}
+          {% set _extR = _bnR.lower().split('.')[-1] if '.' in _bnR else '' %}
+          {% set _extL = _bnL.lower().split('.')[-1] if '.' in _bnL else '' %}
+          {% set _urlR = ('http://192.168.44.253:8001/static/assets/' ~ _bnR) if _bnR else '' %}
+          {% set _urlL = ('http://192.168.44.253:8001/static/assets/' ~ _bnL) if _bnL else '' %}
+          <div class="flex gap-4 items-stretch h-[60vh]">
+            {# 左 player (比較元・古い側 or dropdown 選択) #}
+            <div class="flex-1 relative bg-slate-900 rounded-3xl overflow-hidden flex items-center justify-center">
+              <div class="absolute top-2 left-2 z-10 text-white font-bold text-sm bg-black/50 rounded px-2 py-0.5">📽️ <span translate="no" id="compare-left-name">{{ _aL.version if _aL else '—' }}</span>（比較元）</div>
+              <div id="compare-left-player" class="w-full h-full flex items-center justify-center">
+                {% if _extL in ['png','jpg','jpeg','webp','gif'] %}
+                  <img src="{{ _urlL }}" alt="{{ _bnL }}" class="max-w-full max-h-full object-contain">
+                {% elif _extL in ['mp4','mov','webm','m4v'] %}
+                  <video src="{{ _urlL }}" controls class="max-w-full max-h-full"></video>
+                {% elif _extL == 'exr' %}
+                  <div class="text-center text-white p-4"><div class="text-4xl mb-2">🎞️</div><p class="text-xs">EXR proxy 未生成</p></div>
+                {% else %}
+                  <div class="text-center text-white/70 p-4"><div class="text-4xl mb-2">📭</div><p class="text-xs">比較対象を dropdown で選択</p></div>
+                {% endif %}
+              </div>
+            </div>
+            <div class="w-1 bg-white/50 rounded-full self-stretch"></div>
+            {# 右 player (最新) #}
+            <div class="flex-1 relative bg-slate-900 rounded-3xl overflow-hidden flex items-center justify-center">
+              <div class="absolute top-2 left-2 z-10 text-white font-bold text-sm bg-black/50 rounded px-2 py-0.5">📽️ <span translate="no">{{ _aR.version if _aR else '—' }}</span>（最新）</div>
+              <div id="compare-right-player" class="w-full h-full flex items-center justify-center">
+                {% if _extR in ['png','jpg','jpeg','webp','gif'] %}
+                  <img src="{{ _urlR }}" alt="{{ _bnR }}" class="max-w-full max-h-full object-contain">
+                {% elif _extR in ['mp4','mov','webm','m4v'] %}
+                  <video src="{{ _urlR }}" controls class="max-w-full max-h-full"></video>
+                {% elif _extR == 'exr' %}
+                  <div class="text-center text-white p-4"><div class="text-4xl mb-2">🎞️</div><p class="text-xs">EXR proxy 未生成</p></div>
+                {% else %}
+                  <div class="text-center text-white/70 p-4"><div class="text-4xl mb-2">📭</div><p class="text-xs">提出物なし</p></div>
+                {% endif %}
+              </div>
+            </div>
+          </div>
+          {# 殿御命 2026-06-03: Before-After overlay (中央線 drag 可・clip-path) #}
+          <div id="compare-ba-area" class="hidden mt-2 bg-slate-900 rounded-3xl overflow-hidden">
+            <div id="ba-container" class="relative w-full h-[60vh] select-none">
+              {% if _aR and _extR in ['png','jpg','jpeg','webp','gif'] %}
+              <img id="ba-base" src="{{ _urlR }}" alt="{{ _bnR }}" class="absolute inset-0 w-full h-full object-contain pointer-events-none">
+              {% endif %}
+              {% if _aL and _extL in ['png','jpg','jpeg','webp','gif'] %}
+              <div id="ba-clip" class="absolute inset-0 w-full h-full overflow-hidden pointer-events-none" style="clip-path: inset(0 50% 0 0);">
+                <img id="ba-overlay" src="{{ _urlL }}" alt="{{ _bnL }}" class="w-full h-full object-contain">
+              </div>
+              {% endif %}
+              <div id="ba-divider" class="absolute top-0 bottom-0 w-1 bg-white shadow-2xl cursor-ew-resize" style="left: 50%;">
+                <div class="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 w-10 h-10 rounded-full bg-white shadow-lg flex items-center justify-center text-slate-700 text-lg font-bold border-2 border-indigo-500">⇔</div>
+              </div>
+              <div class="absolute top-2 left-2 bg-black/60 text-white text-xs font-bold rounded px-2 py-0.5 z-10">📽️ {{ _aL.version if _aL else '?' }} (Before)</div>
+              <div class="absolute top-2 right-2 bg-black/60 text-white text-xs font-bold rounded px-2 py-0.5 z-10">📽️ {{ _aR.version if _aR else '?' }} (After)</div>
+              {% if not (_aR and _aL and _extR in ['png','jpg','jpeg','webp','gif'] and _extL in ['png','jpg','jpeg','webp','gif']) %}
+              <div class="absolute inset-0 flex items-center justify-center text-white/70 text-center p-8">
+                <div><div class="text-6xl mb-3">📭</div><p class="font-bold">Before-After は画像 2 件以上必要</p><p class="text-xs mt-2 opacity-70">動画/EXR の Before-After は cmd_474 完遂後に対応</p></div>
+              </div>
+              {% endif %}
+            </div>
+          </div>
+          <script>
+            (function(){
+              // 殿御命 2026-06-03: Before-After divider drag
+              const _container = document.getElementById('ba-container');
+              const _divider = document.getElementById('ba-divider');
+              const _clip = document.getElementById('ba-clip');
+              let _dragging = false;
+              const _move = (e) => {
+                if (!_dragging || !_container) return;
+                const _rect = _container.getBoundingClientRect();
+                const _x = (e.clientX || (e.touches && e.touches[0].clientX) || 0) - _rect.left;
+                const _pct = Math.max(0, Math.min(100, (_x / _rect.width) * 100));
+                if (_divider) _divider.style.left = _pct + '%';
+                if (_clip) _clip.style.clipPath = 'inset(0 ' + (100 - _pct) + '% 0 0)';
+              };
+              if (_divider) {
+                _divider.addEventListener('mousedown', () => { _dragging = true; });
+                _divider.addEventListener('touchstart', () => { _dragging = true; });
+              }
+              document.addEventListener('mouseup', () => { _dragging = false; });
+              document.addEventListener('touchend', () => { _dragging = false; });
+              document.addEventListener('mousemove', _move);
+              document.addEventListener('touchmove', _move);
+              // モード切替
+              window.setCompareMode = function(m) {
+                const _split = document.querySelector('#compare-mode > .flex.gap-4');
+                const _ba = document.getElementById('compare-ba-area');
+                const _tabSplit = document.getElementById('tab-split');
+                const _tabBA = document.getElementById('tab-ba');
+                if (m === 'split') {
+                  if (_split) _split.classList.remove('hidden');
+                  if (_ba) _ba.classList.add('hidden');
+                  if (_tabSplit) { _tabSplit.classList.add('bg-indigo-600','text-white'); _tabSplit.classList.remove('bg-slate-200','text-slate-700'); }
+                  if (_tabBA) { _tabBA.classList.remove('bg-indigo-600','text-white'); _tabBA.classList.add('bg-slate-200','text-slate-700'); }
+                } else {
+                  if (_split) _split.classList.add('hidden');
+                  if (_ba) _ba.classList.remove('hidden');
+                  if (_tabBA) { _tabBA.classList.add('bg-indigo-600','text-white'); _tabBA.classList.remove('bg-slate-200','text-slate-700'); }
+                  if (_tabSplit) { _tabSplit.classList.remove('bg-indigo-600','text-white'); _tabSplit.classList.add('bg-slate-200','text-slate-700'); }
+                }
+              };
+            })();
+          </script>
+          {# 殿御命: dropdown 選択時に左 player の src を切替 #}
+          <script>
+            (function(){
+              const _assets = {{ asset_list|tojson if asset_list else '[]' }};
+              const _baseURL = 'http://192.168.44.253:8001/static/assets/';
+              window.updateCompareAsset = function(val) {
+                const _a = _assets.find(a => String(a.id) === String(val));
+                if (!_a) return;
+                const _bn = (_a.file_path || '').split('/').pop();
+                const _ext = (_bn.split('.').pop() || '').toLowerCase();
+                const _url = _baseURL + _bn;
+                const _player = document.getElementById('compare-left-player');
+                const _name = document.getElementById('compare-left-name');
+                if (_name) _name.textContent = _a.version || '?';
+                if (['png','jpg','jpeg','webp','gif'].includes(_ext)) {
+                  _player.innerHTML = '<img src="' + _url + '" alt="' + _bn + '" class="max-w-full max-h-full object-contain">';
+                } else if (['mp4','mov','webm','m4v'].includes(_ext)) {
+                  _player.innerHTML = '<video src="' + _url + '" controls class="max-w-full max-h-full"></video>';
+                } else if (_ext === 'exr') {
+                  _player.innerHTML = '<div class="text-center text-white p-4"><div class="text-4xl mb-2">🎞️</div><p class="text-xs">EXR proxy 未生成</p></div>';
+                } else {
+                  _player.innerHTML = '<div class="text-center text-white p-4"><div class="text-4xl mb-2">📦</div><p class="text-xs">' + _ext.toUpperCase() + '</p></div>';
+                }
+              };
+            })();
+          </script>
+
+          <!-- 同期プレイヤーコントロール -->
+          <div class="mt-4 flex items-center justify-center gap-3 bg-slate-800/80 rounded-2xl px-4 py-2.5">
+            <button onclick="togglePlayer('both')" id="sync-play-btn"
+              class="bg-indigo-600 hover:bg-indigo-700 text-white rounded-full w-9 h-9 flex items-center justify-center text-lg transition-colors">▶</button>
+            <input type="range" id="sync-timeline" min="0" max="250" value="0" oninput="seekTo(this.value)"
+              class="flex-1 accent-indigo-500 cursor-pointer">
+            <span id="sync-time" class="text-white text-xs font-mono whitespace-nowrap">00:00 / 04:10</span>
+            <button onclick="alert('🔊 ボリュームコントロール (準備中)')" title="音量" class="text-white/70 hover:text-white text-lg">🔊</button>
+          </div>
+        </div>
+
+        <script>
+        // 同期プレイヤー mock (実 video element 接続前の placeholder)
+        let _playInterval = null;
+        let _currentSec = 0;
+        const _maxSec = 250;
+        function _fmt(s) {
+          const m = String(Math.floor(s/60)).padStart(2,'0');
+          const ss = String(s%60).padStart(2,'0');
+          return `${m}:${ss}`;
+        }
+        function _updateUI() {
+          document.getElementById('sync-timeline').value = _currentSec;
+          document.getElementById('sync-time').textContent = `${_fmt(_currentSec)} / ${_fmt(_maxSec)}`;
+        }
+        function togglePlayer(side) {
+          const btn = document.getElementById('sync-play-btn');
+          if (_playInterval) {
+            clearInterval(_playInterval);
+            _playInterval = null;
+            btn.textContent = '▶';
+            ['play-btn-left','play-btn-right'].forEach(id => document.getElementById(id).textContent = '▶');
+          } else {
+            _playInterval = setInterval(() => {
+              _currentSec++;
+              if (_currentSec >= _maxSec) {
+                _currentSec = 0;
+              }
+              _updateUI();
+            }, 100);
+            btn.textContent = '⏸';
+            ['play-btn-left','play-btn-right'].forEach(id => document.getElementById(id).textContent = '⏸');
+          }
+        }
+        function seekTo(sec) {
+          _currentSec = Number(sec);
+          _updateUI();
+        }
+        </script>
+
+        <script>
+        function toggleMode() {
+          const normal = document.getElementById('normal-mode');
+          const compare = document.getElementById('compare-mode');
+          const btn = document.getElementById('mode-toggle-btn');
+          if (normal.classList.contains('hidden')) {
+            normal.classList.remove('hidden');
+            compare.classList.add('hidden');
+            btn.textContent = '📊 比較モードに切替';
+          } else {
+            normal.classList.add('hidden');
+            compare.classList.remove('hidden');
+            btn.textContent = '◀ 通常プレビューに戻る';
+          }
+        }
+        function toggleFullscreen(elementId) {
+          const el = document.getElementById(elementId);
+          if (!el) return;
+          if (!document.fullscreenElement) {
+            (el.requestFullscreen || el.webkitRequestFullscreen || el.mozRequestFullScreen).call(el)
+              .catch(err => alert('全画面化に失敗: ' + err.message));
+          } else {
+            (document.exitFullscreen || document.webkitExitFullscreen || document.mozCancelFullScreen).call(document);
+          }
+        }
+        function updateCompareAsset(val) {
+          const meta = {
+            'Animation_v04': {status: 'Approved', cls: 'bg-emerald-500'},
+            'Lighting_v04': {status: 'Approved', cls: 'bg-emerald-500'},
+            'FX_v04': {status: 'Reviewing', cls: 'bg-amber-500'},
+            'MattePaint_v04': {status: 'Retake', cls: 'bg-rose-500'},
+            'Composite_v04': {status: 'Reviewing', cls: 'bg-amber-500'},
+            'Composite_v03': {status: 'Retake', cls: 'bg-rose-500'},
+            'Composite_v02': {status: 'Approved', cls: 'bg-emerald-500'},
+            'Composite_v01': {status: 'Approved', cls: 'bg-emerald-500'},
+          }[val] || {status: '-', cls: 'bg-slate-500'};
+          document.getElementById('compare-left-name').textContent = val;
+          const st = document.getElementById('compare-left-status');
+          st.textContent = meta.status;
+          st.className = meta.cls + ' text-white text-xs font-bold px-3 py-1 rounded-full';
+        }
+        </script>
+
+      </div>
+
+      <!-- 右: バージョン履歴 + アクション -->
+      <div class="w-72 flex flex-col gap-4">
+
+        <!-- バージョン履歴カード -->
+        <div class="bg-white/40 backdrop-blur-xl border border-white/60 rounded-3xl shadow-xl p-5">
+          <h2 class="font-bold text-slate-800 mb-4">📋 バージョン履歴</h2>
+          <div class="space-y-2">
+            {% if asset_list %}
+            {% for a in asset_list %}
+            {% set _bn = (a.file_path or '').split('/')[-1] %}
+            {% set _ext = _bn.lower().split('.')[-1] if '.' in _bn else '' %}
+            {% set _url = 'http://192.168.44.253:8001/static/assets/' ~ _bn %}
+            <div id="asset-row-{{ a.id }}" onclick="selectAsset({{ a.id }},'{{ _url }}','{{ _ext }}','{{ a.version or '?' }}')"
+              class="flex items-center justify-between p-3 rounded-2xl cursor-pointer hover:bg-indigo-50 transition-colors">
+              <div class="flex items-center gap-2">
+                {# 殿御命 2026-06-03: サムネ実画像表示 (image/video の場合) #}
+                <div class="w-16 h-10 rounded-xl overflow-hidden flex-shrink-0 bg-slate-200 relative">
+                  {% if _ext in ['png','jpg','jpeg','webp','gif'] %}
+                    <img src="{{ _url }}" alt="{{ a.version or '?' }}" class="w-full h-full object-cover" loading="lazy"
+                         onerror="this.style.display='none';this.nextElementSibling.style.display='flex';">
+                    <div class="hidden w-full h-full items-center justify-center text-base bg-gradient-to-br from-blue-200 to-amber-200">🖼️</div>
+                  {% elif _ext in ['mp4','mov','webm','m4v'] %}
+                    <video src="{{ _url }}" muted preload="metadata" class="w-full h-full object-cover pointer-events-none"
+                           onerror="this.style.display='none';this.nextElementSibling.style.display='flex';"></video>
+                    <div class="hidden w-full h-full items-center justify-center text-base bg-gradient-to-br from-blue-200 to-amber-200">🎬</div>
+                  {% elif _ext == 'exr' %}
+                    <div class="w-full h-full bg-gradient-to-br from-blue-200 to-amber-200 flex items-center justify-center text-base">🎞️</div>
+                  {% else %}
+                    <div class="w-full h-full bg-gradient-to-br from-blue-200 to-amber-200 flex items-center justify-center text-base">📦</div>
+                  {% endif %}
+                </div>
+                <div>
+                  <div class="text-sm font-medium text-slate-700" translate="no">{{ a.version or '?' }}</div>
+                  <div class="text-xs text-slate-500">{{ (a.created_at or '')[:10] }}</div>
+                </div>
+              </div>
+              <span class="text-xs bg-indigo-100 text-indigo-700 font-medium px-2 py-0.5 rounded-full truncate max-w-[80px]" translate="no">{{ _bn }}</span>
+            </div>
+            {% endfor %}
+            {% else %}
+            <p class="text-xs text-slate-400 text-center py-4">提出物がありません</p>
+            {% endif %}
+          </div>
+          {# 殿御命 2026-06-03: 「v04 と並べて比較」ボタン削除 (旧 mock・上部「📊 比較モードに切替」が現役) #}
+        </div>
+
+        <!-- QC アクションボタン (Director ロール限定・status='reviewing' な task または shot.status='in_review' で判定可) -->
+        {% if role == 'director' or role == 'pm' %}
+        {% set _task_status = '' %}
+        {% if task_id and tasks %}
+          {% for t in tasks %}{% if t.task_id == task_id %}{% set _task_status = t.status %}{% endif %}{% endfor %}
+        {% endif %}
+        {# task_id 指定なし → shot.status を見る or 任意 reviewing task の有無で判定 #}
+        {% set _shot_in_review = false %}
+        {% if shot and shot.status %}
+          {% if shot.status|string|lower in ['in_review', 'reviewing'] %}
+            {% set _shot_in_review = true %}
+          {% endif %}
+        {% endif %}
+        {% set _ns_judge = namespace(any_review=false) %}
+        {% if not task_id and tasks %}
+          {% for t in tasks %}{% if t.status == 'reviewing' %}{% set _ns_judge.any_review = true %}{% endif %}{% endfor %}
+        {% endif %}
+        {% set _can_judge = (_task_status == 'reviewing') or (not task_id and (_shot_in_review or _ns_judge.any_review)) %}
+        <div class="bg-white/40 backdrop-blur-xl border border-white/60 rounded-3xl shadow-xl p-5 flex flex-col gap-3">
+          <h2 class="font-bold text-slate-800 mb-1"><span translate="no">QC</span> アクション <span class="text-xs text-slate-500 font-normal">(<span translate="no">{{ role | capitalize }}</span> 専用)</span></h2>
+          {% if _can_judge %}
+          {# Reviewing 状態のみ Approve/Retake 判定可 #}
+          <button onclick="alert('QC 承認しました: Comp_v05 → Approved')"
+            class="w-full bg-emerald-500 text-white rounded-2xl px-4 py-3 font-medium hover:bg-emerald-600 transition-colors">
+            ✅ <span translate="no">Approve</span>
+          </button>
+          <a href="/director_retake_input?shot_id={{ shot_id }}{% if task_id %}&task_id={{ task_id }}{% endif %}"
+            class="block w-full text-center bg-rose-500 text-white rounded-2xl px-4 py-3 font-medium hover:bg-rose-600 transition-colors">
+            🔁 <span translate="no">Retake</span> を発行する
+          </a>
+          {% else %}
+          <p class="text-xs text-slate-500 bg-slate-50 border border-slate-100 rounded-xl px-3 py-2">
+            ⚠️ 現 task status: <span class="font-bold" translate="no">{{ _task_status or '-' }}</span>
+            {% if _task_status == 'retake' %}<br>→ Compositor の Retake 修正待ち中・修正完了後(status=reviewing)に Approve/Retake 判定可能{% endif %}
+            {% if _task_status == 'open' %}<br>→ 未着手・Compositor が作業着手・提出待ち{% endif %}
+            {% if _task_status == 'in_progress' %}<br>→ Compositor 作業中・提出(status=reviewing)後に判定可能{% endif %}
+            {% if _task_status == 'approved' %}<br>→ 既に承認済{% endif %}
+          </p>
+          {% endif %}
+          <button class="w-full bg-white/60 border border-white/60 rounded-2xl px-4 py-3 font-medium text-slate-700 hover:bg-white/80 transition-colors">
+            ⬇️ ダウンロード
+          </button>
+        </div>
+        {% elif role in ('lead', 'lighting_lead', 'kato') %}
+        <!-- Lead 用 アクション: QC 上申(任意) — Lead が後輩 review した結果を Director に上げる -->
+        <div class="bg-white/40 backdrop-blur-xl border border-white/60 rounded-3xl shadow-xl p-5 flex flex-col gap-3">
+          <h2 class="font-bold text-slate-800 mb-1"><span translate="no">QC</span> アクション <span class="text-xs text-slate-500 font-normal">(<span translate="no">Lead</span> 用)</span></h2>
+          <p class="text-xs text-slate-500"><strong>📤 QC 上申</strong>: 後輩 review 結果を Director に上申(コメント付)</p>
+          <button onclick="openQCSubmitModal()" id="submit-to-qc-btn"
+            class="w-full bg-purple-600 text-white rounded-2xl px-4 py-3 font-medium hover:bg-purple-700 transition-colors">
+            📤 <span translate="no">Director</span> <span translate="no">QC</span> へ上申
+          </button>
+          <button class="w-full bg-white/60 border border-white/60 rounded-2xl px-4 py-3 font-medium text-slate-700 hover:bg-white/80 transition-colors">
+            ⬇️ ダウンロード
+          </button>
+        </div>
+
+        <!-- レビュー依頼 modal (意見を聞きたい時に発動・任意) -->
+        <div id="reviewRequestModal" class="hidden fixed inset-0 bg-black/40 backdrop-blur-sm flex items-center justify-center z-50" onclick="if(event.target.id==='reviewRequestModal') closeReviewRequestModal()">
+          <div class="bg-white/95 backdrop-blur-xl rounded-3xl shadow-2xl p-6 w-[28rem] max-w-full" onclick="event.stopPropagation()">
+            <div class="flex items-start justify-between mb-4">
+              <h3 class="text-lg font-black text-slate-800">👁 レビュー依頼 (意見を聞く)</h3>
+              <button onclick="closeReviewRequestModal()" class="text-slate-400 hover:text-slate-600 text-xl leading-none">×</button>
+            </div>
+            <p class="text-xs text-slate-500 mb-4">迷っている点・意見が欲しい点を関係者に共有します。判定要求ではないので任意です。</p>
+            <form onsubmit="submitReviewRequest(event)" class="space-y-3">
+              <div>
+                <label class="text-xs font-bold text-slate-600 mb-1 block">依頼先</label>
+                <select name="reviewer" class="w-full bg-white border border-slate-300 rounded-xl px-3 py-2 text-sm">
+                  <option value="director">Director Yamada(最終判定者として意見)</option>
+                  <option value="lead_kato">Lighting Lead Kato(部内 LookDev 視点)</option>
+                  <option value="pm_tanaka">PM Tanaka(進捗確認)</option>
+                  <option value="all_peers">同職位 peers</option>
+                </select>
+              </div>
+              <div>
+                <label class="text-xs font-bold text-slate-600 mb-1 block">レビュー観点</label>
+                <select name="focus" class="w-full bg-white border border-slate-300 rounded-xl px-3 py-2 text-sm">
+                  <option>仕上がり全体</option>
+                  <option>色味・LookDev</option>
+                  <option>動きの自然さ・タイミング</option>
+                  <option>テクニカル品質</option>
+                  <option>その他(下記コメント参照)</option>
+                </select>
+              </div>
+              <div>
+                <label class="text-xs font-bold text-slate-600 mb-1 block">伝言メッセージ <span class="text-rose-500">*必須</span></label>
+                <textarea name="message" rows="3" required placeholder="例: 色味でハーフトーン部分の判断に迷っています。意見を頂きたく。"
+                  class="w-full bg-white border border-slate-300 rounded-xl px-3 py-2 text-sm"></textarea>
+              </div>
+              <div class="flex justify-end gap-2 pt-2">
+                <button type="button" onclick="closeReviewRequestModal()" class="px-4 py-2 text-sm text-slate-600 hover:text-slate-800">キャンセル</button>
+                <button type="submit" class="bg-indigo-600 hover:bg-indigo-700 text-white text-sm font-bold rounded-xl px-5 py-2">🚀 送信</button>
+              </div>
+            </form>
+          </div>
+        </div>
+        <script>
+        function openReviewRequestModal() { document.getElementById('reviewRequestModal').classList.remove('hidden'); }
+        function closeReviewRequestModal() { document.getElementById('reviewRequestModal').classList.add('hidden'); }
+        async function submitReviewRequest(ev) {
+          ev.preventDefault();
+          const fd = new FormData(ev.target);
+          const reviewer = fd.get('reviewer');
+          const focus = fd.get('focus');
+          const message = (fd.get('message') || '').trim();
+          if (!message) { alert('伝言メッセージは必須です'); return; }
+          const body = {
+            type: 'review_request',
+            shot_id: {{ shot_id }},
+            {% if task_id %}task_id: {{ task_id }},{% endif %}
+            recipient: reviewer,
+            focus: focus,
+            body: `📋 レビュー依頼 (意見を求める)\n依頼先: ${reviewer}\n観点: ${focus}\n\n${message}`,
+            submitted_at: new Date().toISOString(),
+          };
+          try {
+            const resp = await fetch('/api/bff/messages', {
+              method: 'POST', credentials: 'include',
+              headers: { 'Content-Type': 'application/json' },
+              body: JSON.stringify(body),
+            });
+            if (!resp.ok) throw new Error('HTTP ' + resp.status);
+            const data = await resp.json();
+            alert(`✅ レビュー依頼を送信しました (msg_id=${data.id})\n依頼先: ${reviewer}\n観点: ${focus}`);
+            closeReviewRequestModal();
+          } catch (e) {
+            alert('❌ 送信失敗: ' + e.message);
+          }
+        }
+        </script>
+
+        <!-- 上申 modal — QC 用コメント記入 -->
+        <div id="qcSubmitModal" class="hidden fixed inset-0 bg-black/40 backdrop-blur-sm flex items-center justify-center z-50" onclick="if(event.target.id==='qcSubmitModal') closeQCSubmitModal()">
+          <div class="bg-white/95 backdrop-blur-xl rounded-3xl shadow-2xl p-6 w-[28rem] max-w-full" onclick="event.stopPropagation()">
+            <div class="flex items-start justify-between mb-4">
+              <h3 class="text-lg font-black text-slate-800">📤 <span translate="no">Director</span> <span translate="no">QC</span> 上申</h3>
+              <button onclick="closeQCSubmitModal()" class="text-slate-400 hover:text-slate-600 text-xl leading-none">×</button>
+            </div>
+            <p class="text-xs text-slate-500 mb-4">部内レビュー結果と <span translate="no">QC</span> 用コメントを記入して上申してください。</p>
+            <form onsubmit="submitToQCWithComment(event)" class="space-y-3">
+              <div>
+                <label class="text-xs font-bold text-slate-600 mb-1 block">部内レビュー結果</label>
+                <select name="result" class="w-full bg-white border border-slate-300 rounded-xl px-3 py-2 text-sm">
+                  <option value="approved_for_qc">✅ 部内 OK・Director に上申推奨</option>
+                  <option value="conditional">⚠️ 条件付き OK(下記コメント参照)</option>
+                  <option value="needs_more_work">❌ 部内不可・後輩に差戻</option>
+                </select>
+              </div>
+              <div>
+                <label class="text-xs font-bold text-slate-600 mb-1 block"><span translate="no">QC</span> コメント <span class="text-rose-500">*必須</span></label>
+                <textarea name="comment" rows="4" required placeholder="例: 色味は OK・但しリムライト弱め。次バージョンで強調検討。Director の判定をお願いします。"
+                  class="w-full bg-white border border-slate-300 rounded-xl px-3 py-2 text-sm"></textarea>
+              </div>
+              <div class="flex justify-end gap-2 pt-2">
+                <button type="button" onclick="closeQCSubmitModal()" class="px-4 py-2 text-sm text-slate-600 hover:text-slate-800">キャンセル</button>
+                <button type="submit" class="bg-purple-600 hover:bg-purple-700 text-white text-sm font-bold rounded-xl px-5 py-2">📤 上申実行</button>
+              </div>
+            </form>
+          </div>
+        </div>
+
+        <script>
+        function openQCSubmitModal() { document.getElementById('qcSubmitModal').classList.remove('hidden'); }
+        function closeQCSubmitModal() { document.getElementById('qcSubmitModal').classList.add('hidden'); }
+        async function submitToQCWithComment(ev) {
+          ev.preventDefault();
+          const fd = new FormData(ev.target);
+          const btn = document.getElementById('submit-to-qc-btn');
+          const result = fd.get('result');
+          const comment = (fd.get('comment') || '').trim();
+          if (!comment) { alert('QC コメントは必須です'); return; }
+          const body = {
+            type: 'qc_request',
+            shot_id: {{ shot_id }},
+            {% if task_id %}task_id: {{ task_id }},{% endif %}
+            recipient: 'director',
+            review_result: result,
+            body: `📤 Lead → Director QC 上申\n結果: ${result}\nコメント: ${comment}`,
+            qc_comment: comment,
+            submitted_at: new Date().toISOString(),
+          };
+          try {
+            const resp = await fetch('/api/bff/messages', {
+              method: 'POST', credentials: 'include',
+              headers: { 'Content-Type': 'application/json' },
+              body: JSON.stringify(body),
+            });
+            if (!resp.ok) throw new Error('HTTP ' + resp.status);
+            const data = await resp.json();
+            alert(`✅ Director QC へ上申しました (msg_id=${data.id})\n結果: ${result}\nコメント: ${comment.substring(0, 50)}...\n通知が Director Yamada 受信箱へ`);
+            closeQCSubmitModal();
+            btn.disabled = true;
+            btn.textContent = '✅ 上申済 (コメント付)';
+            btn.className = 'w-full bg-slate-300 text-slate-500 rounded-2xl px-4 py-3 font-medium cursor-not-allowed';
+          } catch (e) {
+            alert('❌ 上申失敗: ' + e.message);
+          }
+        }
+        </script>
+        {% else %}
+        <div class="bg-white/40 backdrop-blur-xl border border-white/60 rounded-3xl shadow-xl p-5 flex flex-col gap-3">
+          <h2 class="font-bold text-slate-800 mb-1"><span translate="no">QC</span> 閲覧</h2>
+          <p class="text-xs text-slate-500">QC 承認・Retake 発行は Director 専用ゆえ閲覧のみ可能。</p>
+          <button class="w-full bg-white/60 border border-white/60 rounded-2xl px-4 py-3 font-medium text-slate-700 hover:bg-white/80 transition-colors">
+            ⬇️ ダウンロード
+          </button>
+        </div>
+        {% endif %}
+
+      </div>
+    </main>
+  </div>
+
+  <!-- mini-footer Language button -->
+  
+
+  <!-- language-modal -->
+  <div id="language-modal" class="hidden fixed inset-0 bg-black/30 backdrop-blur-sm flex items-center justify-center z-[999]" onclick="document.getElementById('language-modal').classList.add('hidden')">
+    <div class="bg-white/90 backdrop-blur-xl border border-white/60 rounded-3xl shadow-2xl p-8 w-80 text-center" onclick="event.stopPropagation()">
+      <h3 class="text-lg font-black text-slate-800 mb-6">🌐 言語を選択</h3>
+      <div class="flex flex-col gap-3">
+        <button class="w-full py-3 bg-slate-100 hover:bg-slate-200 text-slate-600 font-bold rounded-2xl text-sm transition-all">繁體中文</button>
+        <button class="w-full py-3 bg-indigo-600 text-white font-bold rounded-2xl text-sm cursor-default">日本語（現在）</button>
+        <button class="w-full py-3 bg-slate-100 hover:bg-slate-200 text-slate-600 font-bold rounded-2xl text-sm transition-all">English</button>
+      </div>
+      <p class="text-xs text-slate-400 mt-4">段階的に拡張中</p>
+    </div>
+  </div>
+
+  <script>
+  function openLanguageModal() {
+    document.getElementById('language-modal').classList.remove('hidden');
+  }
+  </script>
+
+  <script>
+    let compareActive = false;
+    let chatOpen = false;
+
+    function toggleChat() {
+      chatOpen = !chatOpen;
+      const panel = document.getElementById('chat-panel');
+      if (chatOpen) {
+        panel.classList.remove('translate-x-full');
+        panel.classList.add('translate-x-0');
+      } else {
+        panel.classList.remove('translate-x-0');
+        panel.classList.add('translate-x-full');
+      }
+    }
+
+    function toggleCompare() {
+      compareActive = !compareActive;
+      const normalMode = document.getElementById('normal-mode');
+      const compareMode = document.getElementById('compare-mode');
+      const compareBtn = document.getElementById('compare-btn');
+      if (compareActive) {
+        normalMode.classList.add('hidden');
+        compareMode.classList.remove('hidden');
+        compareBtn.textContent = '✖ 比較を終了';
+        compareBtn.classList.remove('bg-amber-500', 'hover:bg-amber-600');
+        compareBtn.classList.add('bg-slate-500', 'hover:bg-slate-600');
+      } else {
+        normalMode.classList.remove('hidden');
+        compareMode.classList.add('hidden');
+        compareBtn.classList.remove('bg-slate-500', 'hover:bg-slate-600');
+        compareBtn.classList.add('bg-amber-500', 'hover:bg-amber-600');
+        compareBtn.textContent = '⚡ v04 と並べて比較';
+      }
+    }
+
+    function selectAsset(assetId, url, ext, version) {
+      const player = document.getElementById('main-player');
+      const meta = document.getElementById('player-meta');
+      const dl = document.getElementById('player-download');
+      const basename = url.split('/').pop();
+      const imgExt = ['png','jpg','jpeg','webp','gif'];
+      const vidExt = ['mp4','mov','webm','m4v'];
+      if (imgExt.includes(ext)) {
+        player.innerHTML = '<img src="' + url + '" alt="' + basename + '" class="max-w-full max-h-[60vh] object-contain">';
+      } else if (vidExt.includes(ext)) {
+        player.innerHTML = '<video src="' + url + '" controls autoplay class="max-w-full max-h-[60vh]"></video>';
+      } else if (ext === 'exr') {
+        player.innerHTML = '<div class="text-center text-white p-8"><div class="text-6xl mb-4">🎞️</div><p class="text-lg font-bold">EXR ブラウザ表示不可</p><p class="text-sm mt-2 opacity-70">cmd_474 で proxy mov 自動生成予定</p></div>';
+      } else {
+        player.innerHTML = '<div class="text-center text-white p-8"><div class="text-6xl mb-4">📦</div><p class="text-lg font-bold">' + (ext||'file').toUpperCase() + ' ファイル</p></div>';
+      }
+      if (meta) meta.textContent = version + ' — ' + basename;
+      if (dl) { dl.href = url; dl.classList.remove('hidden'); }
+      document.querySelectorAll('[id^="asset-row-"]').forEach(r => r.classList.remove('bg-indigo-100','ring-2','ring-indigo-400'));
+      const row = document.getElementById('asset-row-' + assetId);
+      if (row) row.classList.add('bg-indigo-100','ring-2','ring-indigo-400');
+    }
+  </script>
+
+</div>
+{% endblock %}
