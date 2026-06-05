@@ -323,11 +323,17 @@ def read_dashboard(
     trans = get_translator(lang)
     greeting_suffix, greeting_emoji = get_time_greeting_key()
     role = get_actor_role(actor_id)
+    # 殿御命 2026-06-05: 出勤時刻 (cookie score_routine_done = ISO+TZ) を HH:MM 形式で抽出
+    clock_in_time = ""
+    _routine_done = request.cookies.get("score_routine_done", "")
+    if _routine_done and len(_routine_done) >= 16 and _routine_done[10] == "T":
+        clock_in_time = _routine_done[11:16]  # "HH:MM"
     return _templates.TemplateResponse(
         request=request,
         name="dashboard.html",
         context={
             "user": user,
+            "clock_in_time": clock_in_time,
             "trans": trans,
             "t": t,
             "user_projects": user_projects,

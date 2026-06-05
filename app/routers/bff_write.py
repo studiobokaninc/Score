@@ -321,9 +321,31 @@ def post_routines(
     body: dict,
     actor_id: str = Depends(get_actor_id),
 ):
+    """殿御命 2026-06-05: routine 提出 → Calendar 経由保存 + cookie 'score_routine_done' set
+    cookie 値 = submitted_at (ISO+TZ)。次 5am JST まで有効。login 動線で 当日 routine skip + dashboard 出勤時刻表示に活用。
+    """
     client = get_calendar_client()
+    # body に submitted_at が無ければ server 時刻 (JST) を補完
+    from datetime import datetime as _dt, timezone as _tz, timedelta as _td
+    _jst = _tz(_td(hours=9))
+    if not body.get("submitted_at"):
+        body["submitted_at"] = _dt.now(_jst).isoformat(timespec="seconds")
     result = client.post_routines(body, actor_user_id=actor_id)
-    return JSONResponse(content=result, headers={"X-Actor-User-Id": actor_id})
+    # cookie set (次 5am JST まで)
+    from app.auth import get_next_5am_jst
+    exp = get_next_5am_jst()
+    max_age = max(0, int((exp - _dt.now(_tz.utc)).total_seconds()))
+    resp = JSONResponse(content=result, headers={"X-Actor-User-Id": actor_id})
+    resp.set_cookie(
+        key="score_routine_done",
+        value=body["submitted_at"],
+        httponly=False,  # JS から読めるように (UI 表示用)
+        samesite="lax",
+        path="/",
+        secure=False,
+        max_age=max_age,
+    )
+    return resp
 
 
 @router.post("/api/bff/change_requests")

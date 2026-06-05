@@ -242,10 +242,17 @@ function selectCondition(btn) {
 function finishRoutine() {
     const condition = document.querySelector('.condition-btn.selected');
     const conditionValue = condition ? condition.innerText : '🙂';
+    // 殿御命 2026-06-05: 出勤時刻も送信 (JST+TZ)
+    const now = new Date();
+    const tz = -now.getTimezoneOffset();
+    const sign = tz >= 0 ? '+' : '-';
+    const pad = n => String(Math.floor(Math.abs(n))).padStart(2, '0');
+    const tzStr = `${sign}${pad(tz/60)}:${pad(tz%60)}`;
+    const submittedAt = `${now.getFullYear()}-${pad(now.getMonth()+1)}-${pad(now.getDate())}T${pad(now.getHours())}:${pad(now.getMinutes())}:${pad(now.getSeconds())}${tzStr}`;
     fetch('/api/bff/routines', {
         method: 'POST',
         headers: {'Content-Type': 'application/json'},
-        body: JSON.stringify({condition: conditionValue, date: new Date().toISOString().slice(0,10)})
+        body: JSON.stringify({condition: conditionValue, date: submittedAt.slice(0,10), submitted_at: submittedAt})
     }).catch(() => {}).finally(() => {
         window.location.href = '/dashboard';
     });

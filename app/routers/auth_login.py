@@ -1,7 +1,7 @@
 import os
 from datetime import datetime, timezone
 import httpx
-from fastapi import APIRouter, Form
+from fastapi import APIRouter, Form, Request
 from fastapi.responses import RedirectResponse
 
 from app.adapters.calendar_factory import get_calendar_client
@@ -12,6 +12,7 @@ router = APIRouter()
 
 @router.post("/api/auth/login")
 def post_login(
+    request: Request,
     username: str = Form(...),
     password: str = Form(default=""),
 ):
@@ -43,9 +44,16 @@ def post_login(
     exp = get_next_5am_jst()
     max_age = max(0, int((exp - datetime.now(timezone.utc)).total_seconds()))
 
-    # 殿御下命動線: login → (前日退勤報告未提出なら /exit_report) → /routine → /dashboard
+    # 殿御下命動線: login → (前日退勤未提出なら /exit_report) → /routine → /dashboard
+    # 殿御命 2026-06-05: 当日 routine 既提出 (cookie) なら routine skip → dashboard 直行
     from app.routers.pages_routine import _has_prev_day_exit_submitted
-    if _has_prev_day_exit_submitted(client, str(user_id)):
+    from datetime import timedelta as _td
+    _jst_today = (datetime.utcnow() + _td(hours=9)).date().isoformat()
+    _routine_done = request.cookies.get("score_routine_done", "")
+    routine_done_today = bool(_routine_done) and _routine_done[:10] == _jst_today
+    if routine_done_today:
+        next_url = "/dashboard"
+    elif _has_prev_day_exit_submitted(client, str(user_id)):
         next_url = "/routine"
     else:
         next_url = "/exit_report?mode=previous&return=routine"
