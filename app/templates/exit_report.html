@@ -193,25 +193,26 @@ function setMode(m) {
 
 function _collectExitFields(sectionId) {
   const sect = document.getElementById(sectionId);
-  if (!sect) return {};
+  if (!sect) { console.warn('[exit_report] section not found:', sectionId); return {}; }
   const timeInput = sect.querySelector('input[type="time"]');
   const textareas = sect.querySelectorAll('textarea');
+  // 殿御命 2026-06-08 trace: section 内 textarea 一覧
+  console.log('[exit_report] textareas in', sectionId, ':', Array.from(textareas).map(t => ({id: t.id, value: t.value, placeholder: t.placeholder})));
   // checkbox で選択された翌日優先タスク値を収集
   const checkboxes = sect.querySelectorAll('input[type="checkbox"][name="priority_task"]:checked');
   const priorityTasks = Array.from(checkboxes).map(cb => cb.value);
-  // localStorage で管理しているアサインタスク編集内容を payload に含める
   const taskEdits = {
     progress: _lsGet(LS_PROGRESS, {}),
     status_change: _lsGet(LS_STATUS_CHG, {}),
     completed_marks: _lsGet(LS_COMPLETED, {}),
     new_tasks: _lsGet(LS_NEW_TASKS, []),
   };
-  // previous mode: textareas[0]=作業報告 (blocker), textareas[1]=申し送り (handover)
-  // current mode:  textareas[0]=申し送り (handover)
+  // 殿御命 2026-06-08: blocker は id 直接取得 (旧 textareas[0] は order 依存で不安定だった)
+  const blockerEl = document.getElementById('blocker-input');
   const isPrev = sectionId === 'section-prev';
   return {
     clock_out_time: timeInput ? timeInput.value : null,
-    blocker: isPrev ? (textareas[0] ? textareas[0].value : '') : '',
+    blocker: isPrev ? (blockerEl ? blockerEl.value : '') : '',
     handover: isPrev
       ? (textareas[1] ? textareas[1].value : '')
       : (textareas[0] ? textareas[0].value : ''),
@@ -222,13 +223,16 @@ function _collectExitFields(sectionId) {
 }
 
 async function submitPrev() {
+  console.log('[exit_report] submitPrev() called');
   const btn = document.getElementById('submit-prev-btn');
   const orig = btn.textContent;
   const fields = _collectExitFields('section-prev');
+  console.log('[exit_report] collected fields:', fields);
   // 必須 validation: 昨日の作業報告 (blocker) 入力チェック
   const blockerInput = document.getElementById('blocker-input');
   const errorEl = document.getElementById('blocker-error');
   if (!fields.blocker || !fields.blocker.trim()) {
+    console.warn('[exit_report] validation failed: blocker is empty (value=' + JSON.stringify(fields.blocker) + ')');
     if (errorEl) errorEl.classList.remove('hidden');
     if (blockerInput) {
       blockerInput.classList.add('ring-2', 'ring-rose-500');
@@ -236,6 +240,7 @@ async function submitPrev() {
     }
     return;
   }
+  console.log('[exit_report] validation pass, proceeding to fetch');
   if (errorEl) errorEl.classList.add('hidden');
   if (blockerInput) blockerInput.classList.remove('ring-2', 'ring-rose-500');
   btn.disabled = true;
@@ -252,6 +257,7 @@ async function submitPrev() {
   // (?return=dashboard で従来の /dashboard 行きも可)
   const _ret = new URLSearchParams(location.search).get('return');
   const _dest = (_ret === 'dashboard') ? '/dashboard' : '/routine?step=2';
+  // 殿御命 2026-06-08: fail-open — fetch error でも /routine 遷移 (localStorage で UI guard 通過済)
   try {
     const resp = await fetch('/api/bff/timecards/clock_out', {
       method: 'POST',
@@ -259,14 +265,11 @@ async function submitPrev() {
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify(body),
     });
-    if (!resp.ok) throw new Error('HTTP ' + resp.status);
-    // 即時遷移 — 殿御指示で動作軽量化 (2026-05-27)
-    window.location.href = _dest;
+    if (!resp.ok) console.warn('[exit_report] server returned HTTP ' + resp.status + ' — proceeding anyway');
   } catch (e) {
-    alert('❌ 送信エラー: ' + e.message);
-    btn.disabled = false;
-    btn.textContent = orig;
+    console.warn('[exit_report] fetch error: ' + (e.message || e) + ' — proceeding anyway');
   }
+  window.location.href = _dest;
 }
 
 async function submitReport() {
@@ -282,6 +285,7 @@ async function submitReport() {
     submitted_at: new Date().toISOString(),
     ...fields,
   };
+  // 殿御命 2026-06-08: fail-open — fetch error でも遷移 (送信内容は localStorage に残る)
   try {
     const resp = await fetch('/api/bff/timecards/clock_out', {
       method: 'POST',
@@ -289,14 +293,11 @@ async function submitReport() {
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify(body),
     });
-    if (!resp.ok) throw new Error('HTTP ' + resp.status);
-    // 即時遷移 — 動作軽量化
-    window.location.href = '/goodbye';
+    if (!resp.ok) console.warn('[exit_report] server returned HTTP ' + resp.status + ' — proceeding anyway');
   } catch (e) {
-    alert('❌ 送信エラー: ' + e.message);
-    btn.disabled = false;
-    btn.textContent = orig;
+    console.warn('[exit_report] fetch error: ' + (e.message || e) + ' — proceeding anyway');
   }
+  window.location.href = '/goodbye';
 }
 
 function openLanguageModal() {

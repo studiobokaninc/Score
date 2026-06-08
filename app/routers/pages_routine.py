@@ -77,38 +77,47 @@ def _enrich_my_tasks(client, actor_id: str) -> list[dict]:
 
 
 def _has_prev_day_exit_submitted(client, actor_id: str) -> bool:
-    """Check server-side timecards for a clock_out from yesterday-or-later.
+    """殿御命 2026-06-05 (#25): 前 1 業務日 (JST 5am-5am 区切り) の退勤 (clock_out) 提出済 check.
 
-    Looks at the actor's timecard list (mock adapter exposes get_timecards;
-    real Calendar BE may not — degrade gracefully). Compares
-    ``created_at`` (server stamp) to "yesterday or later" using local date.
-    Either previous-day or current-day clock_out counts as "the user
-    already closed out at least one workday", which is the precondition
-    for showing today's prioritized task list.
+    timecard shape (nibu 殿納品 2026-06-01): {id, user_id, date, clock_out_at, worked_minutes, break_minutes, memo}
+      - `type` field は存在しない (旧 logic は type='clock_out' filter で全 record skip していたバグ)
+    業務日定義: 5:00 JST 〜 翌 5:00 JST。 例: 5am 前にログインなら 業務日 = 前日付。
+    判定: 前業務日 もしくは 当業務日 で clock_out_at が記録されていれば True。
+    content check: memo (退勤メモ) もしくは worked_minutes > 0 を伴うものを優先するが、
+                  clock_out_at の存在のみでも valid (memo は任意仕様)。
     """
-    from datetime import datetime, timedelta
+    from datetime import datetime, timedelta, timezone
     if not hasattr(client, "get_timecards"):
         return False
     try:
         tcs = client.get_timecards(actor_user_id=actor_id) or []
     except Exception:
         return False
-    today = datetime.now().date()
-    yest = today - timedelta(days=1)
+    JST = timezone(timedelta(hours=9))
+    now_jst = datetime.now(JST)
+    # JST 5am 業務日 boundary: 5am 前は 前日付の業務日
+    if now_jst.hour < 5:
+        biz_today = (now_jst - timedelta(days=1)).date()
+    else:
+        biz_today = now_jst.date()
+    biz_yesterday = biz_today - timedelta(days=1)
     for t in tcs:
-        if (t.get("type") or "") != "clock_out":
+        if not isinstance(t, dict):
             continue
-        raw = t.get("created_at") or t.get("submitted_at") or ""
-        if not raw:
+        # 業務日 = date field 優先・無ければ clock_out_at の日付部
+        d_raw = t.get("date") or ((t.get("clock_out_at") or "")[:10])
+        if not d_raw:
             continue
-        # parse just the date portion
-        date_str = str(raw)[:10]
         try:
-            d = datetime.strptime(date_str, "%Y-%m-%d").date()
-        except ValueError:
+            d = datetime.strptime(str(d_raw)[:10], "%Y-%m-%d").date()
+        except (ValueError, TypeError):
             continue
-        if d >= yest:
-            return True
+        if d != biz_yesterday and d != biz_today:
+            continue
+        # content check: clock_out_at 必須 (打刻あり)
+        if not t.get("clock_out_at"):
+            continue
+        return True
     return False
 
 

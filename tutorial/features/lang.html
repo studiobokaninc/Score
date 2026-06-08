@@ -14,33 +14,55 @@
     </div>
     <div class="max-w-5xl mx-auto mt-2">
       <h1 class="text-3xl font-bold flex items-center gap-3">🌐 Lang (言語切替)</h1>
-      <p class="mt-2 text-slate-200">UI 言語を 日本語 / 繁體中文 / English に切替。設定は localStorage に永続化。</p>
     </div>
   </header>
   <main class="max-w-5xl mx-auto py-10 px-6 space-y-8">
+
+    <!-- 機能の目的 -->
+    <section class="bg-gradient-to-br from-slate-50 to-white border-2 border-slate-200 rounded-2xl p-6">
+      <h2 class="text-lg font-bold text-slate-800 mb-2">📘 この機能の目的</h2>
+      <p class="text-gray-700 leading-relaxed">UI 言語を日本語 / 繁體中文 / English に切替。translate="no" 属性で固有名詞は翻訳除外。</p>
+    </section>
+
     <section class="bg-white rounded-2xl shadow p-6">
       <h2 class="text-xl font-bold text-gray-800 mb-4">📸 画面</h2>
       <div class="screenshot-wrap cursor-pointer" onclick="openLightbox(this)">
-        <img src="../images/admin/dashboard.png" alt="Lang (言語切替) 画面" loading="lazy" class="rounded-xl shadow-md w-full max-w-3xl mx-auto block">
+        <img src="../images/admin/lang_switcher.png" alt="Lang (言語切替) 画面" loading="lazy" class="rounded-xl shadow-md w-full max-w-3xl mx-auto block">
       </div>
+      <p class="text-xs text-gray-500 italic text-center mt-3">📍 画面例: 桜咲く街 の海外 outsource User が English UI でログイン → SHOT 名「sq01 c05」 は原文保持。</p>
     </section>
+
+    <!-- 主な機能 -->
     <section class="bg-white rounded-2xl shadow p-6">
       <h2 class="text-xl font-bold text-gray-800 mb-4">✨ 主な機能</h2>
       <ul class="list-disc list-inside space-y-2">
-<li class="text-gray-700 leading-relaxed"><strong>3 言語対応</strong> — 日本語 (default) / 繁體中文 / English。</li>
-<li class="text-gray-700 leading-relaxed"><strong>段階的拡張中</strong> — 一部 文言は未翻訳 (順次対応)。</li>
-<li class="text-gray-700 leading-relaxed"><strong>固有名詞は translate="no"</strong> で 自動翻訳から除外。</li>
+        <li class="text-gray-700 leading-relaxed"><strong>3 言語サポート</strong> — 日本語 (ja) / 繁體中文 (zh-TW) / English (en)</li>
+        <li class="text-gray-700 leading-relaxed"><strong>サイドメニューから即切替</strong> — cookie に保存 (永続)</li>
+        <li class="text-gray-700 leading-relaxed"><strong>固有名詞は翻訳除外</strong> — SHOT 名・user 名・project 名は translate="no"</li>
+        <li class="text-gray-700 leading-relaxed"><strong>Calendar UI 連動</strong> — Calendar 言語も同期</li>
       </ul>
     </section>
+
+    <!-- 桜咲く街 具体例 -->
+    <section class="bg-gradient-to-br from-pink-50 to-purple-50 border border-pink-200 rounded-2xl p-6">
+      <h2 class="text-lg font-bold text-pink-800 mb-2">🌸 使用例 — 架空 project「桜咲く街」</h2>
+      <p class="text-gray-700 leading-relaxed text-sm">桜咲く街 の海外 outsource User が English UI でログイン → SHOT 名「sq01 c05」 は原文保持。</p>
+    </section>
+
+    <!-- 操作方法 -->
     <section class="bg-white rounded-2xl shadow p-6">
       <h2 class="text-xl font-bold text-gray-800 mb-4">🛠 操作方法</h2>
       <ol class="list-decimal list-inside space-y-2">
-<li class="text-gray-700 leading-relaxed">sidemenu 🌐 Lang → 言語選択 modal。</li>
-<li class="text-gray-700 leading-relaxed">言語選択 → 即座に UI 文言切替 (page reload なし)。</li>
+        <li class="text-gray-700 leading-relaxed">サイドメニュー🌐 → 言語選択</li>
+        <li class="text-gray-700 leading-relaxed">日 / 繁 / EN click で即切替</li>
+        <li class="text-gray-700 leading-relaxed">cookie 保存・次回も同言語で起動</li>
       </ol>
     </section>
   </main>
-  <footer class="text-center text-gray-400 text-xs py-6">Score Tutorial — 機能リファレンス</footer>
+  <footer class="text-center text-gray-400 text-xs py-6">Score Tutorial — 機能リファレンス (2026-06-08 改訂)</footer>
+  <div id="lightbox" class="lightbox-overlay" onclick="closeLightbox()">
+    <img id="lightbox-img" src="" alt="">
+  </div>
   <script src="../js/nav.js"></script>
 </body>
 </html>

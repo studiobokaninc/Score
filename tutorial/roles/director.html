@@ -3,7 +3,7 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>Director 1日業務動線 — Score Tutorial</title>
+  <title>Director (作業指示・QC業務) 1日業務動線 — Score Tutorial</title>
   <script src="https://cdn.tailwindcss.com"></script>
   <link rel="stylesheet" href="../css/style.css">
 </head>
@@ -11,162 +11,263 @@
   <nav class="bg-white border-b px-6 py-3 flex items-center gap-4">
     <a href="../index.html" class="text-indigo-600 hover:text-indigo-800 text-sm">← トップに戻る</a>
     <span class="text-gray-400">/</span>
-    <span class="text-gray-700 font-medium">Director 1日業務動線</span>
+    <span class="text-gray-700 font-medium">Director (作業指示・QC業務) 1日業務動線</span>
   </nav>
   <header class="bg-gradient-to-r from-purple-600 to-purple-700 text-white py-8 px-6">
-    <h1 class="text-2xl font-bold">🎬 Director</h1>
+    <h1 class="text-2xl font-bold">🎬 Director (作業指示・QC業務)</h1>
     <p class="mt-1 text-purple-200">山田 博 の 1 日業務動線</p>
   </header>
   <main class="max-w-4xl mx-auto py-10 px-6">
 
-    <section class="stage">
+    <section class="bg-gradient-to-br from-purple-50 to-white border-2 border-purple-200 rounded-2xl p-6 mb-8">
+      <h2 class="text-lg font-bold text-purple-800 mb-3">📌 このロールが Score でできること</h2>
+      <ul class="space-y-2 text-gray-700">
+        <li class="flex items-start gap-2"><span class="text-purple-600 font-bold">▸</span><span>QC ビューアで Approve/Retake 判定 (Director 専用権限)</span></li>
+        <li class="flex items-start gap-2"><span class="text-purple-600 font-bold">▸</span><span>Retake 発令 page で <strong>作業指示</strong> (全体方針・マーカー・参考素材) を User に具体的に伝達</span></li>
+        <li class="flex items-start gap-2"><span class="text-purple-600 font-bold">▸</span><span>全 SHOT QC 状況を Director ダッシュボードで集約把握 → 判定順を効率化</span></li>
+        <li class="flex items-start gap-2"><span class="text-purple-600 font-bold">▸</span><span>SHOT thread 経由で User/Lead と作業指示・修正方針を直接やり取り</span></li>
+        <li class="flex items-start gap-2"><span class="text-purple-600 font-bold">▸</span><span>視点切替 (admin の場合) で各 role の見え方を即時 preview</span></li>
+      </ul>
+    </section>
+
+    <section class="bg-amber-50 border-l-4 border-amber-400 rounded-r-xl p-5 mb-10">
+      <h3 class="text-sm font-bold text-amber-800 mb-2">💡 1 日の流れ — 架空 project「桜咲く街」(TV アニメ・第 3 話 制作中) を例に</h3>
+      <p class="text-sm text-gray-700 leading-relaxed">山田 Director は「桜咲く街」の作業指示と QC 判定を担当。朝の QC 依頼確認 → QC ビューアで Approve/Retake 判定 → リテイクは具体的な作業指示を記述して発令 → User との thread でフォローアップ → 退勤。</p>
+    </section>
+
+    <section class="stage" id="stage-1">
       <div class="flex items-center gap-3 mb-4">
         <span class="stage-num bg-purple-100 text-purple-700 font-bold px-3 py-1 rounded-full text-sm">Stage 1</span>
-        <h2 class="text-xl font-bold text-gray-800">ログイン・朝のルーティン確認</h2>
+        <h2 class="text-xl font-bold text-gray-800">ログイン・朝のルーティン</h2>
       </div>
       <div class="screenshot-wrap cursor-pointer" onclick="openLightbox(this)">
-        <img src="../images/director/routine.png" alt="朝のルーティン確認" loading="lazy"
-             class="rounded-xl shadow-md w-full max-w-3xl">
+        <img src="../images/admin/dashboard_unmasked.png" alt="ログイン・朝のルーティン" loading="lazy" class="rounded-xl shadow-md w-full max-w-3xl">
       </div>
-      <div class="description mt-4 bg-white rounded-xl p-5 shadow-sm">
-        <p class="text-gray-700 leading-relaxed">ログイン後、まずルーティン画面で本日の定例チェックリストを確認します。Director は毎朝 QC 待ちショットの件数や未処理の承認依頼を把握してから作業に入ります。</p>
-        <ul class="mt-3 list-disc list-inside text-sm text-gray-500 space-y-1">
-          <li>QC 待ちアイテムが増加している場合は赤バッジで件数表示</li>
-          <li>ルーティン完了にチェックを入れると進捗バーが更新される</li>
-        </ul>
+      <p class="text-xs text-gray-500 italic mt-2 mb-3">📸 画面例: 山田 Director 朝の体調🤩 → 桜咲く街 QC 依頼 7 件を確認</p>
+      <div class="description bg-white rounded-xl p-5 shadow-sm space-y-3">
+        <div>
+          <span class="inline-block bg-purple-50 text-purple-700 text-xs font-bold rounded-full px-2 py-0.5 mr-2">🎯 目的</span>
+          <span class="text-gray-700">今日判定すべき QC 依頼の総数を体調と共に把握</span>
+        </div>
+        <div>
+          <span class="inline-block bg-emerald-50 text-emerald-700 text-xs font-bold rounded-full px-2 py-0.5 mr-2">✅ 結果</span>
+          <span class="text-gray-700">QC 依頼数・締切迫る判定が一覧化</span>
+        </div>
+        <div class="border-t pt-3">
+          <span class="inline-block text-amber-700 text-xs font-bold mr-2">💡 ポイント</span>
+          <span class="text-gray-600 text-sm">出勤時刻が Dashboard に🕘 表示される</span>
+        </div>
+        <div class="bg-amber-50 border-l-4 border-amber-400 rounded-r-xl p-3 mt-3">
+          <p class="text-xs font-bold text-amber-800 mb-1">💬 例えば</p>
+          <p class="text-sm text-gray-700 leading-relaxed">例えば 月曜朝に QC 依頼 7 件溜まっていれば、 優先度 (締切迫る → 進捗ブロック) で判定順を組み立てる。 体調🤒 の日は 判定数を絞り Lead に部分委譲する判断も。</p>
+        </div>
       </div>
     </section>
 
-    <section class="stage">
+    <section class="stage" id="stage-2">
       <div class="flex items-center gap-3 mb-4">
         <span class="stage-num bg-purple-100 text-purple-700 font-bold px-3 py-1 rounded-full text-sm">Stage 2</span>
-        <h2 class="text-xl font-bold text-gray-800">Director ダッシュボード確認</h2>
+        <h2 class="text-xl font-bold text-gray-800">Director ダッシュボード</h2>
       </div>
       <div class="screenshot-wrap cursor-pointer" onclick="openLightbox(this)">
-        <img src="../images/director/director_dashboard.png" alt="Director ダッシュボード" loading="lazy"
-             class="rounded-xl shadow-md w-full max-w-3xl">
+        <img src="../images/admin/qc_received_dashboard.png" alt="Director ダッシュボード" loading="lazy" class="rounded-xl shadow-md w-full max-w-3xl">
       </div>
-      <div class="description mt-4 bg-white rounded-xl p-5 shadow-sm">
-        <p class="text-gray-700 leading-relaxed">Director ダッシュボードでは担当プロジェクトの品質状況を確認します。QC 通過率・リテイク率・承認待ちショット数がグラフで可視化されており、どのプロジェクトに注力すべきかを判断できます。</p>
-        <ul class="mt-3 list-disc list-inside text-sm text-gray-500 space-y-1">
-          <li>リテイク率が高いプロジェクトは警告カラーで表示</li>
-          <li>「QC 待ち一覧へ」ボタンから即座に QC ビューワーへ遷移可能</li>
-        </ul>
+      <p class="text-xs text-gray-500 italic mt-2 mb-3">📸 画面例: 桜咲く街 sq01 c05 Compositing QC 依頼 → click で qc_viewer 遷移</p>
+      <div class="description bg-white rounded-xl p-5 shadow-sm space-y-3">
+        <div>
+          <span class="inline-block bg-purple-50 text-purple-700 text-xs font-bold rounded-full px-2 py-0.5 mr-2">🎯 目的</span>
+          <span class="text-gray-700">受信 QC 依頼・Review 依頼・Retake 進行状況を集約</span>
+        </div>
+        <div>
+          <span class="inline-block bg-emerald-50 text-emerald-700 text-xs font-bold rounded-full px-2 py-0.5 mr-2">✅ 結果</span>
+          <span class="text-gray-700">緊急対応 SHOT が浮上・🔍📌 アイコンで一目判別</span>
+        </div>
+        <div class="border-t pt-3">
+          <span class="inline-block text-amber-700 text-xs font-bold mr-2">💡 ポイント</span>
+          <span class="text-gray-600 text-sm">qc_requests filter は status='review'・thread_qc_requests は SHOT thread 経由も統合</span>
+        </div>
+        <div class="bg-amber-50 border-l-4 border-amber-400 rounded-r-xl p-3 mt-3">
+          <p class="text-xs font-bold text-amber-800 mb-1">💬 例えば</p>
+          <p class="text-sm text-gray-700 leading-relaxed">例えば 紫 card に「🔍 桜咲く街 sq01 c05 QC 依頼 (佐藤花子 → 山田博)」 と表示されたら、 click 1 回で qc_viewer に直行。 thread 経由の Review 依頼は 📌 アイコンで識別。</p>
+        </div>
       </div>
     </section>
 
-    <section class="stage">
+    <section class="stage" id="stage-3">
       <div class="flex items-center gap-3 mb-4">
         <span class="stage-num bg-purple-100 text-purple-700 font-bold px-3 py-1 rounded-full text-sm">Stage 3</span>
-        <h2 class="text-xl font-bold text-gray-800">QC ビューワーでショット確認</h2>
+        <h2 class="text-xl font-bold text-gray-800">QC ビューア (Approve/Retake 判定)</h2>
       </div>
       <div class="screenshot-wrap cursor-pointer" onclick="openLightbox(this)">
-        <img src="../images/director/director_qc_viewer.png" alt="QC ビューワー" loading="lazy"
-             class="rounded-xl shadow-md w-full max-w-3xl">
+        <img src="../images/admin/qc_main_view.png" alt="QC ビューア (Approve/Retake 判定)" loading="lazy" class="rounded-xl shadow-md w-full max-w-3xl">
       </div>
-      <div class="description mt-4 bg-white rounded-xl p-5 shadow-sm">
-        <p class="text-gray-700 leading-relaxed">QC ビューワーではショット映像・静止画・素材ファイルを確認し、品質判定を行います。前バージョンとの比較表示や、フレーム単位での注釈ツールが利用できます。</p>
-        <ul class="mt-3 list-disc list-inside text-sm text-gray-500 space-y-1">
-          <li>左右スプリットビューで前バージョンとの差分確認が可能</li>
-          <li>「Approve」ボタンで QC 通過、「Reject」でリテイク画面に遷移</li>
-        </ul>
+      <p class="text-xs text-gray-500 italic mt-2 mb-3">📸 画面例: 桜咲く街 sq01 c05 v04 を視聴 → ライティング微調整必要 → 🔁 Retake click</p>
+      <div class="description bg-white rounded-xl p-5 shadow-sm space-y-3">
+        <div>
+          <span class="inline-block bg-purple-50 text-purple-700 text-xs font-bold rounded-full px-2 py-0.5 mr-2">🎯 目的</span>
+          <span class="text-gray-700">User 提出 asset を実視聴し Approve/Retake 判定</span>
+        </div>
+        <div>
+          <span class="inline-block bg-emerald-50 text-emerald-700 text-xs font-bold rounded-full px-2 py-0.5 mr-2">✅ 結果</span>
+          <span class="text-gray-700">Approve → task.status = completed・Retake → /director_retake_input 遷移</span>
+        </div>
+        <div class="border-t pt-3">
+          <span class="inline-block text-amber-700 text-xs font-bold mr-2">💡 ポイント</span>
+          <span class="text-gray-600 text-sm">video player は実時間同期 (旧 placeholder 廃止)・version 履歴サムネで比較も可</span>
+        </div>
+        <div class="bg-amber-50 border-l-4 border-amber-400 rounded-r-xl p-3 mt-3">
+          <p class="text-xs font-bold text-amber-800 mb-1">💬 例えば</p>
+          <p class="text-sm text-gray-700 leading-relaxed">例えば v04 を視聴 → 桜花のピンクが薄いと感じたら、 version 履歴で v03 と比較 → v03 の方が良い箇所を特定 → 🔁 Retake click で具体的な作業指示画面へ。 問題なしなら ✅ Approve でその場で完了。</p>
+        </div>
       </div>
     </section>
 
-    <section class="stage">
+    <section class="stage" id="stage-4">
       <div class="flex items-center gap-3 mb-4">
         <span class="stage-num bg-purple-100 text-purple-700 font-bold px-3 py-1 rounded-full text-sm">Stage 4</span>
-        <h2 class="text-xl font-bold text-gray-800">リテイク指示入力</h2>
+        <h2 class="text-xl font-bold text-gray-800">Retake 発令 page (作業指示の中核)</h2>
       </div>
       <div class="screenshot-wrap cursor-pointer" onclick="openLightbox(this)">
-        <img src="../images/director/director_retake_input.png" alt="リテイク指示入力" loading="lazy"
-             class="rounded-xl shadow-md w-full max-w-3xl">
+        <img src="../images/admin/retake_full.png" alt="Retake 発令 page (作業指示の中核)" loading="lazy" class="rounded-xl shadow-md w-full max-w-3xl">
       </div>
-      <div class="description mt-4 bg-white rounded-xl p-5 shadow-sm">
-        <p class="text-gray-700 leading-relaxed">QC で Reject となったショットには、具体的なリテイク指示を入力します。テキストコメント・フレーム番号指定・参照画像添付が可能です。入力後「送信」するとコンポジターに通知が届きます。</p>
-        <ul class="mt-3 list-disc list-inside text-sm text-gray-500 space-y-1">
-          <li>過去のリテイクコメントがタイムライン形式で参照可能</li>
-          <li>テンプレートコメントを登録しておくと入力を省力化できる</li>
-        </ul>
+      <p class="text-xs text-gray-500 italic mt-2 mb-3">📸 画面例: 「桜並木の桜花 ピンク 10% 強め」記入 + リファレンス画像添付 → 発令</p>
+      <div class="description bg-white rounded-xl p-5 shadow-sm space-y-3">
+        <div>
+          <span class="inline-block bg-purple-50 text-purple-700 text-xs font-bold rounded-full px-2 py-0.5 mr-2">🎯 目的</span>
+          <span class="text-gray-700">全体方針・マーカー・コメント・参考素材を添えて <strong>具体的な作業指示</strong>を User に伝達</span>
+        </div>
+        <div>
+          <span class="inline-block bg-emerald-50 text-emerald-700 text-xs font-bold rounded-full px-2 py-0.5 mr-2">✅ 結果</span>
+          <span class="text-gray-700">POST /api/bff/retakes → SHOT thread 通知 + Push/SSE 配信 + task=in-progress</span>
+        </div>
+        <div class="border-t pt-3">
+          <span class="inline-block text-amber-700 text-xs font-bold mr-2">💡 ポイント</span>
+          <span class="text-gray-600 text-sm">video player でマーカー click 保存・参考素材は drag&drop 対応</span>
+        </div>
+        <div class="bg-amber-50 border-l-4 border-amber-400 rounded-r-xl p-3 mt-3">
+          <p class="text-xs font-bold text-amber-800 mb-1">💬 例えば</p>
+          <p class="text-sm text-gray-700 leading-relaxed">例えば「桜花のピンクが弱い」 だけだと User は迷う。 → 全体方針「ピンク 10% 強化」 + 0:12 マーカー保存 + 参考画像「絵コンテ第 3 話 sq01」 + 期日 = 明日18:00 と入力すると、 修正方針が明確に。 User の /retake_view で全て確認できる。</p>
+        </div>
       </div>
     </section>
 
-    <section class="stage">
+    <section class="stage" id="stage-5">
       <div class="flex items-center gap-3 mb-4">
         <span class="stage-num bg-purple-100 text-purple-700 font-bold px-3 py-1 rounded-full text-sm">Stage 5</span>
-        <h2 class="text-xl font-bold text-gray-800">プロジェクト全体確認</h2>
+        <h2 class="text-xl font-bold text-gray-800">メッセージ・SHOT thread</h2>
       </div>
       <div class="screenshot-wrap cursor-pointer" onclick="openLightbox(this)">
-        <img src="../images/director/projects.png" alt="プロジェクト一覧" loading="lazy"
-             class="rounded-xl shadow-md w-full max-w-3xl">
+        <img src="../images/admin/messages_unmasked.png" alt="メッセージ・SHOT thread" loading="lazy" class="rounded-xl shadow-md w-full max-w-3xl">
       </div>
-      <div class="description mt-4 bg-white rounded-xl p-5 shadow-sm">
-        <p class="text-gray-700 leading-relaxed">午後は担当プロジェクト全体の進捗を俯瞰します。ショット総数・承認済み数・リテイク中数が集計表示されます。PM との認識合わせに使用する週次サマリーもここからエクスポートできます。</p>
-        <ul class="mt-3 list-disc list-inside text-sm text-gray-500 space-y-1">
-          <li>ショット進捗をプロジェクト横断で比較できるグラフビュー付き</li>
-          <li>「CSV エクスポート」で週次報告資料の自動生成が可能</li>
-        </ul>
+      <p class="text-xs text-gray-500 italic mt-2 mb-3">📸 画面例: 桜咲く街 sq01 c05 thread で佐藤 User に追加指示</p>
+      <div class="description bg-white rounded-xl p-5 shadow-sm space-y-3">
+        <div>
+          <span class="inline-block bg-purple-50 text-purple-700 text-xs font-bold rounded-full px-2 py-0.5 mr-2">🎯 目的</span>
+          <span class="text-gray-700">User/Lead/PM と SHOT 単位 thread で作業指示の補足やり取り</span>
+        </div>
+        <div>
+          <span class="inline-block bg-emerald-50 text-emerald-700 text-xs font-bold rounded-full px-2 py-0.5 mr-2">✅ 結果</span>
+          <span class="text-gray-700">thread 一覧から該当 SHOT に直接遷移・past message 検索可</span>
+        </div>
+        <div class="border-t pt-3">
+          <span class="inline-block text-amber-700 text-xs font-bold mr-2">💡 ポイント</span>
+          <span class="text-gray-600 text-sm">Director は重要 thread に自動 participants 追加</span>
+        </div>
+        <div class="bg-amber-50 border-l-4 border-amber-400 rounded-r-xl p-3 mt-3">
+          <p class="text-xs font-bold text-amber-800 mb-1">💬 例えば</p>
+          <p class="text-sm text-gray-700 leading-relaxed">例えば Retake 発令後 User から「桜花のピンクは色相 H=350°でよいか」 と質問が来た場合、 thread で「H=345°がベスト・参考画像 v2 添付」 と即返信。 Retake 発令 page を再度開かなくても thread で補足指示が完結する。</p>
+        </div>
       </div>
     </section>
 
-    <section class="stage">
+    <section class="stage" id="stage-6">
       <div class="flex items-center gap-3 mb-4">
         <span class="stage-num bg-purple-100 text-purple-700 font-bold px-3 py-1 rounded-full text-sm">Stage 6</span>
-        <h2 class="text-xl font-bold text-gray-800">カレンダー・スケジュール確認</h2>
+        <h2 class="text-xl font-bold text-gray-800">リファレンス管理</h2>
       </div>
       <div class="screenshot-wrap cursor-pointer" onclick="openLightbox(this)">
-        <img src="../images/director/calendar.png" alt="カレンダー" loading="lazy"
-             class="rounded-xl shadow-md w-full max-w-3xl">
+        <img src="../images/admin/projects_unmasked.png" alt="リファレンス管理" loading="lazy" class="rounded-xl shadow-md w-full max-w-3xl">
       </div>
-      <div class="description mt-4 bg-white rounded-xl p-5 shadow-sm">
-        <p class="text-gray-700 leading-relaxed">カレンダー画面で試写・マイルストーン・メンバーの休暇スケジュールを確認します。QC レビュー集中日と休暇が重なっていないかチェックし、必要に応じてレビュー日程を調整します。</p>
-        <ul class="mt-3 list-disc list-inside text-sm text-gray-500 space-y-1">
-          <li>試写イベントはオレンジ色、マイルストーンは青色で表示</li>
-          <li>カレンダー上のイベントをドラッグ&ドロップで日程変更可能</li>
-        </ul>
+      <p class="text-xs text-gray-500 italic mt-2 mb-3">📸 画面例: 桜咲く街 全話 color script (5 枚) アップ → 全 User 参照可</p>
+      <div class="description bg-white rounded-xl p-5 shadow-sm space-y-3">
+        <div>
+          <span class="inline-block bg-purple-50 text-purple-700 text-xs font-bold rounded-full px-2 py-0.5 mr-2">🎯 目的</span>
+          <span class="text-gray-700">プロジェクト全体の color script・絵コンテ・参考映像を集約</span>
+        </div>
+        <div>
+          <span class="inline-block bg-emerald-50 text-emerald-700 text-xs font-bold rounded-full px-2 py-0.5 mr-2">✅ 結果</span>
+          <span class="text-gray-700">User が Retake 時に即参照可・チーム全体で共有</span>
+        </div>
+        <div class="border-t pt-3">
+          <span class="inline-block text-amber-700 text-xs font-bold mr-2">💡 ポイント</span>
+          <span class="text-gray-600 text-sm">アップロード後 SHOT thread に自動投稿</span>
+        </div>
+        <div class="bg-amber-50 border-l-4 border-amber-400 rounded-r-xl p-3 mt-3">
+          <p class="text-xs font-bold text-amber-800 mb-1">💬 例えば</p>
+          <p class="text-sm text-gray-700 leading-relaxed">例えば 第 3 話 color script を新たに更新したら、 リファレンス page で upload → 全 SHOT thread に自動通知 → 各 User の Dashboard に「新リファレンス追加」 表示。 Retake 発令時にも参考素材として addable。</p>
+        </div>
       </div>
     </section>
 
-    <section class="stage">
+    <section class="stage" id="stage-7">
       <div class="flex items-center gap-3 mb-4">
         <span class="stage-num bg-purple-100 text-purple-700 font-bold px-3 py-1 rounded-full text-sm">Stage 7</span>
+        <h2 class="text-xl font-bold text-gray-800">ヘルプ・チュートリアル</h2>
+      </div>
+      <div class="screenshot-wrap cursor-pointer" onclick="openLightbox(this)">
+        <img src="../images/admin/dashboard_unmasked.png" alt="ヘルプ・チュートリアル" loading="lazy" class="rounded-xl shadow-md w-full max-w-3xl">
+      </div>
+      <p class="text-xs text-gray-500 italic mt-2 mb-3">📸 画面例: 新 Director 着任時 30 分で全機能習得可能</p>
+      <div class="description bg-white rounded-xl p-5 shadow-sm space-y-3">
+        <div>
+          <span class="inline-block bg-purple-50 text-purple-700 text-xs font-bold rounded-full px-2 py-0.5 mr-2">🎯 目的</span>
+          <span class="text-gray-700">新人 Director 用に Score 機能の使い方を確認</span>
+        </div>
+        <div>
+          <span class="inline-block bg-emerald-50 text-emerald-700 text-xs font-bold rounded-full px-2 py-0.5 mr-2">✅ 結果</span>
+          <span class="text-gray-700">QC ビューア / Retake 発令 / SHOT thread の使い方を理解</span>
+        </div>
+        <div class="border-t pt-3">
+          <span class="inline-block text-amber-700 text-xs font-bold mr-2">💡 ポイント</span>
+          <span class="text-gray-600 text-sm">本 tutorial 自体もここから参照可</span>
+        </div>
+        <div class="bg-amber-50 border-l-4 border-amber-400 rounded-r-xl p-3 mt-3">
+          <p class="text-xs font-bold text-amber-800 mb-1">💬 例えば</p>
+          <p class="text-sm text-gray-700 leading-relaxed">例えば 副 Director として山下氏が着任した時、 サイドメニュー「ヘルプ」 → 「Director 1 日業務動線」 page を 30 分閲覧 → 朝のルーティンから Retake 発令まで全 flow を把握 → 即実務 OK。</p>
+        </div>
+      </div>
+    </section>
+
+    <section class="stage" id="stage-8">
+      <div class="flex items-center gap-3 mb-4">
+        <span class="stage-num bg-purple-100 text-purple-700 font-bold px-3 py-1 rounded-full text-sm">Stage 8</span>
         <h2 class="text-xl font-bold text-gray-800">退勤報告</h2>
       </div>
       <div class="screenshot-wrap cursor-pointer" onclick="openLightbox(this)">
-        <img src="../images/director/exit_report.png" alt="[撮影予定: exit_report]" loading="lazy"
-             class="rounded-xl shadow-md w-full max-w-3xl">
+        <img src="../images/admin/exit_report_unmasked.png" alt="退勤報告" loading="lazy" class="rounded-xl shadow-md w-full max-w-3xl">
       </div>
-      <div class="description mt-4 bg-white rounded-xl p-5 shadow-sm">
-        <p class="text-gray-700 leading-relaxed">退勤前に本日の QC 結果・承認件数・リテイク件数を退勤報告に記載します。特記事項（品質懸念・翌日優先ショット）があれば備考欄に記入して送信します。</p>
-        <ul class="mt-3 list-disc list-inside text-sm text-gray-500 space-y-1">
-          <li>当日の Approve / Reject 件数は自動集計されてフォームにプリフィル</li>
-          <li>報告内容は PM・Lead のダッシュボードに翌朝反映される</li>
-        </ul>
+      <p class="text-xs text-gray-500 italic mt-2 mb-3">📸 画面例: 山田 Director「sq01 全 12 SHOT 判定完了・sq02 は明日」 提出</p>
+      <div class="description bg-white rounded-xl p-5 shadow-sm space-y-3">
+        <div>
+          <span class="inline-block bg-purple-50 text-purple-700 text-xs font-bold rounded-full px-2 py-0.5 mr-2">🎯 目的</span>
+          <span class="text-gray-700">本日判定済 QC・残 Retake を引き継ぎとして記録</span>
+        </div>
+        <div>
+          <span class="inline-block bg-emerald-50 text-emerald-700 text-xs font-bold rounded-full px-2 py-0.5 mr-2">✅ 結果</span>
+          <span class="text-gray-700">翌日他 Director 出勤時 即引き継ぎ可・属人化防止</span>
+        </div>
+        <div class="border-t pt-3">
+          <span class="inline-block text-amber-700 text-xs font-bold mr-2">💡 ポイント</span>
+          <span class="text-gray-600 text-sm">「明日 朝一で sq02 全 SHOT QC 判定」等の予定記入推奨</span>
+        </div>
+        <div class="bg-amber-50 border-l-4 border-amber-400 rounded-r-xl p-3 mt-3">
+          <p class="text-xs font-bold text-amber-800 mb-1">💬 例えば</p>
+          <p class="text-sm text-gray-700 leading-relaxed">例えば 「本日: sq01 全 12 SHOT 判定 (Approve 10 / Retake 2) / 明日: sq02 全 14 SHOT 着手予定 / 引継: sq01 c05 と sq01 c08 の Retake 確認」 と記入。 副 Director が翌朝即引き継げる。</p>
+        </div>
       </div>
-    </section>
-
-  
-    <section class="stage">
-        <span class="stage-num bg-red-100 text-red-700 font-bold px-3 py-1 rounded-full text-sm">Stage 8</span>
-        <h3 class="text-xl font-bold text-gray-800 mt-2 mb-3">💬 メッセージ — SHOT 関係者 thread + 1対1 DM</h3>
-      <div class="screenshot-wrap cursor-pointer" onclick="openLightbox(this)">
-        <img src="../images/director/messages.png" alt="💬 メッセージ — SHOT 関係者 thread + 1対1 DM" loading="lazy" class="rounded-lg border border-gray-200">
-      </div>
-        <p class="text-gray-700 leading-relaxed">Director として QC 依頼が SHOT 関係者 thread に自動投稿される。タブ振り分け (👥 SHOT 3+名 / 💬 DM 2 名) で多数の依頼を整理。階層 title (proj/seq/shot/task) で対象が一目瞭然。</p>
-    </section>
-
-  
-    <section class="stage">
-        <span class="stage-num bg-red-100 text-red-700 font-bold px-3 py-1 rounded-full text-sm">Stage 9</span>
-        <h3 class="text-xl font-bold text-gray-800 mt-2 mb-3">⚙️ 通知設定 — Push / SSE / 画面 badge の三重立て</h3>
-      <div class="screenshot-wrap cursor-pointer" onclick="openLightbox(this)">
-        <img src="../images/director/settings_notifications.png" alt="⚙️ 通知設定 — Push / SSE / 画面 badge の三重立て" loading="lazy" class="rounded-lg border border-gray-200">
-      </div>
-        <p class="text-gray-700 leading-relaxed">Director は QC 依頼が中心。Push 通知を ON にすることで離席中も即時把握、SSE で在席中の対応速度を向上。種別 OFF で Review 依頼通知を絞ることも可能。</p>
     </section>
 
   </main>
-  <!-- lightbox overlay -->
   <div id="lightbox" class="lightbox-overlay" onclick="closeLightbox()">
     <img id="lightbox-img" src="" alt="">
   </div>

@@ -3,145 +3,172 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>Score チュートリアル — ロール別 1 日業務動線</title>
+  <title>Score チュートリアル — 映像制作スタジオ向けプロジェクト管理</title>
   <script src="https://cdn.tailwindcss.com"></script>
   <link rel="stylesheet" href="css/style.css">
 </head>
 <body class="bg-gray-50 min-h-screen">
   <header class="bg-indigo-700 text-white py-8 px-6">
     <h1 class="text-3xl font-bold">Score チュートリアル</h1>
-    <p class="mt-2 text-indigo-200">各ロールの 1 日業務動線をスクリーンショットで解説</p>
+    <p class="mt-2 text-indigo-200">映像制作スタジオ向け統合プロジェクト管理システム</p>
   </header>
   <main class="max-w-5xl mx-auto py-10 px-6">
-    <p class="text-gray-600 mb-8">Score は映像制作スタジオ向けプロジェクト管理システムです。ロールを選択して 1 日の業務動線を確認してください。</p>
+
+    <section class="bg-white rounded-2xl shadow p-6 mb-10">
+      <h2 class="text-xl font-bold text-gray-800 mb-3">📺 Score とは</h2>
+      <p class="text-gray-700 leading-relaxed">
+        Score は <strong>映像制作スタジオ向けの統合プロジェクト管理システム</strong> です。プロジェクト・SHOT・task・asset・QC・thread を 1 つの画面に集約し、
+        <strong>PM</strong>・<strong>Director</strong>・<strong>Lead</strong>・<strong>User</strong> など各ロールが <em>連絡漏れなく</em> 業務を進められます。
+      </p>
+      <ul class="mt-4 grid grid-cols-1 md:grid-cols-2 gap-3 text-sm text-gray-700">
+        <li class="flex items-start gap-2"><span class="text-indigo-500 font-bold">✓</span><span>SHOT 関係者 thread 自動作成で連絡集約</span></li>
+        <li class="flex items-start gap-2"><span class="text-indigo-500 font-bold">✓</span><span>QC 依頼 → Director 判定 → Retake 発令 の完全動線</span></li>
+        <li class="flex items-start gap-2"><span class="text-indigo-500 font-bold">✓</span><span>Push + SSE + 画面 badge の三重通知で見逃し防止</span></li>
+        <li class="flex items-start gap-2"><span class="text-indigo-500 font-bold">✓</span><span>朝のルーティン + 退勤報告で稼働可視化</span></li>
+      </ul>
+    </section>
+
+
+    <h2 class="text-2xl font-bold text-gray-800 mb-3">🎭 ロール別 1 日業務動線</h2>
+    <p class="text-gray-600 mb-6 text-sm">各ロールを選択して、Score を使った 1 日の業務動線を確認してください。各ステージは「目的・結果・ポイント・💬 例えば」 で整理されており、初めての方でも 1 日の流れが具体的に理解できます。</p>
     <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
-      <!-- PM -->
       <a href="roles/pm.html" class="block bg-white rounded-2xl shadow hover:shadow-lg transition p-6 border-l-4 border-blue-500">
         <div class="text-3xl mb-3">📋</div>
-        <h2 class="text-xl font-bold text-gray-800">PM</h2>
-        <p class="text-sm text-gray-500 mt-1">田中 太郎</p>
-        <p class="text-gray-600 mt-3 text-sm">プロジェクト全体の進捗管理・納品管理・ルーティン確認</p>
+        <h2 class="text-xl font-bold text-gray-800">PM (プロダクションマネージャー)</h2>
+        <p class="text-sm text-gray-500 mt-1">担当: 田中 太郎</p>
+        <ul class="text-xs text-gray-600 mt-3 space-y-1">
+          <li class="flex items-start gap-1"><span class="text-blue-500">▸</span><span>全プロジェクトの進捗・納品スケジュール 集約把握</span></li>
+          <li class="flex items-start gap-1"><span class="text-blue-500">▸</span><span>全 SHOT 関係者 thread に自動 participants として含まれる (連絡漏れ防止)</span></li>
+          <li class="flex items-start gap-1"><span class="text-blue-500">▸</span><span>納品チェックリストで全 SHOT が Approved 済か確認してから提出</span></li>
+        </ul>
       </a>
-      <!-- Director -->
+
       <a href="roles/director.html" class="block bg-white rounded-2xl shadow hover:shadow-lg transition p-6 border-l-4 border-purple-500">
         <div class="text-3xl mb-3">🎬</div>
-        <h2 class="text-xl font-bold text-gray-800">Director</h2>
-        <p class="text-sm text-gray-500 mt-1">山田 博</p>
-        <p class="text-gray-600 mt-3 text-sm">品質管理・QC レビュー・リテイク指示・ルーティン確認</p>
+        <h2 class="text-xl font-bold text-gray-800">Director (作業指示・QC業務)</h2>
+        <p class="text-sm text-gray-500 mt-1">担当: 山田 博</p>
+        <ul class="text-xs text-gray-600 mt-3 space-y-1">
+          <li class="flex items-start gap-1"><span class="text-purple-500">▸</span><span>QC ビューアで Approve/Retake 判定 (Director 専用権限)</span></li>
+          <li class="flex items-start gap-1"><span class="text-purple-500">▸</span><span>Retake 発令 page で <strong>作業指示</strong> (全体方針・マーカー・参考素材) を User に具体的に伝達</span></li>
+          <li class="flex items-start gap-1"><span class="text-purple-500">▸</span><span>全 SHOT QC 状況を Director ダッシュボードで集約把握 → 判定順を効率化</span></li>
+        </ul>
       </a>
-      <!-- Lead (各分野 技術・アート責任者) -->
+
       <a href="roles/lead.html" class="block bg-white rounded-2xl shadow hover:shadow-lg transition p-6 border-l-4 border-yellow-500">
         <div class="text-3xl mb-3">💡</div>
-        <h2 class="text-xl font-bold text-gray-800">Lead</h2>
-        <p class="text-sm text-gray-500 mt-1">加藤 健司</p>
-        <p class="text-gray-600 mt-3 text-sm">各分野 Lead (Lighting / Animation / FX 等)・技術アート責任者・ショット管理・QC 担当</p>
+        <h2 class="text-xl font-bold text-gray-800">Lead (テクニカルサポート)</h2>
+        <p class="text-sm text-gray-500 mt-1">担当: 加藤 健司</p>
+        <ul class="text-xs text-gray-600 mt-3 space-y-1">
+          <li class="flex items-start gap-1"><span class="text-yellow-500">▸</span><span>User からの<strong>技術相談・トラブル対応</strong>を SHOT thread で支援</span></li>
+          <li class="flex items-start gap-1"><span class="text-yellow-500">▸</span><span>Director QC で発生した <strong>テクニカル issue</strong> を User と共同解決</span></li>
+          <li class="flex items-start gap-1"><span class="text-yellow-500">▸</span><span>リファレンス・過去 asset・pipeline 情報の参照支援</span></li>
+        </ul>
       </a>
-      <!-- User (一般業務担当) -->
+
       <a href="roles/user.html" class="block bg-white rounded-2xl shadow hover:shadow-lg transition p-6 border-l-4 border-green-500">
         <div class="text-3xl mb-3">🖥️</div>
-        <h2 class="text-xl font-bold text-gray-800">User</h2>
-        <p class="text-sm text-gray-500 mt-1">佐藤 花子</p>
-        <p class="text-gray-600 mt-3 text-sm">Compositor / Animator / FX 等の一般業務担当・ショット詳細・素材 upload・退勤報告</p>
-      </a>
-      <!-- Admin -->
-      <a href="roles/admin.html" class="block bg-white rounded-2xl shadow hover:shadow-lg transition p-6 border-l-4 border-red-500">
-        <div class="text-3xl mb-3">👑</div>
-        <h2 class="text-xl font-bold text-gray-800">Admin</h2>
-        <p class="text-sm text-gray-500 mt-1">Ryoji Bokan</p>
-        <p class="text-gray-600 mt-3 text-sm">スタジオ全体管理・横断プロジェクト確認・プロフィール管理</p>
+        <h2 class="text-xl font-bold text-gray-800">User (一般業務担当・Animator/FX 等)</h2>
+        <p class="text-sm text-gray-500 mt-1">担当: 佐藤 花子</p>
+        <ul class="text-xs text-gray-600 mt-3 space-y-1">
+          <li class="flex items-start gap-1"><span class="text-green-500">▸</span><span>担当 SHOT の作業着手・asset upload・部内 Review/QC 依頼提出</span></li>
+          <li class="flex items-start gap-1"><span class="text-green-500">▸</span><span>Retake 発令時 リファレンス・マーカー・コメントを /retake_view で一覧確認</span></li>
+          <li class="flex items-start gap-1"><span class="text-green-500">▸</span><span>shot_detail で 自分の担当 task と asset version 履歴を一括管理</span></li>
+        </ul>
       </a>
     </div>
+
     <div class="mt-12 p-6 bg-indigo-50 rounded-2xl">
       <h2 class="text-lg font-bold text-indigo-800 mb-3">共通操作: ログイン〜ログアウト</h2>
       <ol class="list-decimal list-inside space-y-2 text-gray-700 text-sm">
-        <li>ブラウザで Score URL を開き、メールアドレス + パスワード でログイン</li>
+        <li>ブラウザで Score URL を開き、メールアドレス + パスワードでログイン</li>
+        <li>(前日退勤未提出時) 退勤報告 page で前日分提出 → ルーティン page へ</li>
+        <li>朝のルーティン (体調確認) 提出 → ダッシュボードへ</li>
         <li>サイドメニューから各機能に移動</li>
         <li>退勤時は「退勤報告」を提出してからログアウト</li>
       </ol>
     </div>
 
-    <!-- 殿御命 2026-06-05: 機能リファレンス (sidemenu 機能別 9 page) -->
     <section class="mt-16">
       <h2 class="text-2xl font-bold text-gray-800 mb-2">📖 機能リファレンス</h2>
-      <p class="text-gray-600 text-sm mb-6">サイドメニューの各機能を 1 ページにまとめた解説。各 page で 機能概要 + 主機能 + 操作方法 を確認できる。</p>
+      <p class="text-gray-600 text-sm mb-4">サイドメニューの各機能を 1 ページにまとめた解説。機能概要 + 主機能 + 操作方法 を確認できます。</p>
+
+      <!-- 1 日のスタート (殿御命 2026-06-08: 別 page で説明) -->
+      <a href="features/morning_routine.html" class="block bg-gradient-to-r from-amber-500 via-orange-500 to-rose-500 hover:from-amber-600 hover:via-orange-600 hover:to-rose-600 text-white rounded-2xl shadow-lg hover:shadow-xl transition p-5 mb-6">
+        <div class="flex items-start gap-4">
+          <div class="text-4xl">🌅</div>
+          <div class="flex-1">
+            <h3 class="text-xl font-bold mb-1">🌅 1 日のスタート — ログイン から ダッシュボード まで</h3>
+            <p class="text-sm text-amber-100">ログイン → (前日退勤未提出時) 退勤報告 → 朝のルーティン (体調・本日タスク) → ダッシュボード の <strong>4 step・約 1 分</strong> を解説。</p>
+          </div>
+          <div class="text-2xl">→</div>
+        </div>
+      </a>
+
+      <p class="text-xs text-gray-500 mb-3">▼ 各機能個別解説</p>
       <div class="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-4">
         <a href="features/dashboard.html" class="block bg-white rounded-xl shadow-sm hover:shadow-lg transition p-4 border-l-4 border-indigo-500">
-          <div class="text-2xl mb-2">🏠</div>
-          <h3 class="font-bold text-gray-800 text-sm">ダッシュボード</h3>
-          <p class="text-xs text-gray-500 mt-1">本日の予定 / タスク / QC</p>
+          <div class="text-2xl mb-2">🏠</div><h3 class="font-bold text-gray-800 text-sm">ダッシュボード</h3><p class="text-xs text-gray-500 mt-1">本日の予定 / タスク / QC</p>
         </a>
         <a href="features/projects.html" class="block bg-white rounded-xl shadow-sm hover:shadow-lg transition p-4 border-l-4 border-blue-500">
-          <div class="text-2xl mb-2">🎞️</div>
-          <h3 class="font-bold text-gray-800 text-sm">Project</h3>
-          <p class="text-xs text-gray-500 mt-1">全プロジェクト一覧 / 進捗</p>
+          <div class="text-2xl mb-2">🎞️</div><h3 class="font-bold text-gray-800 text-sm">Project</h3><p class="text-xs text-gray-500 mt-1">全プロジェクト一覧 / 進捗</p>
         </a>
         <a href="features/calendar.html" class="block bg-white rounded-xl shadow-sm hover:shadow-lg transition p-4 border-l-4 border-purple-500">
-          <div class="text-2xl mb-2">📅</div>
-          <h3 class="font-bold text-gray-800 text-sm">Calendar</h3>
-          <p class="text-xs text-gray-500 mt-1">予定追加 / 参加者選択 / mtg リンク</p>
+          <div class="text-2xl mb-2">📅</div><h3 class="font-bold text-gray-800 text-sm">Calendar</h3><p class="text-xs text-gray-500 mt-1">予定追加 / 参加者選択</p>
         </a>
         <a href="features/messages.html" class="block bg-white rounded-xl shadow-sm hover:shadow-lg transition p-4 border-l-4 border-emerald-500">
-          <div class="text-2xl mb-2">💬</div>
-          <h3 class="font-bold text-gray-800 text-sm">Messages</h3>
-          <p class="text-xs text-gray-500 mt-1">SHOT thread / 1対1 DM</p>
+          <div class="text-2xl mb-2">💬</div><h3 class="font-bold text-gray-800 text-sm">Messages</h3><p class="text-xs text-gray-500 mt-1">SHOT thread / 1対1 DM</p>
         </a>
         <a href="features/notifications.html" class="block bg-white rounded-xl shadow-sm hover:shadow-lg transition p-4 border-l-4 border-amber-500">
-          <div class="text-2xl mb-2">🔔</div>
-          <h3 class="font-bold text-gray-800 text-sm">通知センター</h3>
-          <p class="text-xs text-gray-500 mt-1">通知一覧 / Push 有効化</p>
+          <div class="text-2xl mb-2">🔔</div><h3 class="font-bold text-gray-800 text-sm">通知センター</h3><p class="text-xs text-gray-500 mt-1">通知一覧 / Push 有効化</p>
         </a>
         <a href="features/exit_report.html" class="block bg-white rounded-xl shadow-sm hover:shadow-lg transition p-4 border-l-4 border-rose-500">
-          <div class="text-2xl mb-2">🚪</div>
-          <h3 class="font-bold text-gray-800 text-sm">退勤</h3>
-          <p class="text-xs text-gray-500 mt-1">当日 / 前日 退勤報告</p>
+          <div class="text-2xl mb-2">🚪</div><h3 class="font-bold text-gray-800 text-sm">退勤</h3><p class="text-xs text-gray-500 mt-1">当日 / 前日 退勤報告</p>
         </a>
         <a href="features/notif_settings.html" class="block bg-white rounded-xl shadow-sm hover:shadow-lg transition p-4 border-l-4 border-indigo-500">
-          <div class="text-2xl mb-2">⚙️</div>
-          <h3 class="font-bold text-gray-800 text-sm">通知設定</h3>
-          <p class="text-xs text-gray-500 mt-1">Push / SSE / badge 経路設定</p>
+          <div class="text-2xl mb-2">⚙️</div><h3 class="font-bold text-gray-800 text-sm">通知設定</h3><p class="text-xs text-gray-500 mt-1">Push / SSE / badge 設定</p>
         </a>
         <a href="features/lang.html" class="block bg-white rounded-xl shadow-sm hover:shadow-lg transition p-4 border-l-4 border-slate-500">
-          <div class="text-2xl mb-2">🌐</div>
-          <h3 class="font-bold text-gray-800 text-sm">Lang</h3>
-          <p class="text-xs text-gray-500 mt-1">言語切替 (日 / 繁 / EN)</p>
+          <div class="text-2xl mb-2">🌐</div><h3 class="font-bold text-gray-800 text-sm">Lang</h3><p class="text-xs text-gray-500 mt-1">言語切替</p>
         </a>
         <a href="features/profile.html" class="block bg-white rounded-xl shadow-sm hover:shadow-lg transition p-4 border-l-4 border-fuchsia-500">
-          <div class="text-2xl mb-2">👤</div>
-          <h3 class="font-bold text-gray-800 text-sm">Profile</h3>
-          <p class="text-xs text-gray-500 mt-1">avatar / 連絡先 / role 表示</p>
+          <div class="text-2xl mb-2">👤</div><h3 class="font-bold text-gray-800 text-sm">Profile</h3><p class="text-xs text-gray-500 mt-1">avatar / 連絡先 / role</p>
         </a>
       </div>
     </section>
 
-    <!-- 殿御命 2026-06-05: QC 業務動線 4 機能 -->
     <section class="mt-12">
       <h2 class="text-2xl font-bold text-gray-800 mb-2">🎯 QC 業務動線</h2>
-      <p class="text-gray-600 text-sm mb-6">Review/QC 提出 → SHOT thread 通知 → QC ビューア判定 → Retake 発令 の業務 flow を機能別に解説。</p>
+      <p class="text-gray-600 text-sm mb-4">Review/QC 提出 → SHOT thread 通知 → QC ビューア判定 → Retake 発令 の業務 flow。</p>
+
+      <a href="qc_flow.html" class="block bg-gradient-to-r from-indigo-500 via-purple-500 to-pink-500 hover:from-indigo-600 hover:via-purple-600 hover:to-pink-600 text-white rounded-2xl shadow-lg hover:shadow-xl transition p-5 mb-6">
+        <div class="flex items-start gap-4">
+          <div class="text-4xl">🎯</div>
+          <div class="flex-1">
+            <h3 class="text-xl font-bold mb-1">📍 まず読む — QC / Review 全体 flow</h3>
+            <p class="text-sm text-indigo-100">桜咲く街 sq01 c05 を例に <strong>User → Lead → Director → Approve/Retake</strong> の 1 サイクル (4 role × 6 step) を時系列で図解。各 step に該当機能の link 付き。</p>
+          </div>
+          <div class="text-2xl">→</div>
+        </div>
+      </a>
+
+      <p class="text-xs text-gray-500 mb-3">▼ 機能別深掘り</p>
       <div class="grid grid-cols-2 md:grid-cols-4 gap-4">
         <a href="features/review_request.html" class="block bg-white rounded-xl shadow-sm hover:shadow-lg transition p-4 border-l-4 border-indigo-500">
-          <div class="text-2xl mb-2">📌</div>
-          <h3 class="font-bold text-gray-800 text-sm">Review 依頼</h3>
-          <p class="text-xs text-gray-500 mt-1">部内レビュー目的 / mention 主体</p>
+          <div class="text-2xl mb-2">📌</div><h3 class="font-bold text-gray-800 text-sm">Review 依頼</h3><p class="text-xs text-gray-500 mt-1">部内 / mention 主体</p>
         </a>
         <a href="features/qc_request.html" class="block bg-white rounded-xl shadow-sm hover:shadow-lg transition p-4 border-l-4 border-amber-500">
-          <div class="text-2xl mb-2">🔍</div>
-          <h3 class="font-bold text-gray-800 text-sm">QC 依頼</h3>
-          <p class="text-xs text-gray-500 mt-1">Director 判定段階 / 部内 OK 前提</p>
+          <div class="text-2xl mb-2">🔍</div><h3 class="font-bold text-gray-800 text-sm">QC 依頼</h3><p class="text-xs text-gray-500 mt-1">Director 判定段階</p>
         </a>
         <a href="features/qc_viewer.html" class="block bg-white rounded-xl shadow-sm hover:shadow-lg transition p-4 border-l-4 border-purple-500">
-          <div class="text-2xl mb-2">🎯</div>
-          <h3 class="font-bold text-gray-800 text-sm">QC ビューア</h3>
-          <p class="text-xs text-gray-500 mt-1">Approve/Retake / 視点切替</p>
+          <div class="text-2xl mb-2">🎯</div><h3 class="font-bold text-gray-800 text-sm">QC ビューア</h3><p class="text-xs text-gray-500 mt-1">Approve/Retake / 視点切替</p>
         </a>
         <a href="features/retake.html" class="block bg-white rounded-xl shadow-sm hover:shadow-lg transition p-4 border-l-4 border-rose-500">
-          <div class="text-2xl mb-2">🔁</div>
-          <h3 class="font-bold text-gray-800 text-sm">Retake 発令</h3>
-          <p class="text-xs text-gray-500 mt-1">マーカー / コメント / 参考素材添付</p>
+          <div class="text-2xl mb-2">🔁</div><h3 class="font-bold text-gray-800 text-sm">Retake 発令</h3><p class="text-xs text-gray-500 mt-1">マーカー / 参考素材</p>
         </a>
       </div>
     </section>
   </main>
-  <footer class="text-center text-gray-400 text-xs py-6">Score Tutorial — 2026-06-03</footer>
+  <footer class="text-center text-gray-400 text-xs py-6">Score Tutorial — 2026-06-08 改訂 (Director/Lead 表記更新 + 例示増強)</footer>
   <script src="js/nav.js"></script>
 </body>
 </html>

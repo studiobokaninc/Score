@@ -94,7 +94,7 @@
               <button
                 type="button"
                 onclick='openEventModal({{ ev|tojson|safe }})'
-                class="w-full text-left {{ _ev_class }} rounded-xl px-2 py-1 text-xs transition-colors truncate"
+                class="js-event-trigger w-full text-left {{ _ev_class }} rounded-xl px-2 py-1 text-xs transition-colors truncate"
                 title="{{ ev.title }} [{{ ev.type or 'Event' }}]">
                 {% if _time %}{{ _time }} {% endif %}<span translate="no">{{ ev.title }}</span>
               </button>
@@ -161,6 +161,19 @@
   </div>
 
   <!-- Event 詳細モーダル (殿御命 2026-06-01) -->
+  {# 殿御命 2026-06-08: 撮影 mode で first event 自動 modal open #}
+  {% if request.query_params.get('_screenshot') and request.query_params.get('_open_first_event') %}
+  <script>
+  window.addEventListener('load', () => {
+    setTimeout(() => {
+      const btn = document.querySelector('.js-event-trigger');
+      if (btn) btn.click();
+      const modal = document.getElementById('event-modal');
+      if (modal) { modal.classList.remove('backdrop-blur-sm', 'bg-black/40'); modal.style.background = 'rgba(0,0,0,0.15)'; }
+    }, 1000);
+  });
+  </script>
+  {% endif %}
   <div id="event-modal" class="hidden fixed inset-0 bg-black/40 backdrop-blur-sm flex items-center justify-center z-[1000]" onclick="if(event.target.id==='event-modal') closeEventModal()">
     <div class="bg-white/95 backdrop-blur-xl border border-white/60 rounded-3xl shadow-2xl p-6 max-w-md w-full mx-4 relative">
       <button onclick="closeEventModal()" class="absolute top-3 right-3 w-8 h-8 rounded-full bg-slate-100 hover:bg-slate-200 text-slate-500 flex items-center justify-center font-bold transition-all">×</button>

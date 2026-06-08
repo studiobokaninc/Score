@@ -45,9 +45,44 @@ def read_dashboard(
     user = _safe(lambda: client.get_me(actor_user_id=actor_id), None)
     if user is None:
         user = CalendarUser(user_id=0, email="", role="", name="")
+    # 殿御命 2026-06-08: user.name が空/「ユーザ」 fallback の場合 get_users から actor_id 経由で再解決
+    if not user.name or user.name == "ユーザ":
+        try:
+            _aid_int = int(actor_id) if str(actor_id).isdigit() else None
+            if _aid_int is not None and hasattr(client, "get_users"):
+                for _u in (client.get_users(actor_user_id=actor_id) or []):
+                    if isinstance(_u, dict):
+                        _uid = _u.get("id") or _u.get("user_id")
+                        if _uid is not None and int(_uid) == _aid_int:
+                            _name = _u.get("name") or _u.get("full_name") or (_u.get("email") or "").split("@")[0]
+                            if _name:
+                                user = CalendarUser(user_id=_aid_int, email=_u.get("email", ""), role=_u.get("role", user.role or ""), name=_name)
+                            break
+        except Exception:
+            pass
 
     user_projects = _safe(lambda: client.get_my_projects(actor_user_id=actor_id), []) or []
     project_name_map = {p.get("id"): p.get("name", "") for p in user_projects if isinstance(p, dict) and p.get("id") is not None}
+    # 殿御命 2026-06-08: 「action item ございませぬ」時 PM 確認 DM 用に PM uid + name を解決
+    pm_contact = None
+    try:
+        for _p in user_projects:
+            if not isinstance(_p, dict): continue
+            _pid = _p.get("id")
+            if _pid is None: continue
+            _roles = _safe(lambda: client.get_project_roles(int(_pid), actor_user_id=actor_id), {}) or {}
+            _pm_uid = _roles.get("pm")
+            if _pm_uid:
+                _pm_name = f"uid {_pm_uid}"
+                if hasattr(client, "get_users"):
+                    for _u in (_safe(lambda: client.get_users(actor_user_id=actor_id), []) or []):
+                        if isinstance(_u, dict) and (_u.get("id") == _pm_uid or _u.get("user_id") == _pm_uid):
+                            _pm_name = _u.get("name") or _u.get("full_name") or (_u.get("email") or "").split("@")[0] or _pm_name
+                            break
+                pm_contact = {"uid": int(_pm_uid), "name": _pm_name}
+                break
+    except Exception:
+        pm_contact = None
     # 殿御命 2026-06-04: ryoji の member 外 project も name 解決可にする (全 project map fallback)
     try:
         if hasattr(client, "get_projects"):
@@ -337,6 +372,7 @@ def read_dashboard(
             "trans": trans,
             "t": t,
             "user_projects": user_projects,
+            "pm_contact": pm_contact,
             "role": role,
             "active": "dashboard",
             "greeting_key": f"dashboard.greeting.{greeting_suffix}",

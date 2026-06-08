@@ -14,35 +14,66 @@
     </div>
     <div class="max-w-5xl mx-auto mt-2">
       <h1 class="text-3xl font-bold flex items-center gap-3">👤 Profile</h1>
-      <p class="mt-2 text-fuchsia-200">プロフィール情報 (表示名・連絡先・avatar 画像) の管理。スタジオ内の全通知・コメントに表示される情報を編集。</p>
     </div>
   </header>
   <main class="max-w-5xl mx-auto py-10 px-6 space-y-8">
+
+    <!-- 機能の目的 -->
+    <section class="bg-gradient-to-br from-fuchsia-50 to-white border-2 border-fuchsia-200 rounded-2xl p-6">
+      <h2 class="text-lg font-bold text-fuchsia-800 mb-2">📘 この機能の目的</h2>
+      <p class="text-gray-700 leading-relaxed">自分の avatar・name・連絡先・role 表示の管理 + <strong>Google アカウント連携</strong> (Calendar / Drive)。他 user からの mention 表示名にも使用。</p>
+    </section>
+
     <section class="bg-white rounded-2xl shadow p-6">
       <h2 class="text-xl font-bold text-gray-800 mb-4">📸 画面</h2>
       <div class="screenshot-wrap cursor-pointer" onclick="openLightbox(this)">
-        <img src="../images/admin/profile.png" alt="Profile 画面" loading="lazy" class="rounded-xl shadow-md w-full max-w-3xl mx-auto block">
+        <img src="../images/admin/profile_sato.png" alt="Profile 画面" loading="lazy" class="rounded-xl shadow-md w-full max-w-3xl mx-auto block">
       </div>
+      <p class="text-xs text-gray-500 italic text-center mt-3">📍 画面例: 佐藤 User が Google ログイン → Score user (佐藤 花子) と紐付け → Google Calendar 同期 ON → 桜咲く街 第 4 話 試写日 (6/15) が Score Calendar と Google Calendar 両方に表示 → 出勤前にスマホ Google Calendar で確認可能。</p>
     </section>
+
+    <!-- 主な機能 -->
     <section class="bg-white rounded-2xl shadow p-6">
       <h2 class="text-xl font-bold text-gray-800 mb-4">✨ 主な機能</h2>
       <ul class="list-disc list-inside space-y-2">
-<li class="text-gray-700 leading-relaxed"><strong>表示名 / 連絡先</strong> — Score 内で表示される情報。</li>
-<li class="text-gray-700 leading-relaxed"><strong>avatar 画像</strong> — PNG/JPG 形式で upload (max 5 MB)。Calendar に同期。</li>
-<li class="text-gray-700 leading-relaxed"><strong>所属 role 表示</strong> — admin / lead / director / pm / user のいずれか。</li>
-<li class="text-gray-700 leading-relaxed"><strong>退勤統計</strong> — 直近の退勤報告履歴 サマリ。</li>
+        <li class="text-gray-700 leading-relaxed"><strong>avatar 画像 upload</strong> — 角丸表示 (Calendar 統合)</li>
+        <li class="text-gray-700 leading-relaxed"><strong>name / nickname 設定</strong> — mention 時の表示名</li>
+        <li class="text-gray-700 leading-relaxed"><strong>連絡先 (email / phone)</strong> — 緊急時連絡用</li>
+        <li class="text-gray-700 leading-relaxed"><strong>role 表示</strong> — admin が割当 (PM / Director / Lead / User / Admin)</li>
+        <li class="text-gray-700 leading-relaxed"><strong>誕生日 banner</strong> — Dashboard で誕生日 user に祝福表示</li>
+        <li class="text-gray-700 leading-relaxed"><strong>🔗 Google アカウント連携</strong> — OAuth 経由で Google ログイン → Score user と紐付け (連携状態 ✅/未連携 表示)</li>
+        <li class="text-gray-700 leading-relaxed">&nbsp;&nbsp;・<strong>📅 Google Calendar 双方向同期</strong> — Score Calendar イベントと Google Calendar イベントを 自動同期 (mtg・試写・納品日 等)</li>
+        <li class="text-gray-700 leading-relaxed">&nbsp;&nbsp;・<strong>📁 Google Drive 参考資料リンク</strong> — Retake 発令時の参考素材として Drive 共有 URL を直接添付可能</li>
+        <li class="text-gray-700 leading-relaxed">&nbsp;&nbsp;・<strong>解除 button</strong> — 連携解除 (Calendar 同期停止 + Drive リンク権限取消)</li>
+        <li class="text-gray-700 leading-relaxed">&nbsp;&nbsp;・<strong>本式 OAuth 連携</strong>: Calendar 側 GCP (Google Cloud Platform) 設定後に正式有効化 (発注書 v3 §4 — B 案 採用予定)</li>
       </ul>
     </section>
+
+    <!-- 桜咲く街 具体例 -->
+    <section class="bg-gradient-to-br from-pink-50 to-purple-50 border border-pink-200 rounded-2xl p-6">
+      <h2 class="text-lg font-bold text-pink-800 mb-2">🌸 使用例 — 架空 project「桜咲く街」</h2>
+      <p class="text-gray-700 leading-relaxed text-sm">佐藤 User が Google ログイン → Score user (佐藤 花子) と紐付け → Google Calendar 同期 ON → 桜咲く街 第 4 話 試写日 (6/15) が Score Calendar と Google Calendar 両方に表示 → 出勤前にスマホ Google Calendar で確認可能。</p>
+    </section>
+
+    <!-- 操作方法 -->
     <section class="bg-white rounded-2xl shadow p-6">
       <h2 class="text-xl font-bold text-gray-800 mb-4">🛠 操作方法</h2>
       <ol class="list-decimal list-inside space-y-2">
-<li class="text-gray-700 leading-relaxed">sidemenu 右下の自分の avatar click → /profile に遷移。</li>
-<li class="text-gray-700 leading-relaxed">avatar 画像欄 click → ファイル選択 → upload (Calendar API 経由)。</li>
-<li class="text-gray-700 leading-relaxed">保存 → 即座に全画面で反映。</li>
+        <li class="text-gray-700 leading-relaxed">サイドメニュー👤 → Profile</li>
+        <li class="text-gray-700 leading-relaxed">avatar click → 画像選択 → upload</li>
+        <li class="text-gray-700 leading-relaxed">name / 連絡先 編集 → 保存</li>
+        <li class="text-gray-700 leading-relaxed">role は admin のみ変更可</li>
+        <li class="text-gray-700 leading-relaxed">🔗 Google アカウント連携 section の「Google でログイン」 button click → OAuth popup → Google 認証 → 連携完了 (✅ 連携済 表示 + email 紐付け)</li>
+        <li class="text-gray-700 leading-relaxed">📅 Calendar 双方向同期 ON → Score Calendar 予定が Google Calendar (個人 / Studio Workspace) に自動反映 + Google 側予定変更も Score に反映</li>
+        <li class="text-gray-700 leading-relaxed">📁 Drive 参考資料リンク ON → Retake 発令時に Drive 共有 URL を直接 paste 可能 (Compositor は Drive 視聴で Retake 確認)</li>
+        <li class="text-gray-700 leading-relaxed">解除 button click → 連携取消 + 同期停止 (Google 側データ削除なし)</li>
       </ol>
     </section>
   </main>
-  <footer class="text-center text-gray-400 text-xs py-6">Score Tutorial — 機能リファレンス</footer>
+  <footer class="text-center text-gray-400 text-xs py-6">Score Tutorial — 機能リファレンス (2026-06-08 改訂)</footer>
+  <div id="lightbox" class="lightbox-overlay" onclick="closeLightbox()">
+    <img id="lightbox-img" src="" alt="">
+  </div>
   <script src="../js/nav.js"></script>
 </body>
 </html>

@@ -3,7 +3,7 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>Score チュートリアル — 💬 Messages</title>
+  <title>Score チュートリアル — 💬 Messages (メッセージ)</title>
   <script src="https://cdn.tailwindcss.com"></script>
   <link rel="stylesheet" href="../css/style.css">
 </head>
@@ -13,39 +13,60 @@
       <a href="../index.html" class="text-emerald-200 hover:text-white text-sm">← トップへ戻る</a>
     </div>
     <div class="max-w-5xl mx-auto mt-2">
-      <h1 class="text-3xl font-bold flex items-center gap-3">💬 Messages</h1>
-      <p class="mt-2 text-emerald-200">SHOT 関係者 thread (3 名以上) と 1対1 DM (2 名) を タブで振り分け表示。新規 DM は 29 名から選択可。未読/既読は localStorage で永続化。</p>
+      <h1 class="text-3xl font-bold flex items-center gap-3">💬 Messages (メッセージ)</h1>
     </div>
   </header>
   <main class="max-w-5xl mx-auto py-10 px-6 space-y-8">
+
+    <!-- 機能の目的 -->
+    <section class="bg-gradient-to-br from-emerald-50 to-white border-2 border-emerald-200 rounded-2xl p-6">
+      <h2 class="text-lg font-bold text-emerald-800 mb-2">📘 この機能の目的</h2>
+      <p class="text-gray-700 leading-relaxed">SHOT 関係者 thread (PM/Director/Lead/User) と 1対1 DM を統合表示。連絡履歴を SHOT 単位で集約。</p>
+    </section>
+
     <section class="bg-white rounded-2xl shadow p-6">
       <h2 class="text-xl font-bold text-gray-800 mb-4">📸 画面</h2>
       <div class="screenshot-wrap cursor-pointer" onclick="openLightbox(this)">
-        <img src="../images/admin/messages.png" alt="Messages 画面" loading="lazy" class="rounded-xl shadow-md w-full max-w-3xl mx-auto block">
+        <img src="../images/admin/messages_unmasked.png" alt="Messages (メッセージ) 画面" loading="lazy" class="rounded-xl shadow-md w-full max-w-3xl mx-auto block">
       </div>
+      <p class="text-xs text-gray-500 italic text-center mt-3">📍 画面例: 佐藤 User が桜咲く街 sq01 c05 QC 依頼提出 → 自動的に PM 太郎・山田 Director・加藤 Lead を含む thread 作成 → 山田 Director から「Lighting 微調整希望」 返信 → thread 内で会話継続。</p>
     </section>
+
+    <!-- 主な機能 -->
     <section class="bg-white rounded-2xl shadow p-6">
       <h2 class="text-xl font-bold text-gray-800 mb-4">✨ 主な機能</h2>
       <ul class="list-disc list-inside space-y-2">
-<li class="text-gray-700 leading-relaxed"><strong>🎬 SHOT タブ</strong> — review/QC 提出時に自動作成された SHOT 関係者 thread (PM/Director/Lead/担当者) を一覧表示。</li>
-<li class="text-gray-700 leading-relaxed"><strong>👤 DM タブ</strong> — 1 対 1 の DM を一覧表示。タブ名に未読数 (例: <code>DM (未読 3)</code>) 表示。</li>
-<li class="text-gray-700 leading-relaxed"><strong>📢 通知タブ</strong> — システム通知。</li>
-<li class="text-gray-700 leading-relaxed"><strong>未読 dot</strong> — 各 thread row に 🔴 dot + 強調背景 で 未読 thread を視覚化。</li>
-<li class="text-gray-700 leading-relaxed"><strong>新規 DM 作成</strong> — ✏️ ボタン → モーダルで Calendar 全 user (自分以外 29 名) から相手選択。</li>
-<li class="text-gray-700 leading-relaxed"><strong>thread 本文 → 緑 QC ビューアボタン</strong> — review 依頼本文中の URL は緑ボタン化され、click 一発で対象 shot の QC viewer へ遷移。</li>
+        <li class="text-gray-700 leading-relaxed"><strong>SHOT 関係者 thread 自動作成</strong> — QC/Review/Retake 提出時に PM + Director + Lead + assignees で構成</li>
+        <li class="text-gray-700 leading-relaxed"><strong>thread 階層 title</strong> — 「c05 Compositing」 等の SHOT + task 名で識別容易 (殿御命 2026-06-05)</li>
+        <li class="text-gray-700 leading-relaxed"><strong>URL ?thread=N で自動 open</strong> — 通知から直接該当 thread へ</li>
+        <li class="text-gray-700 leading-relaxed"><strong>QC ビューア URL は緑ボタン化</strong> — 本文中の link が即 click 可能</li>
+        <li class="text-gray-700 leading-relaxed"><strong>SHOT/DM 振り分け</strong> — content から自動判別 (QC/Review/Approved/Retake で始まる = SHOT)</li>
+        <li class="text-gray-700 leading-relaxed"><strong>他 page で thread link click → 右スライドイン drawer</strong> (殿御命 2026-06-05)</li>
       </ul>
     </section>
+
+    <!-- 桜咲く街 具体例 -->
+    <section class="bg-gradient-to-br from-pink-50 to-purple-50 border border-pink-200 rounded-2xl p-6">
+      <h2 class="text-lg font-bold text-pink-800 mb-2">🌸 使用例 — 架空 project「桜咲く街」</h2>
+      <p class="text-gray-700 leading-relaxed text-sm">佐藤 User が桜咲く街 sq01 c05 QC 依頼提出 → 自動的に PM 太郎・山田 Director・加藤 Lead を含む thread 作成 → 山田 Director から「Lighting 微調整希望」 返信 → thread 内で会話継続。</p>
+    </section>
+
+    <!-- 操作方法 -->
     <section class="bg-white rounded-2xl shadow p-6">
       <h2 class="text-xl font-bold text-gray-800 mb-4">🛠 操作方法</h2>
       <ol class="list-decimal list-inside space-y-2">
-<li class="text-gray-700 leading-relaxed">sidemenu 💬 Messages → メッセージ画面 (left thread 一覧 + right 本文)。</li>
-<li class="text-gray-700 leading-relaxed">thread row click → 右ペインに最新メッセージ表示 + 既読化 + sidemenu 赤丸も即時更新。</li>
-<li class="text-gray-700 leading-relaxed">新規 DM ✏️ → 相手選択 → /messages?thread={new_id} に遷移。</li>
-<li class="text-gray-700 leading-relaxed">メッセージ入力欄 → 送信 → Push 通知 + SSE banner で全 SHOT 関係者に届く。</li>
+        <li class="text-gray-700 leading-relaxed">サイドメニュー💬 → Messages</li>
+        <li class="text-gray-700 leading-relaxed">SHOT タブ / DM タブ切替</li>
+        <li class="text-gray-700 leading-relaxed">thread 行 click → 会話履歴表示</li>
+        <li class="text-gray-700 leading-relaxed">本文中の緑 button → qc_viewer 即遷移</li>
+        <li class="text-gray-700 leading-relaxed">通知から /messages?thread=280052 で直接 open</li>
       </ol>
     </section>
   </main>
-  <footer class="text-center text-gray-400 text-xs py-6">Score Tutorial — 機能リファレンス</footer>
+  <footer class="text-center text-gray-400 text-xs py-6">Score Tutorial — 機能リファレンス (2026-06-08 改訂)</footer>
+  <div id="lightbox" class="lightbox-overlay" onclick="closeLightbox()">
+    <img id="lightbox-img" src="" alt="">
+  </div>
   <script src="../js/nav.js"></script>
 </body>
 </html>

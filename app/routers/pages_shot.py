@@ -53,12 +53,26 @@ def get_shot_detail(
     from app.helpers.colors import attach_task_palettes, get_project_palette
     tasks = attach_task_palettes(tasks)
     project_palette = get_project_palette(project_id) if project_id else None
+    # 殿御命 2026-06-08: asset_list を context に追加 + tasks 各 task に latest_asset attach
+    asset_list = list((shot_detail_raw.get("asset_list", []) or [])) if isinstance(shot_detail_raw, dict) else []
+    latest_by_task = {}
+    for a in asset_list:
+        if isinstance(a, dict):
+            tid = a.get("task_id")
+            if tid is None: continue
+            cur = latest_by_task.get(tid)
+            if cur is None or (a.get("version", "") > cur.get("version", "")):
+                latest_by_task[tid] = a
+    for t in tasks:
+        try:
+            t.latest_asset = latest_by_task.get(getattr(t, "task_id", None))
+        except Exception: pass
     return _templates.TemplateResponse(
         request=request,
         name="shot_detail.html",
         context={
-            "tasks": tasks,                 # asset history 用 (全工程)
-            "upstream_tasks": tasks,        # upstream 可視化用 (同じ全工程)
+            "tasks": tasks,
+            "upstream_tasks": tasks,
             "shot_id": id,
             "shot": shot,
             "task_id": None,
@@ -72,6 +86,8 @@ def get_shot_detail(
             "demo_mode": os.getenv("CALENDAR_MOCK", "0") == "1",
             "isolated_task": False,
             "shot_detail_raw": shot_detail_raw,
+            "asset_list": asset_list,
+            "latest_by_task": latest_by_task,
         },
     )
 

@@ -479,6 +479,13 @@ async def post_asset_upload(
     #         (殿御指摘 2026-06-04: 個別 DM ではなく SHOT 関係者 全員に届くべき)
     # 暫定 hardcode: Calendar 側に project.director_id / pm_id 解決 EP 不在 (Phase 2 nibu 殿差替)
     if submission_type in ("qc", "review"):
+        # 殿御命 2026-06-05 (#46 動線修正): task status を 'review' に patch (in-progress → review)
+        # これにより qc_viewer の判定 block (_can_judge = status in ('review','reviewing')) が活性化する
+        if task_id and hasattr(client, "patch_task"):
+            try:
+                client.patch_task(int(task_id), {"status": "review"}, actor_user_id=actor_id)
+            except Exception:
+                pass
         # project / seq / shot / task 階層解決 (殿御命 2026-06-04/05: get_shot_detail 空時 get_shot DTO + get_tasks fallback)
         proj_name = ""
         seq_code = ""
@@ -873,6 +880,13 @@ async def post_qc_notify_existing(request: Request, actor_id: str = Depends(get_
     if not shot_id:
         raise HTTPException(status_code=400, detail="asset から shot_id 解決不可")
 
+    # 殿御命 2026-06-05 (#46 動線修正): task status を 'review' に patch (in-progress → review)
+    if task_id and hasattr(client, "patch_task"):
+        try:
+            client.patch_task(int(task_id), {"status": "review"}, actor_user_id=actor_id)
+        except Exception:
+            pass
+
     # 既存 POST /api/bff/assets と同じ thread + body 構築 logic を再利用
     # 階層解決 (殿御命 2026-06-05: get_shot_detail 空時 get_shot DTO + get_tasks fallback)
     proj_name, seq_code, shot_code, task_type = "", "", "", ""
@@ -1149,6 +1163,91 @@ def get_dm_thread_messages_bff(thread_id: int, actor_id: str = Depends(get_actor
     return JSONResponse(content=messages, headers={"X-Actor-User-Id": actor_id})
 
 
+# 殿御命 2026-06-08 (nibu cmd_471 ②): Calendar BE → Score webhook 受信 EP
+# HMAC-SHA256 (X-Calendar-Signature) 検証 + event 別 SSE dispatch
+@router.post("/api/bff/webhook/calendar")
+async def calendar_webhook(request: Request):
+    """Calendar BE → Score outbound webhook 受信。
+    署名: X-Calendar-Signature ヘッダ (HMAC-SHA256, hex)
+    secret: 環境変数 CALENDAR_WEBHOOK_SECRET
+    対応 event: event.created / event.updated / dm_thread.new_message
+    各 event は payload 内 対象 user_id 群に対して SSE 配信 (notif category 別)。
+    """
+    import hmac as _hmac
+    import hashlib as _hashlib
+    raw_body = await request.body()
+    signature = request.headers.get("X-Calendar-Signature", "")
+    secret = _os.environ.get("CALENDAR_WEBHOOK_SECRET", "")
+    if not secret:
+        # 設定不在は 503 (障害扱い)
+        raise HTTPException(status_code=503, detail="CALENDAR_WEBHOOK_SECRET not configured")
+    expected = _hmac.new(secret.encode("utf-8"), raw_body, _hashlib.sha256).hexdigest()
+    if not _hmac.compare_digest(signature, expected):
+        raise HTTPException(status_code=401, detail="invalid signature")
+    try:
+        body = _json.loads(raw_body.decode("utf-8"))
+    except Exception:
+        raise HTTPException(status_code=400, detail="invalid JSON")
+    event_type = (body.get("event") or body.get("type") or "").strip()
+    payload = body.get("payload") or body.get("data") or {}
+    if not isinstance(payload, dict):
+        payload = {}
+
+    # SSE helper
+    from app.routers.sse_notifications import push_sse_event
+    delivered = {"event": event_type, "sse_targets": [], "errors": []}
+
+    if event_type in ("event.created", "event.updated"):
+        # Calendar event: attendees に SSE 配信
+        attendees = payload.get("attendees") or payload.get("user_ids") or []
+        title = payload.get("title") or "予定変更"
+        body_text = (payload.get("description") or payload.get("body") or "")[:200]
+        for uid in attendees:
+            try:
+                cuid = int(uid)
+            except (ValueError, TypeError):
+                continue
+            push_sse_event([cuid], "calendar", {
+                "category": event_type,
+                "title": title,
+                "body": body_text,
+                "event_id": payload.get("event_id") or payload.get("id"),
+                "start_at": payload.get("start_at"),
+                "end_at": payload.get("end_at"),
+            })
+            delivered["sse_targets"].append(cuid)
+
+    elif event_type == "dm_thread.new_message":
+        # DM thread 新着: participants (sender 除外) に SSE 配信
+        thread_id = payload.get("thread_id")
+        sender_id = payload.get("sender_id") or payload.get("sender_uid")
+        participants = payload.get("participants") or payload.get("recipient_ids") or []
+        message_body = (payload.get("body") or payload.get("content") or "")[:200]
+        try:
+            sender_int = int(sender_id) if sender_id is not None else None
+        except (ValueError, TypeError):
+            sender_int = None
+        for uid in participants:
+            try:
+                cuid = int(uid)
+            except (ValueError, TypeError):
+                continue
+            if cuid == sender_int:
+                continue
+            push_sse_event([cuid], "dm", {
+                "category": "dm_message",
+                "thread_id": thread_id,
+                "sender_id": sender_int,
+                "body": message_body,
+                "message_id": payload.get("message_id") or payload.get("id"),
+            })
+            delivered["sse_targets"].append(cuid)
+    else:
+        delivered["errors"].append(f"unknown event_type: {event_type}")
+
+    return JSONResponse(content={"ok": True, **delivered})
+
+
 @router.post("/api/bff/dm/threads/{thread_id}/read")
 def post_dm_thread_read_bff(thread_id: int, actor_id: str = Depends(get_actor_id)):
     """殿御命 2026-06-05 (nibu Phase 2 EP): DM thread 既読 mark pass-through (冪等)"""
@@ -1210,3 +1309,4 @@ async def upload_my_avatar(
         actor_user_id=actor_id,
     )
     return JSONResponse(content=result, headers={"X-Actor-User-Id": actor_id})
+# touch 1780901283

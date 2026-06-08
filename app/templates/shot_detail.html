@@ -318,7 +318,7 @@
         {% set _is_img = _ext in ('png','jpg','jpeg','webp','gif') %}
         {% set _is_vid = _ext in ('mp4','mov','webm','m4v') %}
         {# 殿御命 2026-06-03: サムネ表示 — Calendar /static/assets/<basename> 経由 #}
-        {% set _img_url = 'http://192.168.44.253:8001/static/assets/' ~ _basename %}
+        {% set _img_url = ('/static/assets/' ~ _basename) if (demo_mode or 'sample_' in _basename) else ('http://192.168.44.253:8001/static/assets/' ~ _basename) %}
         {# 殿御命 2026-06-03: card クリックで /qc/{shot_id} プレイヤー画面遷移 (旧仕様復帰) #}
         <a href="/qc/{{ shot_id }}?task_id={{ a.task_id }}&asset_id={{ a.id }}" class="relative block bg-white/60 backdrop-blur-xl border-2 border-white/60 rounded-2xl shadow-lg p-4 hover:shadow-xl hover:scale-[1.02] transition-all">
           <div class="aspect-video rounded-xl mb-3 bg-gradient-to-br from-indigo-200 via-purple-300 to-rose-300 flex items-center justify-center overflow-hidden relative">

@@ -45,7 +45,45 @@
   })();
   </script>
   {# 殿御命 2026-06-04 cmd_478: 全 page 共通 notif client (SSE 受信 + Push onboarding + silent re-subscribe) #}
+  {# 殿御命 2026-06-08: ?_screenshot=1 で SSE/Push 接続 skip (chrome headless 撮影用) #}
+  {% if not request.query_params.get('_screenshot') %}
   <script src="/static/push-register.js"></script>
   <script src="/static/notif-client.js"></script>
+  {% else %}
+  {# 撮影 mode: URL ?_open_modal=ID で modal class="hidden" 解除 + ?_scroll_to=ID で scroll #}
+  <script>
+  window.addEventListener('DOMContentLoaded', () => {
+    setTimeout(() => {
+      const qp = new URLSearchParams(location.search);
+      const mid = qp.get('_open_modal');
+      if (mid) {
+        const m = document.getElementById(mid);
+        if (m) {
+          m.classList.remove('hidden'); m.style.display = 'flex';
+          // 殿御命 2026-06-08: 後ろの page を見せる (blur + dark overlay 解除)
+          m.classList.remove('backdrop-blur-sm', 'backdrop-blur-md', 'bg-black/50', 'bg-black/40');
+          m.style.background = 'rgba(0,0,0,0.15)';
+        }
+      }
+      const sid = qp.get('_scroll_to');
+      if (sid) {
+        const el = document.getElementById(sid);
+        if (el) el.scrollIntoView({behavior: 'instant', block: 'start'});
+      }
+      const clickSel = qp.get('_click_first');  // pattern: CSS selector for first match → .click()
+      if (clickSel) {
+        const el = document.querySelector(clickSel);
+        if (el) el.click();
+      }
+      const cls = qp.get('_set_class');  // pattern: id:class (例 "modal-qc-notify:flex")
+      if (cls) {
+        const [eid, cnames] = cls.split(':');
+        const el = document.getElementById(eid);
+        if (el) cnames.split(',').forEach(c => el.classList.add(c));
+      }
+    }, 600);
+  });
+  </script>
+  {% endif %}
 </body>
 </html>

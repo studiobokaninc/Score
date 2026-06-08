@@ -23,6 +23,7 @@ from app.routers import (
     pages_project_detail,
     pages_pm,
     pages_calendar,
+    pages_meeting_minutes,
     pages_director_dashboard,
     pages_lead_dashboard,
     pages_pm_dashboard,
@@ -66,6 +67,11 @@ _static_dir = _Path(__file__).parent / "static"
 _static_dir.mkdir(exist_ok=True)
 app.mount("/static", StaticFiles(directory=str(_static_dir)), name="static")
 
+# 殿御命 2026-06-08: tutorial を score_be 経由で配信 (/tutorial)
+_tutorial_dir = _Path(__file__).parent.parent / "tutorial"
+if _tutorial_dir.exists():
+    app.mount("/tutorial", StaticFiles(directory=str(_tutorial_dir), html=True), name="tutorial")
+
 
 # 殿御命 2026-06-04 cmd_477: Service Worker を root scope (/) で配信
 # (Push 通知用 SW は controller として全 page に作用する必要・/static/sw.js では scope=/static/ で不適)
@@ -94,6 +100,7 @@ app.include_router(pages_auth.router)
 app.include_router(pages_qc.router)
 app.include_router(bff_write.router)
 app.include_router(pages_misc.router)
+app.include_router(pages_meeting_minutes.router)
 app.include_router(cross_projects.router)
 app.include_router(cross_production_tracker.router)
 app.include_router(bff_cross.router, prefix="")

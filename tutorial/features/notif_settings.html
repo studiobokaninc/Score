@@ -14,38 +14,57 @@
     </div>
     <div class="max-w-5xl mx-auto mt-2">
       <h1 class="text-3xl font-bold flex items-center gap-3">⚙️ 通知設定</h1>
-      <p class="mt-2 text-indigo-200">通知の配信経路 (📣 Web Push / 🟢 SSE / 🔴 画面 badge) と 通知種別 (Review / QC / DM / SHOT thread / @ mention) を個別に ON/OFF 設定。</p>
     </div>
   </header>
   <main class="max-w-5xl mx-auto py-10 px-6 space-y-8">
+
+    <!-- 機能の目的 -->
+    <section class="bg-gradient-to-br from-indigo-50 to-white border-2 border-indigo-200 rounded-2xl p-6">
+      <h2 class="text-lg font-bold text-indigo-800 mb-2">📘 この機能の目的</h2>
+      <p class="text-gray-700 leading-relaxed">Push / SSE / 画面 badge の経路別 ON/OFF + category 別 (qc_request 等) ON/OFF 設定。通知過多を防止。</p>
+    </section>
+
     <section class="bg-white rounded-2xl shadow p-6">
       <h2 class="text-xl font-bold text-gray-800 mb-4">📸 画面</h2>
       <div class="screenshot-wrap cursor-pointer" onclick="openLightbox(this)">
-        <img src="../images/admin/settings_notifications.png" alt="通知設定 画面" loading="lazy" class="rounded-xl shadow-md w-full max-w-3xl mx-auto block">
+        <img src="../images/admin/notif_settings_unmasked.png" alt="通知設定 画面" loading="lazy" class="rounded-xl shadow-md w-full max-w-3xl mx-auto block">
       </div>
+      <p class="text-xs text-gray-500 italic text-center mt-3">📍 画面例: PM 太郎は「桜咲く街」 関連 qc_request のみ Push ON、 他 SHOT thread 投稿は SSE のみ にして通知過多を回避。</p>
     </section>
+
+    <!-- 主な機能 -->
     <section class="bg-white rounded-2xl shadow p-6">
       <h2 class="text-xl font-bold text-gray-800 mb-4">✨ 主な機能</h2>
       <ul class="list-disc list-inside space-y-2">
-<li class="text-gray-700 leading-relaxed"><strong>📣 Web Push (OS 通知)</strong> — PC / モバイル の OS toast。離席中でも通知。要 ブラウザ通知許可 (1 回のみ)。</li>
-<li class="text-gray-700 leading-relaxed"><strong>🟢 在席中 banner (SSE)</strong> — Score を開いている間 画面右下に 紫アクセント白 toast。OS 通知許可不要。8 秒で消失。</li>
-<li class="text-gray-700 leading-relaxed"><strong>🔴 sidemenu 赤丸 + 通知センター</strong> — 常時 ON (設定で OFF 不可)。見落とし防止。</li>
-<li class="text-gray-700 leading-relaxed"><strong>通知種別 5 区分</strong> — 📌 Review 依頼 / 🔍 QC 依頼 / 💬 DM 受信 / 👥 SHOT thread 投稿 / @ mention 含む の個別 ON/OFF。</li>
-<li class="text-gray-700 leading-relaxed"><strong>初回ログイン onboarding</strong> — Notification.permission=default の user に紫色 banner で 1 click 許可案内。</li>
-<li class="text-gray-700 leading-relaxed"><strong>silent re-subscribe</strong> — 既許可 user は 起動時に subscription を自動 refresh。</li>
+        <li class="text-gray-700 leading-relaxed"><strong>Push 有効化 button</strong> — VAPID + Service Worker root scope で subscribe</li>
+        <li class="text-gray-700 leading-relaxed"><strong>category 別 ON/OFF</strong> — qc_request / review_request / retake / approve / mention 個別設定</li>
+        <li class="text-gray-700 leading-relaxed"><strong>経路別設定</strong> — Push / SSE / badge を independently ON/OFF</li>
+        <li class="text-gray-700 leading-relaxed"><strong>HTTPS or localhost 必須</strong> — Web Push の制約 (LAN HTTP では非対応)</li>
+        <li class="text-gray-700 leading-relaxed"><strong>3 秒 keepalive</strong> — SSE 接続維持間隔</li>
       </ul>
     </section>
+
+    <!-- 桜咲く街 具体例 -->
+    <section class="bg-gradient-to-br from-pink-50 to-purple-50 border border-pink-200 rounded-2xl p-6">
+      <h2 class="text-lg font-bold text-pink-800 mb-2">🌸 使用例 — 架空 project「桜咲く街」</h2>
+      <p class="text-gray-700 leading-relaxed text-sm">PM 太郎は「桜咲く街」 関連 qc_request のみ Push ON、 他 SHOT thread 投稿は SSE のみ にして通知過多を回避。</p>
+    </section>
+
+    <!-- 操作方法 -->
     <section class="bg-white rounded-2xl shadow p-6">
       <h2 class="text-xl font-bold text-gray-800 mb-4">🛠 操作方法</h2>
       <ol class="list-decimal list-inside space-y-2">
-<li class="text-gray-700 leading-relaxed">sidemenu ⚙️ 通知設定 → 設定画面。</li>
-<li class="text-gray-700 leading-relaxed">経路 / 種別 を checkbox で ON/OFF → 💾 保存 → 即時反映。</li>
-<li class="text-gray-700 leading-relaxed">📣 Web Push を有効化 ボタン → 許可取得 + 購読登録。</li>
-<li class="text-gray-700 leading-relaxed">🧪 テスト送信 → Push + SSE 両方発火 → 結果確認。</li>
+        <li class="text-gray-700 leading-relaxed">サイドメニュー⚙️ → 通知設定</li>
+        <li class="text-gray-700 leading-relaxed">Push 有効化 button → ブラウザ permission 許可</li>
+        <li class="text-gray-700 leading-relaxed">category 別 toggle で個別設定</li>
+        <li class="text-gray-700 leading-relaxed">経路別 (Push/SSE/badge) ON/OFF 切替</li>
       </ol>
     </section>
   </main>
-  <footer class="text-center text-gray-400 text-xs py-6">Score Tutorial — 機能リファレンス</footer>
+  <footer class="text-center text-gray-400 text-xs py-6">Score Tutorial — 機能リファレンス (2026-06-08 改訂)</footer>
+  <div id="lightbox" class="lightbox-overlay" onclick="closeLightbox()">
+    <img id="lightbox-img" src="" alt="">
+  </div>
   <script src="../js/nav.js"></script>
 </body>
 </html>

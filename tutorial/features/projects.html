@@ -3,7 +3,7 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>Score チュートリアル — 🎞️ Project</title>
+  <title>Score チュートリアル — 🎞️ Project (プロジェクト一覧)</title>
   <script src="https://cdn.tailwindcss.com"></script>
   <link rel="stylesheet" href="../css/style.css">
 </head>
@@ -13,125 +13,85 @@
       <a href="../index.html" class="text-blue-200 hover:text-white text-sm">← トップへ戻る</a>
     </div>
     <div class="max-w-5xl mx-auto mt-2">
-      <h1 class="text-3xl font-bold flex items-center gap-3">🎞️ Project</h1>
-      <p class="mt-2 text-blue-200">スタジオが受注した全プロジェクトの一覧と進捗状況を確認。各プロジェクトの shot 数・QC 通過率・リテイク発生数等を俯瞰可能。</p>
+      <h1 class="text-3xl font-bold flex items-center gap-3">🎞️ Project (プロジェクト一覧)</h1>
     </div>
   </header>
   <main class="max-w-5xl mx-auto py-10 px-6 space-y-8">
-    <section class="bg-white rounded-2xl shadow p-6">
-      <h2 class="text-xl font-bold text-gray-800 mb-4">📸 画面</h2>
-      <div class="screenshot-wrap cursor-pointer" onclick="openLightbox(this)">
-        <img src="../images/admin/projects.png" alt="Project 画面" loading="lazy" class="rounded-xl shadow-md w-full max-w-3xl mx-auto block">
-      </div>
+
+    <!-- 機能の目的 -->
+    <section class="bg-gradient-to-br from-blue-50 to-white border-2 border-blue-200 rounded-2xl p-6">
+      <h2 class="text-lg font-bold text-blue-800 mb-2">📘 この機能の目的</h2>
+      <p class="text-gray-700 leading-relaxed">自分が参加する全プロジェクトを一覧表示。ステータス・進捗率・担当 Director でソート・フィルタ可能。</p>
     </section>
+
+    <section class="bg-white rounded-2xl shadow p-6">
+      <h2 class="text-xl font-bold text-gray-800 mb-4">📸 画面 (4 枚)</h2>
+      <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+        <div class="bg-gray-50 rounded-xl p-4">
+          <p class="text-xs font-bold text-gray-700 mb-2">① 全プロジェクト一覧</p>
+          <div class="screenshot-wrap cursor-pointer bg-white rounded-lg overflow-hidden border border-gray-200" onclick="openLightbox(this)">
+            <img src="../images/admin/projects_unmasked.png" alt="① 全プロジェクト一覧" loading="lazy" class="w-full h-auto block" onerror="this.onerror=null; this.src=&quot;data:image/svg+xml;utf8,&lt;svg xmlns='http://www.w3.org/2000/svg' width='640' height='360' viewBox='0 0 640 360'&gt;&lt;rect width='640' height='360' fill='%23f3f4f6'/&gt;&lt;text x='50%' y='45%' text-anchor='middle' font-size='40' font-family='sans-serif'&gt;📷&lt;/text&gt;&lt;text x='50%' y='60%' text-anchor='middle' font-size='20' fill='%239ca3af' font-family='sans-serif' font-weight='bold'&gt;撮影待ち&lt;/text&gt;&lt;/svg&gt;&quot;;">
+          </div>
+          <p class="text-xs text-gray-600 italic mt-2">サイドメニュー🎞️ click → 自分参加プロジェクト 全 list (status / 進捗率 / 納品日)</p>
+        </div>
+        <div class="bg-gray-50 rounded-xl p-4">
+          <p class="text-xs font-bold text-gray-700 mb-2">② プロジェクト詳細 (SEQ 一覧)</p>
+          <div class="screenshot-wrap cursor-pointer bg-white rounded-lg overflow-hidden border border-gray-200" onclick="openLightbox(this)">
+            <img src="../images/admin/project_detail_view.png" alt="② プロジェクト詳細 (SEQ 一覧)" loading="lazy" class="w-full h-auto block" onerror="this.onerror=null; this.src=&quot;data:image/svg+xml;utf8,&lt;svg xmlns='http://www.w3.org/2000/svg' width='640' height='360' viewBox='0 0 640 360'&gt;&lt;rect width='640' height='360' fill='%23f3f4f6'/&gt;&lt;text x='50%' y='45%' text-anchor='middle' font-size='40' font-family='sans-serif'&gt;📷&lt;/text&gt;&lt;text x='50%' y='60%' text-anchor='middle' font-size='20' fill='%239ca3af' font-family='sans-serif' font-weight='bold'&gt;撮影待ち&lt;/text&gt;&lt;/svg&gt;&quot;;">
+          </div>
+          <p class="text-xs text-gray-600 italic mt-2">プロジェクト行 click → 各 SEQ (sequence) ごとに SHOT 数 / 進捗 表示</p>
+        </div>
+        <div class="bg-gray-50 rounded-xl p-4">
+          <p class="text-xs font-bold text-gray-700 mb-2">③ SHOT 詳細 (task / asset)</p>
+          <div class="screenshot-wrap cursor-pointer bg-white rounded-lg overflow-hidden border border-gray-200" onclick="openLightbox(this)">
+            <img src="../images/admin/shot_detail_view.png" alt="③ SHOT 詳細 (task / asset)" loading="lazy" class="w-full h-auto block" onerror="this.onerror=null; this.src=&quot;data:image/svg+xml;utf8,&lt;svg xmlns='http://www.w3.org/2000/svg' width='640' height='360' viewBox='0 0 640 360'&gt;&lt;rect width='640' height='360' fill='%23f3f4f6'/&gt;&lt;text x='50%' y='45%' text-anchor='middle' font-size='40' font-family='sans-serif'&gt;📷&lt;/text&gt;&lt;text x='50%' y='60%' text-anchor='middle' font-size='20' fill='%239ca3af' font-family='sans-serif' font-weight='bold'&gt;撮影待ち&lt;/text&gt;&lt;/svg&gt;&quot;;">
+          </div>
+          <p class="text-xs text-gray-600 italic mt-2">SHOT 行 click → 各 task (Animation/Compositing 等) + asset upload + thread link</p>
+        </div>
+        <div class="bg-gray-50 rounded-xl p-4">
+          <p class="text-xs font-bold text-gray-700 mb-2">④ Task 詳細</p>
+          <div class="screenshot-wrap cursor-pointer bg-white rounded-lg overflow-hidden border border-gray-200" onclick="openLightbox(this)">
+            <img src="../images/admin/task_detail_view.png" alt="④ Task 詳細" loading="lazy" class="w-full h-auto block" onerror="this.onerror=null; this.src=&quot;data:image/svg+xml;utf8,&lt;svg xmlns='http://www.w3.org/2000/svg' width='640' height='360' viewBox='0 0 640 360'&gt;&lt;rect width='640' height='360' fill='%23f3f4f6'/&gt;&lt;text x='50%' y='45%' text-anchor='middle' font-size='40' font-family='sans-serif'&gt;📷&lt;/text&gt;&lt;text x='50%' y='60%' text-anchor='middle' font-size='20' fill='%239ca3af' font-family='sans-serif' font-weight='bold'&gt;撮影待ち&lt;/text&gt;&lt;/svg&gt;&quot;;">
+          </div>
+          <p class="text-xs text-gray-600 italic mt-2">task 行 click → task 詳細 + asset 履歴 + 状態 + 担当者</p>
+        </div>
+      </div>
+      <p class="text-xs text-gray-500 italic text-center mt-4">📍 シナリオ: PM 太郎は「桜咲く街」(進捗 65%・残 84 日) を含む 4 プロジェクト管理。納品日順 sort で桜咲く街 第 2 話 (残 30 日) を最優先 確認。</p>
+    </section>
+
+    <!-- 主な機能 -->
     <section class="bg-white rounded-2xl shadow p-6">
       <h2 class="text-xl font-bold text-gray-800 mb-4">✨ 主な機能</h2>
       <ul class="list-disc list-inside space-y-2">
-<li class="text-gray-700 leading-relaxed"><strong>全プロジェクト一覧</strong> — オンライン (進行中) / オフライン (完了) / アーカイブ済 の 3 区分。</li>
-<li class="text-gray-700 leading-relaxed"><strong>進捗バー</strong> — 各プロジェクトの全 shot に対する完了率 (Approved 数 ÷ 全 shot 数)。</li>
-<li class="text-gray-700 leading-relaxed"><strong>QC 通過率 / リテイク率</strong> — 品質管理の健全性指標。</li>
-<li class="text-gray-700 leading-relaxed"><strong>担当チーム表示</strong> — PM / Director / Lead 各役のアバター。</li>
-<li class="text-gray-700 leading-relaxed"><strong>プロジェクト click → 詳細画面</strong> — 全 shot 一覧 / 担当割当 / カレンダー 等。</li>
+        <li class="text-gray-700 leading-relaxed"><strong>ステータス filter</strong> — 「進行中」「完了待ち」「納品済」 で絞込み</li>
+        <li class="text-gray-700 leading-relaxed"><strong>進捗率表示</strong> — 各プロジェクトの全 SHOT Approved 率を視覚化</li>
+        <li class="text-gray-700 leading-relaxed"><strong>納品日カウントダウン</strong> — 残日数で警告色 (赤 7 日以内・黄 14 日以内)</li>
+        <li class="text-gray-700 leading-relaxed"><strong>役割別表示</strong> — PM は全プロジェクト・User は参加分のみ</li>
+        <li class="text-gray-700 leading-relaxed"><strong>各行 click でプロジェクト詳細遷移</strong> — SHOT 一覧へ即移動</li>
       </ul>
     </section>
+
+    <!-- 桜咲く街 具体例 -->
+    <section class="bg-gradient-to-br from-pink-50 to-purple-50 border border-pink-200 rounded-2xl p-6">
+      <h2 class="text-lg font-bold text-pink-800 mb-2">🌸 使用例 — 架空 project「桜咲く街」</h2>
+      <p class="text-gray-700 leading-relaxed text-sm">PM 太郎は「桜咲く街」(進捗 65%・残 84 日) を含む 4 プロジェクト管理。納品日順 sort で桜咲く街 第 2 話 (残 30 日) を最優先 確認。</p>
+    </section>
+
+    <!-- 操作方法 -->
     <section class="bg-white rounded-2xl shadow p-6">
       <h2 class="text-xl font-bold text-gray-800 mb-4">🛠 操作方法</h2>
       <ol class="list-decimal list-inside space-y-2">
-<li class="text-gray-700 leading-relaxed">sidemenu 🎞 Project → 全プロジェクト一覧。</li>
-<li class="text-gray-700 leading-relaxed">プロジェクトカード click → /project_detail/{id} で全 shot を確認。</li>
-<li class="text-gray-700 leading-relaxed">ステータスフィルタ (オンライン/オフライン/アーカイブ) で表示切替。</li>
+        <li class="text-gray-700 leading-relaxed">サイドメニュー🎞️ click → Project 一覧</li>
+        <li class="text-gray-700 leading-relaxed">ステータス filter で対象絞込み</li>
+        <li class="text-gray-700 leading-relaxed">プロジェクト行 click → SHOT 一覧へ遷移</li>
+        <li class="text-gray-700 leading-relaxed">💡 各 SHOT の QC ステータスは詳細 page で確認</li>
       </ol>
     </section>
-
-    <!-- 殿御命 2026-06-05: Project / SEQ / SHOT / Task 階層構造説明 -->
-    <section class="bg-white rounded-2xl shadow p-6">
-      <h2 class="text-xl font-bold text-gray-800 mb-4">🗂 階層構造 — Project / SEQ / SHOT / Task</h2>
-      <p class="text-gray-600 text-sm mb-4">Score では制作対象を <strong>4 階層</strong> で管理します。各層が上位を含む親子関係。QC/Review 依頼の通知タイトルにもこの階層が反映されます (例: <code class="bg-slate-100 px-1 rounded text-xs">marukome / SEQ001 / SHOT_001 / Composite</code>)。</p>
-      <div class="space-y-4">
-
-        <!-- Project -->
-        <div class="border-l-4 border-blue-500 pl-4 py-2">
-          <div class="flex items-center gap-2 mb-1">
-            <span class="text-2xl">📁</span>
-            <h3 class="text-lg font-bold text-gray-800">Project (案件・最上位)</h3>
-          </div>
-          <p class="text-gray-700 text-sm leading-relaxed">スタジオが受注した 1 つの案件単位。クライアント・予算・納期・担当チーム (PM / Director / 各分野 Lead) が紐付く。</p>
-          <ul class="list-disc list-inside text-xs text-gray-500 mt-2 space-y-0.5">
-            <li>例: <strong>marukome</strong> (味噌 CM 案件) / <strong>Bali</strong> (映画予告 案件)</li>
-            <li>1 Project = 複数 SEQ + Production Tracker + 共有カレンダー + 担当割当</li>
-            <li>ステータス: オンライン (進行中) / オフライン (完了) / アーカイブ済 (圧縮保管)</li>
-          </ul>
-        </div>
-
-        <!-- SEQ -->
-        <div class="border-l-4 border-purple-500 pl-4 py-2 ml-6">
-          <div class="flex items-center gap-2 mb-1">
-            <span class="text-2xl">🎞️</span>
-            <h3 class="text-lg font-bold text-gray-800">SEQ (シーケンス・場面単位)</h3>
-          </div>
-          <p class="text-gray-700 text-sm leading-relaxed">Project 内の連続する場面 (シーケンス) のまとまり。物語の章単位・ロケーション単位・尺単位 等で区切る。</p>
-          <ul class="list-disc list-inside text-xs text-gray-500 mt-2 space-y-0.5">
-            <li>例: <strong>SEQ001</strong> (オープニング場面) / <strong>SEQ002</strong> (本編 食卓場面)</li>
-            <li>1 SEQ = 複数 SHOT のまとまり (通常 5〜50 SHOT)</li>
-            <li>命名規則: <code class="bg-slate-100 px-1 rounded">SEQ + 3 桁数字</code> (例 SEQ001 / SEQ045)</li>
-          </ul>
-        </div>
-
-        <!-- SHOT -->
-        <div class="border-l-4 border-emerald-500 pl-4 py-2 ml-12">
-          <div class="flex items-center gap-2 mb-1">
-            <span class="text-2xl">🎬</span>
-            <h3 class="text-lg font-bold text-gray-800">SHOT (ショット・カット単位)</h3>
-          </div>
-          <p class="text-gray-700 text-sm leading-relaxed">1 つのカット (連続する映像の最小単位)。カメラのカット〜カットの間。映像制作の基本作業単位。</p>
-          <ul class="list-disc list-inside text-xs text-gray-500 mt-2 space-y-0.5">
-            <li>例: <strong>SHOT_001</strong> (タイトルロゴ出現) / <strong>SHOT_023</strong> (商品クローズアップ)</li>
-            <li>1 SHOT = 複数 Task (工程) + 提出 asset (動画/画像) + QC 履歴 + コメント</li>
-            <li>命名規則: <code class="bg-slate-100 px-1 rounded">SHOT_ + 3 桁数字</code> (例 SHOT_001)・Lighting/Composite/MattePaint/Animation/FX 等 全工程を内包</li>
-            <li>各 SHOT に対し SHOT 関係者 thread (PM/Director/Lead/担当者) が QC/Review 提出時 自動作成される</li>
-          </ul>
-        </div>
-
-        <!-- Task -->
-        <div class="border-l-4 border-rose-500 pl-4 py-2 ml-20">
-          <div class="flex items-center gap-2 mb-1">
-            <span class="text-2xl">⚙️</span>
-            <h3 class="text-lg font-bold text-gray-800">Task (工程・最小作業単位)</h3>
-          </div>
-          <p class="text-gray-700 text-sm leading-relaxed">SHOT 内の各工程 (Lighting / Composite / MattePaint / Animation / FX 等)。担当者 1 名 + 期日 + 提出 asset (バージョン管理) + status (open/in_progress/reviewing/retake/approved) を持つ。</p>
-          <ul class="list-disc list-inside text-xs text-gray-500 mt-2 space-y-0.5">
-            <li>例: <strong>Composite</strong> (Sato 担当) / <strong>Lighting</strong> (Kato 担当) / <strong>MattePaint</strong></li>
-            <li>1 Task = 1 担当者 + バージョン履歴 (v001 / v002 / ...) + QC ステータス</li>
-            <li>Review/QC 提出 → SHOT 関係者 thread に通知 → Director Approve → status=approved</li>
-            <li>status: 🔵 open (未着手) → 🟡 in_progress (作業中) → 🟠 reviewing (Director 判定待ち) → 🔴 retake (差し戻し) → 🟢 approved (承認済)</li>
-          </ul>
-        </div>
-
-      </div>
-
-      <!-- まとめ図 -->
-      <div class="mt-6 bg-slate-50 rounded-xl p-4">
-        <p class="text-xs font-bold text-slate-600 mb-2">📐 階層イメージ (実例)</p>
-        <pre class="text-xs text-slate-700 leading-relaxed font-mono whitespace-pre-wrap">📁 marukome (Project)
-└── 🎞️ SEQ001 (オープニング)
-    └── 🎬 SHOT_001 (タイトルロゴ出現)
-        ├── ⚙️ Composite (Sato 担当・v005 Approved)
-        ├── ⚙️ Lighting (Kato 担当・v003 in_progress)
-        └── ⚙️ MattePaint (Sato 担当・v002 reviewing)</pre>
-      </div>
-
-      <!-- Score での表現 -->
-      <div class="mt-6 bg-indigo-50 rounded-xl p-4">
-        <p class="text-xs font-bold text-indigo-700 mb-2">🏷️ Score での階層表現</p>
-        <ul class="text-xs text-slate-700 space-y-1">
-          <li>• <strong>パンくず</strong> (画面上部): <code class="bg-white px-1 rounded">プロジェクト › marukome › SEQ001 › SHOT_001 › Composite › QC確認</code></li>
-          <li>• <strong>QC/Review 依頼通知 title</strong>: <code class="bg-white px-1 rounded">📌 Review 依頼: marukome / SEQ001 / SHOT_001 / Composite</code></li>
-          <li>• <strong>SHOT 関係者 thread 命名</strong>: SHOT 単位で 1 thread (Project + SEQ + SHOT で一意特定)</li>
-        </ul>
-      </div>
-    </section>
   </main>
-  <footer class="text-center text-gray-400 text-xs py-6">Score Tutorial — 機能リファレンス</footer>
+  <footer class="text-center text-gray-400 text-xs py-6">Score Tutorial — 機能リファレンス (2026-06-08 改訂)</footer>
+  <div id="lightbox" class="lightbox-overlay" onclick="closeLightbox()">
+    <img id="lightbox-img" src="" alt="">
+  </div>
   <script src="../js/nav.js"></script>
 </body>
 </html>

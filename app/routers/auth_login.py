@@ -70,6 +70,43 @@ def post_login(
     return response
 
 
+# 殿御命 2026-06-08: tutorial 自動撮影用 test login EP (mock 環境限定)
+@router.get("/__test_login")
+def test_login(user_id: int, next: str = "/dashboard"):
+    """CALENDAR_MOCK=1 限定: user_id 指定で cookie 発行 + redirect (tutorial 撮影専用)"""
+    if os.environ.get("CALENDAR_MOCK", "0") != "1":
+        return RedirectResponse(url="/login?error=test_login_disabled", status_code=303)
+    client = get_calendar_client()
+    user = None
+    try:
+        if hasattr(client, "get_users"):
+            for u in (client.get_users(actor_user_id=str(user_id)) or []):
+                if isinstance(u, dict) and (u.get("id") == user_id or u.get("user_id") == user_id):
+                    user = u; break
+    except Exception:
+        pass
+    if not user:
+        return RedirectResponse(url=f"/login?error=user_not_found&uid={user_id}", status_code=303)
+    email = user.get("email") or f"uid{user_id}@test"
+    token = create_score_token(email)
+    exp = get_next_5am_jst()
+    max_age = max(0, int((exp - datetime.now(timezone.utc)).total_seconds()))
+    # 加えて routine 提出済 cookie + 前日退勤済 localStorage 不可なので URL 経由は guard 通過困難
+    # → cookie で score_routine_done 設定 = routine skip
+    from datetime import timedelta as _td
+    _jst_today = (datetime.utcnow() + _td(hours=9)).isoformat(timespec="seconds")
+    # 殿御命 2026-06-08: 撮影用 _screenshot=1 を next URL に自動付与 (SSE skip)
+    next_url = next
+    if "?" in next_url:
+        next_url += "&_screenshot=1"
+    else:
+        next_url += "?_screenshot=1"
+    response = RedirectResponse(url=next_url, status_code=303)
+    response.set_cookie("score_token", token, httponly=True, samesite="lax", path="/", secure=False, max_age=max_age)
+    response.set_cookie("score_routine_done", _jst_today, httponly=False, samesite="lax", path="/", secure=False, max_age=max_age)
+    return response
+
+
 @router.post("/api/auth/logout")
 def post_logout():
     """Cookie削除 + /login へリダイレクト"""

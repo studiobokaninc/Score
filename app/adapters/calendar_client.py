@@ -97,8 +97,12 @@ class CalendarClient:
         if os.environ.get("CALENDAR_MOCK", "0") == "1":
             h = {"Authorization": f"Bearer {self.m2m_token}"}
         else:
-            token = self._get_admin_token()
-            h = {"Authorization": f"Bearer {token}"}
+            # 殿御命 2026-06-08: admin token 取得失敗 (SCORE_CALENDAR_ADMIN_* 未設定等) 時 m2m token に fallback
+            try:
+                token = self._get_admin_token()
+                h = {"Authorization": f"Bearer {token}"}
+            except Exception:
+                h = {"Authorization": f"Bearer {self.m2m_token}"}
         if actor_user_id is not None:
             calendar_uid = _to_calendar_uid(actor_user_id)
             if calendar_uid is not None:
@@ -120,7 +124,9 @@ class CalendarClient:
         resp = httpx.get(f"{self.base_url}/api/me", headers=self._headers(actor_user_id))
         resp.raise_for_status()
         d = resp.json()
-        name = d.get("name") or d.get("full_name") or d.get("username") or "ユーザ"
+        # 殿御命 2026-06-08: email から推測 fallback 追加 (Ryoji 等 name 欠落 user 対応)
+        _email_local = (d.get("email") or "").split("@")[0]
+        name = d.get("name") or d.get("full_name") or d.get("username") or _email_local or "ユーザ"
         return CalendarUser(
             user_id=d["id"],
             email=d["email"],

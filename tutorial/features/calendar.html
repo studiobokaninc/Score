@@ -3,7 +3,7 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>Score チュートリアル — 📅 Calendar</title>
+  <title>Score チュートリアル — 📅 Calendar (スケジュール)</title>
   <script src="https://cdn.tailwindcss.com"></script>
   <link rel="stylesheet" href="../css/style.css">
 </head>
@@ -13,38 +13,71 @@
       <a href="../index.html" class="text-purple-200 hover:text-white text-sm">← トップへ戻る</a>
     </div>
     <div class="max-w-5xl mx-auto mt-2">
-      <h1 class="text-3xl font-bold flex items-center gap-3">📅 Calendar</h1>
-      <p class="mt-2 text-purple-200">個人 / チーム / プロジェクト 別カレンダー。予定の追加・編集・参加者選択・ミーティングリンク設定が可能。</p>
+      <h1 class="text-3xl font-bold flex items-center gap-3">📅 Calendar (スケジュール)</h1>
     </div>
   </header>
   <main class="max-w-5xl mx-auto py-10 px-6 space-y-8">
-    <section class="bg-white rounded-2xl shadow p-6">
-      <h2 class="text-xl font-bold text-gray-800 mb-4">📸 画面</h2>
-      <div class="screenshot-wrap cursor-pointer" onclick="openLightbox(this)">
-        <img src="../images/admin/calendar.png" alt="Calendar 画面" loading="lazy" class="rounded-xl shadow-md w-full max-w-3xl mx-auto block">
-      </div>
+
+    <!-- 機能の目的 -->
+    <section class="bg-gradient-to-br from-purple-50 to-white border-2 border-purple-200 rounded-2xl p-6">
+      <h2 class="text-lg font-bold text-purple-800 mb-2">📘 この機能の目的</h2>
+      <p class="text-gray-700 leading-relaxed">スタジオ全体のマイルストーン・試写・納品日・mtg を月/週/日 ビューで可視化。リソース競合・日程過密を早期発見。</p>
     </section>
+
+    <section class="bg-white rounded-2xl shadow p-6">
+      <h2 class="text-xl font-bold text-gray-800 mb-4">📸 画面 (2 枚)</h2>
+      <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
+        <div class="bg-gray-50 rounded-xl p-4">
+          <p class="text-xs font-bold text-gray-700 mb-2">① Calendar 月/週ビュー</p>
+          <div class="screenshot-wrap cursor-pointer bg-white rounded-lg overflow-hidden border border-gray-200" onclick="openLightbox(this)">
+            <img src="../images/admin/calendar_unmasked.png" alt="① Calendar 月/週ビュー" loading="lazy" class="w-full h-auto block" onerror="this.onerror=null; this.src=&quot;data:image/svg+xml;utf8,&lt;svg xmlns='http://www.w3.org/2000/svg' width='640' height='360' viewBox='0 0 640 360'&gt;&lt;rect width='640' height='360' fill='%23f3f4f6'/&gt;&lt;text x='50%' y='45%' text-anchor='middle' font-size='40' font-family='sans-serif'&gt;📷&lt;/text&gt;&lt;text x='50%' y='60%' text-anchor='middle' font-size='20' fill='%239ca3af' font-family='sans-serif' font-weight='bold'&gt;撮影待ち&lt;/text&gt;&lt;/svg&gt;&quot;;">
+          </div>
+          <p class="text-xs text-gray-600 italic mt-2">佐藤 花子 のスケジュール — Meeting / Milestone / Deadline / Workshop / Task / General の filter 切替 + 月-週-日ビュー</p>
+        </div>
+        <div class="bg-gray-50 rounded-xl p-4">
+          <p class="text-xs font-bold text-gray-700 mb-2">② イベント詳細 modal (mtg リンク)<span class="ml-2 text-xs bg-amber-100 text-amber-700 rounded-full px-2 py-0.5 font-bold">撮影待ち</span></p>
+          <div class="screenshot-wrap cursor-pointer bg-white rounded-lg overflow-hidden border border-gray-200" onclick="openLightbox(this)">
+            <img src="../images/admin/calendar_event_modal.png" alt="② イベント詳細 modal (mtg リンク)" loading="lazy" class="w-full h-auto block" onerror="this.onerror=null; this.src=&quot;data:image/svg+xml;utf8,&lt;svg xmlns='http://www.w3.org/2000/svg' width='640' height='360' viewBox='0 0 640 360'&gt;&lt;rect width='640' height='360' fill='%23f3f4f6'/&gt;&lt;text x='50%' y='45%' text-anchor='middle' font-size='40' font-family='sans-serif'&gt;📷&lt;/text&gt;&lt;text x='50%' y='60%' text-anchor='middle' font-size='20' fill='%239ca3af' font-family='sans-serif' font-weight='bold'&gt;撮影待ち&lt;/text&gt;&lt;/svg&gt;&quot;;">
+          </div>
+          <p class="text-xs text-gray-600 italic mt-2">イベント click → modal 表示 — 時刻 / 場所 / 参加者 + 🎥 Zoom / Teams / Meet など mtg link button (殿御命 2026-06-08 改修)</p>
+        </div>
+      </div>
+      <p class="text-xs text-gray-500 italic text-center mt-4">📍 シナリオ: PM 太郎が桜咲く街 第 4 話 試写日 (6/15) と 別 CM 案件納品日 (6/16) が近接していることを発見 → 加藤 Lead に Lighting 完了予定を 1 日前倒し依頼。</p>
+    </section>
+
+    <!-- 主な機能 -->
     <section class="bg-white rounded-2xl shadow p-6">
       <h2 class="text-xl font-bold text-gray-800 mb-4">✨ 主な機能</h2>
       <ul class="list-disc list-inside space-y-2">
-<li class="text-gray-700 leading-relaxed"><strong>個人 / チーム / プロジェクト カレンダー</strong> — タブ切替で view 変更。</li>
-<li class="text-gray-700 leading-relaxed"><strong>予定の追加・編集</strong> — タイトル / 日時 / 場所 / 参加者 / ミーティングリンク / 説明文。</li>
-<li class="text-gray-700 leading-relaxed"><strong>参加者選択</strong> — Calendar API の user 一覧から選択。複数選択可。</li>
-<li class="text-gray-700 leading-relaxed"><strong>ミーティングリンク</strong> — Zoom/Meet 等の URL を直接登録。ダッシュボードに緑ボタンで反映される。</li>
-<li class="text-gray-700 leading-relaxed"><strong>イベント連動</strong> — review/QC 依頼の SHOT に紐付けて関連 task 自動 link。</li>
+        <li class="text-gray-700 leading-relaxed"><strong>3 ビュー切替</strong> — 月・週・日で表示密度切替</li>
+        <li class="text-gray-700 leading-relaxed"><strong>color 分け</strong> — マイルストーン (青) / 試写 (黄) / 納品日 (赤) / mtg (緑)</li>
+        <li class="text-gray-700 leading-relaxed"><strong>イベント click → 詳細 popup</strong> — 関連プロジェクト link 付き</li>
+        <li class="text-gray-700 leading-relaxed"><strong>予定追加 + 参加者選択</strong> — mtg 招待・自動 thread 作成</li>
+        <li class="text-gray-700 leading-relaxed"><strong>nibu Calendar BE 連携</strong> — Score Calendar 機能は nibu 殿御陣営 BE に依存</li>
       </ul>
     </section>
+
+    <!-- 桜咲く街 具体例 -->
+    <section class="bg-gradient-to-br from-pink-50 to-purple-50 border border-pink-200 rounded-2xl p-6">
+      <h2 class="text-lg font-bold text-pink-800 mb-2">🌸 使用例 — 架空 project「桜咲く街」</h2>
+      <p class="text-gray-700 leading-relaxed text-sm">PM 太郎が桜咲く街 第 4 話 試写日 (6/15) と 別 CM 案件納品日 (6/16) が近接していることを発見 → 加藤 Lead に Lighting 完了予定を 1 日前倒し依頼。</p>
+    </section>
+
+    <!-- 操作方法 -->
     <section class="bg-white rounded-2xl shadow p-6">
       <h2 class="text-xl font-bold text-gray-800 mb-4">🛠 操作方法</h2>
       <ol class="list-decimal list-inside space-y-2">
-<li class="text-gray-700 leading-relaxed">sidemenu 📅 Calendar → カレンダー画面。</li>
-<li class="text-gray-700 leading-relaxed">日付セル click → 新規イベント作成 dialog。</li>
-<li class="text-gray-700 leading-relaxed">既存イベント click → 編集 modal。</li>
-<li class="text-gray-700 leading-relaxed">参加者列に複数 user を選択 → ダッシュボードに反映。</li>
+        <li class="text-gray-700 leading-relaxed">サイドメニュー📅 → Calendar</li>
+        <li class="text-gray-700 leading-relaxed">月/週/日 button で切替</li>
+        <li class="text-gray-700 leading-relaxed">イベント click → popup で詳細 + プロジェクト link</li>
+        <li class="text-gray-700 leading-relaxed">「予定追加」 button → mtg 招待 + 参加者選択</li>
       </ol>
     </section>
   </main>
-  <footer class="text-center text-gray-400 text-xs py-6">Score Tutorial — 機能リファレンス</footer>
+  <footer class="text-center text-gray-400 text-xs py-6">Score Tutorial — 機能リファレンス (2026-06-08 改訂)</footer>
+  <div id="lightbox" class="lightbox-overlay" onclick="closeLightbox()">
+    <img id="lightbox-img" src="" alt="">
+  </div>
   <script src="../js/nav.js"></script>
 </body>
 </html>

@@ -3,7 +3,7 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>PM 1日業務動線 — Score Tutorial</title>
+  <title>PM (プロダクションマネージャー) 1日業務動線 — Score Tutorial</title>
   <script src="https://cdn.tailwindcss.com"></script>
   <link rel="stylesheet" href="../css/style.css">
 </head>
@@ -11,162 +11,292 @@
   <nav class="bg-white border-b px-6 py-3 flex items-center gap-4">
     <a href="../index.html" class="text-indigo-600 hover:text-indigo-800 text-sm">← トップに戻る</a>
     <span class="text-gray-400">/</span>
-    <span class="text-gray-700 font-medium">PM 1日業務動線</span>
+    <span class="text-gray-700 font-medium">PM (プロダクションマネージャー) 1日業務動線</span>
   </nav>
   <header class="bg-gradient-to-r from-blue-600 to-blue-700 text-white py-8 px-6">
-    <h1 class="text-2xl font-bold">📋 PM</h1>
+    <h1 class="text-2xl font-bold">📋 PM (プロダクションマネージャー)</h1>
     <p class="mt-1 text-blue-200">田中 太郎 の 1 日業務動線</p>
   </header>
   <main class="max-w-4xl mx-auto py-10 px-6">
 
-    <section class="stage">
+    <section class="bg-gradient-to-br from-blue-50 to-white border-2 border-blue-200 rounded-2xl p-6 mb-8">
+      <h2 class="text-lg font-bold text-blue-800 mb-3">📌 このロールが Score でできること</h2>
+      <ul class="space-y-2 text-gray-700">
+        <li class="flex items-start gap-2"><span class="text-blue-600 font-bold">▸</span><span>全プロジェクトの進捗・納品スケジュール 集約把握</span></li>
+        <li class="flex items-start gap-2"><span class="text-blue-600 font-bold">▸</span><span>全 SHOT 関係者 thread に自動 participants として含まれる (連絡漏れ防止)</span></li>
+        <li class="flex items-start gap-2"><span class="text-blue-600 font-bold">▸</span><span>納品チェックリストで全 SHOT が Approved 済か確認してから提出</span></li>
+        <li class="flex items-start gap-2"><span class="text-blue-600 font-bold">▸</span><span>カレンダー横断ビューでリソース競合・日程過密を早期発見</span></li>
+        <li class="flex items-start gap-2"><span class="text-blue-600 font-bold">▸</span><span>通知優先度・配信経路 (Push/SSE/badge) の使い分けで通知過多防止</span></li>
+      </ul>
+    </section>
+
+    <section class="bg-amber-50 border-l-4 border-amber-400 rounded-r-xl p-5 mb-10">
+      <h3 class="text-sm font-bold text-amber-800 mb-2">💡 1 日の流れ — 架空 project「桜咲く街」(TV アニメ・第 3 話 制作中) を例に</h3>
+      <p class="text-sm text-gray-700 leading-relaxed">PM 太郎は「桜咲く街」第 3 話制作中。朝のルーティン提出 → ダッシュボードで全プロジェクト進捗把握 → ボトルネック SHOT 特定 → 納品予定確認 → 各 thread で Director/Lead 連絡 → 退勤報告 まで Score 1 つで完結。</p>
+    </section>
+
+    <section class="stage" id="stage-1">
       <div class="flex items-center gap-3 mb-4">
         <span class="stage-num bg-blue-100 text-blue-700 font-bold px-3 py-1 rounded-full text-sm">Stage 1</span>
-        <h2 class="text-xl font-bold text-gray-800">ログイン・朝のルーティン確認</h2>
+        <h2 class="text-xl font-bold text-gray-800">ログイン・朝のルーティン</h2>
       </div>
       <div class="screenshot-wrap cursor-pointer" onclick="openLightbox(this)">
-        <img src="../images/pm/routine.png" alt="朝のルーティン確認" loading="lazy"
-             class="rounded-xl shadow-md w-full max-w-3xl">
+        <img src="../images/admin/dashboard_unmasked.png" alt="ログイン・朝のルーティン" loading="lazy" class="rounded-xl shadow-md w-full max-w-3xl">
       </div>
-      <div class="description mt-4 bg-white rounded-xl p-5 shadow-sm">
-        <p class="text-gray-700 leading-relaxed">Score にログイン後、まず「ルーティン」画面を確認します。本日の定例タスクや期限が近い承認待ちアイテムが一覧表示されます。PM は毎朝この画面から 1 日の優先度を把握します。</p>
-        <ul class="mt-3 list-disc list-inside text-sm text-gray-500 space-y-1">
-          <li>未処理ルーティンは赤色でハイライト表示</li>
-          <li>完了済みルーティンにチェックを入れると非表示に切り替え可能</li>
-        </ul>
+      <p class="text-xs text-gray-500 italic mt-2 mb-3">📸 画面例: PM 太郎は出勤と同時にログイン → 体調🙂選択 → 「本日のタスク」確認 → 提出</p>
+      <div class="description bg-white rounded-xl p-5 shadow-sm space-y-3">
+        <div>
+          <span class="inline-block bg-blue-50 text-blue-700 text-xs font-bold rounded-full px-2 py-0.5 mr-2">🎯 目的</span>
+          <span class="text-gray-700">今日の優先タスクと体調を 30 秒で把握する</span>
+        </div>
+        <div>
+          <span class="inline-block bg-emerald-50 text-emerald-700 text-xs font-bold rounded-full px-2 py-0.5 mr-2">✅ 結果</span>
+          <span class="text-gray-700">本日対応すべき QC 依頼・締切迫る task が一覧化され、Dashboard に出勤時刻が記録される</span>
+        </div>
+        <div class="border-t pt-3">
+          <span class="inline-block text-amber-700 text-xs font-bold mr-2">💡 ポイント</span>
+          <span class="text-gray-600 text-sm">提出後 1 日 1 回のみ表示。 翌 5am JST 以降 再表示</span>
+        </div>
+        <div class="bg-amber-50 border-l-4 border-amber-400 rounded-r-xl p-3 mt-3">
+          <p class="text-xs font-bold text-amber-800 mb-1">💬 例えば</p>
+          <p class="text-sm text-gray-700 leading-relaxed">例えば 9:43 にログインすると Dashboard 右上に「🕘 出勤 09:43」 chip が表示される。 体調が🤒(風邪) なら 後で 振り返り時に稼働分析の参考となる。</p>
+        </div>
       </div>
     </section>
 
-    <section class="stage">
+    <section class="stage" id="stage-2">
       <div class="flex items-center gap-3 mb-4">
         <span class="stage-num bg-blue-100 text-blue-700 font-bold px-3 py-1 rounded-full text-sm">Stage 2</span>
-        <h2 class="text-xl font-bold text-gray-800">PM ダッシュボード確認</h2>
+        <h2 class="text-xl font-bold text-gray-800">PM ダッシュボード</h2>
       </div>
       <div class="screenshot-wrap cursor-pointer" onclick="openLightbox(this)">
-        <img src="../images/pm/pm_dashboard.png" alt="PM ダッシュボード" loading="lazy"
-             class="rounded-xl shadow-md w-full max-w-3xl">
+        <img src="../images/admin/dashboard_unmasked.png" alt="PM ダッシュボード" loading="lazy" class="rounded-xl shadow-md w-full max-w-3xl">
       </div>
-      <div class="description mt-4 bg-white rounded-xl p-5 shadow-sm">
-        <p class="text-gray-700 leading-relaxed">PM ダッシュボードでは、担当プロジェクト全体の進捗をひと目で把握できます。各プロジェクトの進捗率・直近の納品予定・ボトルネックになっているショットが集約表示されます。</p>
-        <ul class="mt-3 list-disc list-inside text-sm text-gray-500 space-y-1">
-          <li>進捗率が 80% 未満かつ納品まで 7 日以内のプロジェクトは警告マーク付き</li>
-          <li>ダッシュボードから直接プロジェクト詳細へジャンプ可能</li>
-        </ul>
+      <p class="text-xs text-gray-500 italic mt-2 mb-3">📸 画面例: 桜咲く街 第 3 話 進捗 65% (警告) → クリックで詳細遷移</p>
+      <div class="description bg-white rounded-xl p-5 shadow-sm space-y-3">
+        <div>
+          <span class="inline-block bg-blue-50 text-blue-700 text-xs font-bold rounded-full px-2 py-0.5 mr-2">🎯 目的</span>
+          <span class="text-gray-700">担当全プロジェクト (桜咲く街 + 他 2 件) の進捗をひと目で把握</span>
+        </div>
+        <div>
+          <span class="inline-block bg-emerald-50 text-emerald-700 text-xs font-bold rounded-full px-2 py-0.5 mr-2">✅ 結果</span>
+          <span class="text-gray-700">進捗 80% 未満 + 納品 7 日以内のプロジェクトに警告マーク表示・ボトルネック SHOT が浮上</span>
+        </div>
+        <div class="border-t pt-3">
+          <span class="inline-block text-amber-700 text-xs font-bold mr-2">💡 ポイント</span>
+          <span class="text-gray-600 text-sm">📥 受信 QC/Review 依頼 section で SHOT thread 経由の連絡も統合表示</span>
+        </div>
+        <div class="bg-amber-50 border-l-4 border-amber-400 rounded-r-xl p-3 mt-3">
+          <p class="text-xs font-bold text-amber-800 mb-1">💬 例えば</p>
+          <p class="text-sm text-gray-700 leading-relaxed">例えば「桜咲く街 第 3 話」が進捗 65% で納品まで残 25 日なら警告色で表示。 並行する「夏祭り CM 案件」 は進捗 95% で安心、と一覧で即判断できる。</p>
+        </div>
       </div>
     </section>
 
-    <section class="stage">
+    <section class="stage" id="stage-3">
       <div class="flex items-center gap-3 mb-4">
         <span class="stage-num bg-blue-100 text-blue-700 font-bold px-3 py-1 rounded-full text-sm">Stage 3</span>
-        <h2 class="text-xl font-bold text-gray-800">プロジェクト一覧・進捗確認</h2>
+        <h2 class="text-xl font-bold text-gray-800">プロジェクト一覧</h2>
       </div>
       <div class="screenshot-wrap cursor-pointer" onclick="openLightbox(this)">
-        <img src="../images/pm/projects.png" alt="プロジェクト一覧" loading="lazy"
-             class="rounded-xl shadow-md w-full max-w-3xl">
+        <img src="../images/admin/projects_unmasked.png" alt="プロジェクト一覧" loading="lazy" class="rounded-xl shadow-md w-full max-w-3xl">
       </div>
-      <div class="description mt-4 bg-white rounded-xl p-5 shadow-sm">
-        <p class="text-gray-700 leading-relaxed">プロジェクト一覧画面では、全担当プロジェクトのステータスと進捗率を一覧で確認します。ステータスフィルタを使い「進行中」「完了待ち」などに絞り込むことができます。</p>
-        <ul class="mt-3 list-disc list-inside text-sm text-gray-500 space-y-1">
-          <li>ステータス・納品日・担当 Director でソート可能</li>
-          <li>各行クリックでプロジェクト詳細へ遷移</li>
-        </ul>
+      <p class="text-xs text-gray-500 italic mt-2 mb-3">📸 画面例: 「桜咲く街」 行 click → 第 3 話制作画面へ</p>
+      <div class="description bg-white rounded-xl p-5 shadow-sm space-y-3">
+        <div>
+          <span class="inline-block bg-blue-50 text-blue-700 text-xs font-bold rounded-full px-2 py-0.5 mr-2">🎯 目的</span>
+          <span class="text-gray-700">ステータスフィルタで「進行中」「完了待ち」に絞り、対応プロジェクトを選別</span>
+        </div>
+        <div>
+          <span class="inline-block bg-emerald-50 text-emerald-700 text-xs font-bold rounded-full px-2 py-0.5 mr-2">✅ 結果</span>
+          <span class="text-gray-700">ソートと絞込みで本日対応すべきプロジェクトが特定される</span>
+        </div>
+        <div class="border-t pt-3">
+          <span class="inline-block text-amber-700 text-xs font-bold mr-2">💡 ポイント</span>
+          <span class="text-gray-600 text-sm">各行 click でプロジェクト詳細へ即遷移</span>
+        </div>
+        <div class="bg-amber-50 border-l-4 border-amber-400 rounded-r-xl p-3 mt-3">
+          <p class="text-xs font-bold text-amber-800 mb-1">💬 例えば</p>
+          <p class="text-sm text-gray-700 leading-relaxed">例えば 4 プロジェクトを抱えている時、 「納品日 昇順」 sort をかけると 桜咲く街 第 2 話 (残 30 日) が先頭に来る。 → 最優先 PJ を即特定。</p>
+        </div>
       </div>
     </section>
 
-    <section class="stage">
+    <section class="stage" id="stage-4">
       <div class="flex items-center gap-3 mb-4">
         <span class="stage-num bg-blue-100 text-blue-700 font-bold px-3 py-1 rounded-full text-sm">Stage 4</span>
-        <h2 class="text-xl font-bold text-gray-800">プロジェクト詳細・ショット状況</h2>
+        <h2 class="text-xl font-bold text-gray-800">プロジェクト詳細・SHOT 状況</h2>
       </div>
       <div class="screenshot-wrap cursor-pointer" onclick="openLightbox(this)">
-        <img src="../images/pm/project_detail_1.png" alt="プロジェクト詳細" loading="lazy"
-             class="rounded-xl shadow-md w-full max-w-3xl">
+        <img src="../images/admin/projects_unmasked.png" alt="プロジェクト詳細・SHOT 状況" loading="lazy" class="rounded-xl shadow-md w-full max-w-3xl">
       </div>
-      <div class="description mt-4 bg-white rounded-xl p-5 shadow-sm">
-        <p class="text-gray-700 leading-relaxed">プロジェクト詳細では、ショット単位の進捗・QC ステータス・担当者を確認します。リテイクが多発しているショットや作業が滞っているショットを特定し、Director や Lead に対応を依頼します。</p>
-        <ul class="mt-3 list-disc list-inside text-sm text-gray-500 space-y-1">
-          <li>ショット一覧は QC ステータス (Pending / Reviewing / Approved / Rejected) でフィルタ可能</li>
-          <li>ショット行クリックでショット詳細へ遷移し、コメント履歴を確認できる</li>
-        </ul>
+      <p class="text-xs text-gray-500 italic mt-2 mb-3">📸 画面例: 桜咲く街 sq01 c05 が Retake 2 回連続 → 加藤 Lead に Lighting 確認依頼</p>
+      <div class="description bg-white rounded-xl p-5 shadow-sm space-y-3">
+        <div>
+          <span class="inline-block bg-blue-50 text-blue-700 text-xs font-bold rounded-full px-2 py-0.5 mr-2">🎯 目的</span>
+          <span class="text-gray-700">SHOT 単位で QC ステータス・担当者・リテイク状況を確認し対応依頼</span>
+        </div>
+        <div>
+          <span class="inline-block bg-emerald-50 text-emerald-700 text-xs font-bold rounded-full px-2 py-0.5 mr-2">✅ 結果</span>
+          <span class="text-gray-700">リテイク多発 SHOT (例: sq01 c05) を特定し Director/Lead に対応依頼可能</span>
+        </div>
+        <div class="border-t pt-3">
+          <span class="inline-block text-amber-700 text-xs font-bold mr-2">💡 ポイント</span>
+          <span class="text-gray-600 text-sm">QC フィルタ (Pending/Reviewing/Approved/Rejected) で絞込み</span>
+        </div>
+        <div class="bg-amber-50 border-l-4 border-amber-400 rounded-r-xl p-3 mt-3">
+          <p class="text-xs font-bold text-amber-800 mb-1">💬 例えば</p>
+          <p class="text-sm text-gray-700 leading-relaxed">例えば sq01 c05 で Retake が 2 回連続発生していると、 PM 太郎は SHOT 詳細を確認 → 加藤 Lead に「Lighting 観点で技術的問題ないか」相談 → 山田 Director と方針すり合わせ会議を設定。</p>
+        </div>
       </div>
     </section>
 
-    <section class="stage">
+    <section class="stage" id="stage-5">
       <div class="flex items-center gap-3 mb-4">
         <span class="stage-num bg-blue-100 text-blue-700 font-bold px-3 py-1 rounded-full text-sm">Stage 5</span>
         <h2 class="text-xl font-bold text-gray-800">納品管理</h2>
       </div>
       <div class="screenshot-wrap cursor-pointer" onclick="openLightbox(this)">
-        <img src="../images/pm/pm_delivery.png" alt="納品管理" loading="lazy"
-             class="rounded-xl shadow-md w-full max-w-3xl">
+        <img src="../images/admin/projects_unmasked.png" alt="納品管理" loading="lazy" class="rounded-xl shadow-md w-full max-w-3xl">
       </div>
-      <div class="description mt-4 bg-white rounded-xl p-5 shadow-sm">
-        <p class="text-gray-700 leading-relaxed">納品管理画面では、納品物の登録・納品ステータス管理・クライアントへの提出記録を行います。PM は最終確認後、「納品完了」ボタンを押すことでプロジェクトを納品済み状態に遷移させます。</p>
-        <ul class="mt-3 list-disc list-inside text-sm text-gray-500 space-y-1">
-          <li>納品チェックリストで全ショットが Approved 済みか確認してから提出</li>
-          <li>提出後はクライアントへの通知メールが自動送信</li>
-        </ul>
+      <p class="text-xs text-gray-500 italic mt-2 mb-3">📸 画面例: 桜咲く街 第 2 話 全 24 SHOT Approved → 納品提出 → クライアント自動通知</p>
+      <div class="description bg-white rounded-xl p-5 shadow-sm space-y-3">
+        <div>
+          <span class="inline-block bg-blue-50 text-blue-700 text-xs font-bold rounded-full px-2 py-0.5 mr-2">🎯 目的</span>
+          <span class="text-gray-700">全 SHOT が Approved 済みか最終確認してクライアントへ提出</span>
+        </div>
+        <div>
+          <span class="inline-block bg-emerald-50 text-emerald-700 text-xs font-bold rounded-full px-2 py-0.5 mr-2">✅ 結果</span>
+          <span class="text-gray-700">「納品完了」 click でプロジェクト納品済状態へ遷移・クライアント通知自動送信</span>
+        </div>
+        <div class="border-t pt-3">
+          <span class="inline-block text-amber-700 text-xs font-bold mr-2">💡 ポイント</span>
+          <span class="text-gray-600 text-sm">1 SHOT でも未 Approved あれば提出 button 非活性</span>
+        </div>
+        <div class="bg-amber-50 border-l-4 border-amber-400 rounded-r-xl p-3 mt-3">
+          <p class="text-xs font-bold text-amber-800 mb-1">💬 例えば</p>
+          <p class="text-sm text-gray-700 leading-relaxed">例えば 第 2 話 全 24 SHOT のうち sq03 c08 のみ Reviewing 中の場合、 「納品完了」 button は灰色で押せない。 sq03 c08 が Approved になった瞬間 button が活性化する仕組み。</p>
+        </div>
       </div>
     </section>
 
-    <section class="stage">
+    <section class="stage" id="stage-6">
       <div class="flex items-center gap-3 mb-4">
         <span class="stage-num bg-blue-100 text-blue-700 font-bold px-3 py-1 rounded-full text-sm">Stage 6</span>
-        <h2 class="text-xl font-bold text-gray-800">カレンダー・スケジュール確認</h2>
+        <h2 class="text-xl font-bold text-gray-800">カレンダー・スケジュール</h2>
       </div>
       <div class="screenshot-wrap cursor-pointer" onclick="openLightbox(this)">
-        <img src="../images/pm/calendar.png" alt="カレンダー" loading="lazy"
-             class="rounded-xl shadow-md w-full max-w-3xl">
+        <img src="../images/admin/calendar_unmasked.png" alt="カレンダー・スケジュール" loading="lazy" class="rounded-xl shadow-md w-full max-w-3xl">
       </div>
-      <div class="description mt-4 bg-white rounded-xl p-5 shadow-sm">
-        <p class="text-gray-700 leading-relaxed">カレンダー画面でスタジオ全体のスケジュールを確認します。マイルストーン・試写・納品日が色分けで表示されます。PM はこの画面でリソース競合や日程過密を早期に発見し、調整します。</p>
-        <ul class="mt-3 list-disc list-inside text-sm text-gray-500 space-y-1">
-          <li>月・週・日の 3 ビュー切替対応</li>
-          <li>イベントクリックで詳細ポップアップと関連プロジェクトへのリンク表示</li>
-        </ul>
+      <p class="text-xs text-gray-500 italic mt-2 mb-3">📸 画面例: 桜咲く街 第 4 話 試写日 (6/15) と 別プロジェクト納品日 (6/16) が近接 → リソース調整</p>
+      <div class="description bg-white rounded-xl p-5 shadow-sm space-y-3">
+        <div>
+          <span class="inline-block bg-blue-50 text-blue-700 text-xs font-bold rounded-full px-2 py-0.5 mr-2">🎯 目的</span>
+          <span class="text-gray-700">スタジオ全体のマイルストーン・試写・納品日をビジュアル把握</span>
+        </div>
+        <div>
+          <span class="inline-block bg-emerald-50 text-emerald-700 text-xs font-bold rounded-full px-2 py-0.5 mr-2">✅ 結果</span>
+          <span class="text-gray-700">リソース競合・日程過密を早期発見し調整可能</span>
+        </div>
+        <div class="border-t pt-3">
+          <span class="inline-block text-amber-700 text-xs font-bold mr-2">💡 ポイント</span>
+          <span class="text-gray-600 text-sm">月/週/日 3 ビュー切替 + イベント click で詳細 popup</span>
+        </div>
+        <div class="bg-amber-50 border-l-4 border-amber-400 rounded-r-xl p-3 mt-3">
+          <p class="text-xs font-bold text-amber-800 mb-1">💬 例えば</p>
+          <p class="text-sm text-gray-700 leading-relaxed">例えば 6 月 15 日に 桜咲く街 第 4 話 試写 + 6 月 16 日に CM 案件納品が重なる場合、 月ビューで赤色イベントが連続するのが一目瞭然。 → 1 週間前に Lead/User の稼働を再配分。</p>
+        </div>
       </div>
     </section>
 
-    <section class="stage">
+    <section class="stage" id="stage-7">
       <div class="flex items-center gap-3 mb-4">
         <span class="stage-num bg-blue-100 text-blue-700 font-bold px-3 py-1 rounded-full text-sm">Stage 7</span>
+        <h2 class="text-xl font-bold text-gray-800">メッセージ・SHOT 関係者 thread</h2>
+      </div>
+      <div class="screenshot-wrap cursor-pointer" onclick="openLightbox(this)">
+        <img src="../images/admin/messages_unmasked.png" alt="メッセージ・SHOT 関係者 thread" loading="lazy" class="rounded-xl shadow-md w-full max-w-3xl">
+      </div>
+      <p class="text-xs text-gray-500 italic mt-2 mb-3">📸 画面例: 山田 Director → 佐藤 User の sq01 c05 QC thread に PM 太郎も自動参加</p>
+      <div class="description bg-white rounded-xl p-5 shadow-sm space-y-3">
+        <div>
+          <span class="inline-block bg-blue-50 text-blue-700 text-xs font-bold rounded-full px-2 py-0.5 mr-2">🎯 目的</span>
+          <span class="text-gray-700">全 SHOT 関係者 thread に PM 自動参加で進捗連絡を集約</span>
+        </div>
+        <div>
+          <span class="inline-block bg-emerald-50 text-emerald-700 text-xs font-bold rounded-full px-2 py-0.5 mr-2">✅ 結果</span>
+          <span class="text-gray-700">QC/Review 依頼の宛先は自動補完・本文中 URL は緑ボタン化で即遷移</span>
+        </div>
+        <div class="border-t pt-3">
+          <span class="inline-block text-amber-700 text-xs font-bold mr-2">💡 ポイント</span>
+          <span class="text-gray-600 text-sm">メッセージ page 以外で thread link click すると右からスライドイン</span>
+        </div>
+        <div class="bg-amber-50 border-l-4 border-amber-400 rounded-r-xl p-3 mt-3">
+          <p class="text-xs font-bold text-amber-800 mb-1">💬 例えば</p>
+          <p class="text-sm text-gray-700 leading-relaxed">例えば 佐藤 User が sq01 c05 を QC 提出すると、 PM 太郎は何もしなくても自動的に thread participants に追加され、 Director と User のやり取りを 全部 横で見られる。 → 後から「あの SHOT どうなった?」 と聞き直す必要なし。</p>
+        </div>
+      </div>
+    </section>
+
+    <section class="stage" id="stage-8">
+      <div class="flex items-center gap-3 mb-4">
+        <span class="stage-num bg-blue-100 text-blue-700 font-bold px-3 py-1 rounded-full text-sm">Stage 8</span>
         <h2 class="text-xl font-bold text-gray-800">退勤報告</h2>
       </div>
       <div class="screenshot-wrap cursor-pointer" onclick="openLightbox(this)">
-        <img src="../images/pm/exit_report.png" alt="[撮影予定: exit_report]" loading="lazy"
-             class="rounded-xl shadow-md w-full max-w-3xl">
+        <img src="../images/admin/exit_report_unmasked.png" alt="退勤報告" loading="lazy" class="rounded-xl shadow-md w-full max-w-3xl">
       </div>
-      <div class="description mt-4 bg-white rounded-xl p-5 shadow-sm">
-        <p class="text-gray-700 leading-relaxed">退勤前に「退勤報告」を提出します。本日の作業内容・明日の予定・引き継ぎ事項を記入し、送信します。提出後、チームメンバーに通知が届き、引き継ぎがスムーズになります。</p>
-        <ul class="mt-3 list-disc list-inside text-sm text-gray-500 space-y-1">
-          <li>退勤報告を提出しないとログアウトの確認ダイアログが表示される</li>
-          <li>過去の退勤報告は「退勤報告履歴」から参照可能</li>
-        </ul>
+      <p class="text-xs text-gray-500 italic mt-2 mb-3">📸 画面例: PM 太郎「明日朝一で桜咲く街 sq02 全 SHOT QC 状況確認予定」 と記入し提出</p>
+      <div class="description bg-white rounded-xl p-5 shadow-sm space-y-3">
+        <div>
+          <span class="inline-block bg-blue-50 text-blue-700 text-xs font-bold rounded-full px-2 py-0.5 mr-2">🎯 目的</span>
+          <span class="text-gray-700">本日作業内容・明日予定・引き継ぎ事項を提出し チームに共有</span>
+        </div>
+        <div>
+          <span class="inline-block bg-emerald-50 text-emerald-700 text-xs font-bold rounded-full px-2 py-0.5 mr-2">✅ 結果</span>
+          <span class="text-gray-700">翌日 PM/Director の引き継ぎがスムーズ・未提出時はログアウト確認 dialog</span>
+        </div>
+        <div class="border-t pt-3">
+          <span class="inline-block text-amber-700 text-xs font-bold mr-2">💡 ポイント</span>
+          <span class="text-gray-600 text-sm">前日退勤未提出だと翌朝 routine 前に exit_report 強制表示</span>
+        </div>
+        <div class="bg-amber-50 border-l-4 border-amber-400 rounded-r-xl p-3 mt-3">
+          <p class="text-xs font-bold text-amber-800 mb-1">💬 例えば</p>
+          <p class="text-sm text-gray-700 leading-relaxed">例えば 木曜退勤時に「金曜朝一で sq02 全 SHOT QC 状況確認・午後 14:00 に山田 Director と次話の打合せ」 と記入。 翌朝 5am 以降ログイン時、 ルーティン画面の「明日の予定」 欄にそのまま反映される。</p>
+        </div>
       </div>
     </section>
 
-  
-    <section class="stage">
-        <span class="stage-num bg-red-100 text-red-700 font-bold px-3 py-1 rounded-full text-sm">Stage 8</span>
-        <h3 class="text-xl font-bold text-gray-800 mt-2 mb-3">💬 メッセージ — SHOT 関係者 thread + 1対1 DM</h3>
-      <div class="screenshot-wrap cursor-pointer" onclick="openLightbox(this)">
-        <img src="../images/pm/messages.png" alt="💬 メッセージ — SHOT 関係者 thread + 1対1 DM" loading="lazy" class="rounded-lg border border-gray-200">
+    <section class="stage" id="stage-9">
+      <div class="flex items-center gap-3 mb-4">
+        <span class="stage-num bg-blue-100 text-blue-700 font-bold px-3 py-1 rounded-full text-sm">Stage 9</span>
+        <h2 class="text-xl font-bold text-gray-800">通知設定</h2>
       </div>
-        <p class="text-gray-700 leading-relaxed">PM は全 SHOT 関係者 thread に自動 participants として含まれる。各 thread に進捗関連 DM が集約され、QC/Review 依頼の宛先は自動補完。本文中の QC ビューア URL は緑ボタン化されており即遷移。</p>
-    </section>
-
-  
-    <section class="stage">
-        <span class="stage-num bg-red-100 text-red-700 font-bold px-3 py-1 rounded-full text-sm">Stage 9</span>
-        <h3 class="text-xl font-bold text-gray-800 mt-2 mb-3">⚙️ 通知設定 — Push / SSE / 画面 badge の三重立て</h3>
       <div class="screenshot-wrap cursor-pointer" onclick="openLightbox(this)">
-        <img src="../images/pm/settings_notifications.png" alt="⚙️ 通知設定 — Push / SSE / 画面 badge の三重立て" loading="lazy" class="rounded-lg border border-gray-200">
+        <img src="../images/admin/notif_settings_unmasked.png" alt="通知設定" loading="lazy" class="rounded-xl shadow-md w-full max-w-3xl">
       </div>
-        <p class="text-gray-700 leading-relaxed">PM は全 SHOT の通知が届くため、Push は重要度高 (Review 依頼/mention) に絞り、SHOT thread 投稿は SSE のみで在席時のみ受信、といった配信経路の使い分けで通知過多を防止。</p>
+      <p class="text-xs text-gray-500 italic mt-2 mb-3">📸 画面例: 桜咲く街 関連通知は Push ON・他プロジェクトは SSE のみに絞る</p>
+      <div class="description bg-white rounded-xl p-5 shadow-sm space-y-3">
+        <div>
+          <span class="inline-block bg-blue-50 text-blue-700 text-xs font-bold rounded-full px-2 py-0.5 mr-2">🎯 目的</span>
+          <span class="text-gray-700">全 SHOT 通知が届くため Push/SSE/badge の使い分けで通知過多防止</span>
+        </div>
+        <div>
+          <span class="inline-block bg-emerald-50 text-emerald-700 text-xs font-bold rounded-full px-2 py-0.5 mr-2">✅ 結果</span>
+          <span class="text-gray-700">重要度高 (Review 依頼/mention) のみ Push・SHOT thread 投稿は SSE 在席時のみ</span>
+        </div>
+        <div class="border-t pt-3">
+          <span class="inline-block text-amber-700 text-xs font-bold mr-2">💡 ポイント</span>
+          <span class="text-gray-600 text-sm">Web Push (VAPID + SW root scope) は HTTPS or localhost 必須</span>
+        </div>
+        <div class="bg-amber-50 border-l-4 border-amber-400 rounded-r-xl p-3 mt-3">
+          <p class="text-xs font-bold text-amber-800 mb-1">💬 例えば</p>
+          <p class="text-sm text-gray-700 leading-relaxed">例えば 1 日に 50 件以上 SHOT thread 投稿が届く PM の場合、 全 Push にすると スマホが鳴り続ける。 → qc_request カテゴリのみ Push、 通常投稿は SSE (画面開いてる時だけ) に設定すると 集中力維持できる。</p>
+        </div>
+      </div>
     </section>
 
   </main>
-  <!-- lightbox overlay -->
   <div id="lightbox" class="lightbox-overlay" onclick="closeLightbox()">
     <img id="lightbox-img" src="" alt="">
   </div>

@@ -58,7 +58,7 @@
           {# 殿御命 2026-06-05: フレームプレビュー = 実 video 連携 (latest_asset.mp4) + canvas 重ね #}
           {% set _bn = (latest_asset.file_path or '').split('/')[-1] if latest_asset else '' %}
           {% set _ext = _bn.lower().split('.')[-1] if _bn and '.' in _bn else '' %}
-          {% set _url = ('http://192.168.44.253:8001/static/assets/' ~ _bn) if _bn else '' %}
+          {% set _url = (('/static/assets/' ~ _bn) if (demo_mode or 'sample_' in _bn) else ('http://192.168.44.253:8001/static/assets/' ~ _bn)) if _bn else '' %}
           <div id="frame-preview" class="relative aspect-video bg-slate-900 rounded-2xl overflow-hidden">
             {% if latest_asset and _ext in ('mp4','mov','webm','m4v') %}
               <video id="qc-video" src="{{ _url }}" preload="auto" playsinline class="absolute inset-0 w-full h-full object-contain bg-black"></video>

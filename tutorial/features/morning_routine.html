@@ -1,0 +1,176 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Score チュートリアル — 🌅 1 日のスタート (ログイン〜ダッシュボード)</title>
+  <script src="https://cdn.tailwindcss.com"></script>
+  <link rel="stylesheet" href="../css/style.css">
+  <style>
+    .step-card { position: relative; }
+    .step-card::after {
+      content: "";
+      position: absolute;
+      left: 1.75rem;
+      top: 100%;
+      width: 2px;
+      height: 24px;
+      background: linear-gradient(to bottom, rgba(99,102,241,0.7), rgba(99,102,241,0.2));
+    }
+    .step-card.last::after { display: none; }
+  </style>
+</head>
+<body class="bg-gradient-to-br from-amber-50 via-orange-50 to-rose-50 min-h-screen">
+  <header class="bg-gradient-to-r from-amber-500 via-orange-500 to-rose-500 text-white py-8 px-6">
+    <div class="max-w-4xl mx-auto flex items-center gap-4">
+      <a href="../index.html" class="text-white/80 hover:text-white text-sm">← トップへ戻る</a>
+    </div>
+    <div class="max-w-4xl mx-auto mt-2">
+      <h1 class="text-3xl font-bold flex items-center gap-3">🌅 1 日のスタート — ログイン から ダッシュボード まで</h1>
+      <p class="mt-2 text-amber-100">Score を開いてから業務開始するまでの 朝の routine を順番に解説</p>
+    </div>
+  </header>
+  <main class="max-w-4xl mx-auto py-10 px-6">
+
+    <!-- 概要 -->
+    <section class="bg-white rounded-2xl shadow p-6 mb-8">
+      <h2 class="text-lg font-bold text-amber-800 mb-2">📘 朝の routine とは</h2>
+      <p class="text-gray-700 leading-relaxed">
+        Score では「ログインしてすぐ業務 page に行く」 のではなく、 <strong>毎朝 1 度だけ ルーティン提出</strong> を経由してから ダッシュボードに到達します。
+        これによって <strong>出勤時刻が自動記録</strong> され、 PM/Lead/Director も「誰が何時に出勤して稼働中か」 を即把握できます。
+        加えて <strong>前日退勤報告が未提出</strong>の場合は、 先に退勤報告 page に強制誘導されるため <em>稼働記録の抜け漏れ</em> を防ぎます。
+      </p>
+      <div class="bg-amber-50 border-l-4 border-amber-400 rounded-r-xl p-3 mt-4">
+        <p class="text-xs font-bold text-amber-800 mb-1">💡 毎日 表示されません</p>
+        <p class="text-sm text-gray-700">提出後は cookie に記録され、 <strong>翌 5am JST まで再表示されません</strong>。同日中の再ログインは即ダッシュボード直行です (殿御命 2026-06-05 改善)。</p>
+      </div>
+    </section>
+
+    <!-- 登場人物 -->
+    <section class="bg-white rounded-2xl shadow p-6 mb-8">
+      <h2 class="text-lg font-bold text-gray-800 mb-3">📍 この例で使用する人物</h2>
+      <div class="bg-gradient-to-br from-pink-50 to-purple-50 rounded-xl p-4">
+        <p class="text-2xl mb-1">🖥️</p>
+        <p class="font-bold text-gray-800">佐藤 花子 (User)</p>
+        <p class="text-xs text-gray-600">桜咲く街 sq01 c05 担当・本日 9:43 に出勤予定</p>
+      </div>
+    </section>
+
+    <!-- Step 1: ログイン -->
+    <section class="step-card bg-white rounded-2xl shadow-lg border-l-8 border-amber-400 p-6 mb-8">
+      <div class="flex items-start gap-4">
+        <div class="bg-amber-100 text-amber-700 font-black rounded-full w-12 h-12 flex items-center justify-center text-lg flex-shrink-0">1</div>
+        <div class="flex-1">
+          <h3 class="text-xl font-bold text-gray-800 mb-2">🔑 ログイン</h3>
+          <p class="text-gray-700 mb-3">ブラウザで Score URL を開き、 email + password で認証します。 認証成功 → cookie に <code>score_token</code> 発行 (次 5am JST まで有効)。</p>
+          <div class="bg-amber-50 rounded-lg p-3 mb-3">
+            <p class="text-xs font-bold text-amber-800 mb-1">🔧 サーバ側 判定</p>
+            <ul class="text-xs text-gray-700 space-y-1 list-disc list-inside">
+              <li>本日 routine 提出済 (cookie <code>score_routine_done</code> あり) → <strong>Step 4 ダッシュボードへ直行</strong></li>
+              <li>本日 未提出 + 前日退勤提出済 → <strong>Step 3 ルーティンへ</strong></li>
+              <li>本日 未提出 + 前日退勤 <strong>未</strong>提出 → <strong>Step 2 退勤報告 強制表示</strong></li>
+            </ul>
+          </div>
+          <div class="bg-orange-50 border-l-4 border-orange-400 rounded-r-xl p-3">
+            <p class="text-xs font-bold text-orange-800 mb-1">💬 例えば</p>
+            <p class="text-sm text-gray-700">佐藤さんが朝 9:43 にログイン → 「昨日帰る前に退勤報告出してたっけ?」 と心配せずに済みます。 Score が自動で判定して、 出してれば Step 3 へ、 出してなければ Step 2 へ自動誘導してくれます。</p>
+          </div>
+        </div>
+      </div>
+    </section>
+
+    <!-- Step 2: 退勤報告 (前日未提出時のみ) -->
+    <section class="step-card bg-white rounded-2xl shadow-lg border-l-8 border-rose-400 p-6 mb-8">
+      <div class="flex items-start gap-4">
+        <div class="bg-rose-100 text-rose-700 font-black rounded-full w-12 h-12 flex items-center justify-center text-lg flex-shrink-0">2</div>
+        <div class="flex-1">
+          <div class="flex items-center gap-2 mb-2">
+            <h3 class="text-xl font-bold text-gray-800">🚪 退勤報告 <span class="text-xs text-rose-600 font-normal">(前日未提出時のみ)</span></h3>
+          </div>
+          <p class="text-gray-700 mb-3">前日業務日 (5am-5am 区切り) に退勤報告 (clock_out) が未提出だと、 ルーティン前に退勤報告 page に強制誘導されます。 本日の作業内容・blocker・引き継ぎ事項を記入し送信。</p>
+          <div class="bg-rose-50 rounded-lg p-3 mb-3">
+            <p class="text-xs font-bold text-rose-800 mb-1">🔧 記入項目</p>
+            <ul class="text-xs text-gray-700 space-y-1 list-disc list-inside">
+              <li>退勤時刻 (HH:MM)・blocker (作業を止めた要因)・handover (引き継ぎ)・next_priority (明日の優先)</li>
+              <li>提出 → 翌朝の routine で「明日の予定」 欄に反映</li>
+              <li>JST 業務日 boundary (5am 区切り) で「前日分」 を厳密判定 (殿御命 2026-06-08 厳格化)</li>
+            </ul>
+          </div>
+          <div class="bg-orange-50 border-l-4 border-orange-400 rounded-r-xl p-3">
+            <p class="text-xs font-bold text-orange-800 mb-1">💬 例えば</p>
+            <p class="text-sm text-gray-700">佐藤さんが昨晩 退勤報告を忘れて寝てしまった場合、 翌朝ログイン直後にこの page が出ます。 「昨日: sq01 c05 v04 提出済・blocker なし」 と記入して送信 → 自動的に Step 3 ルーティンへ進みます。</p>
+          </div>
+        </div>
+      </div>
+    </section>
+
+    <!-- Step 3: 朝のルーティン -->
+    <section class="step-card bg-white rounded-2xl shadow-lg border-l-8 border-indigo-400 p-6 mb-8">
+      <div class="flex items-start gap-4">
+        <div class="bg-indigo-100 text-indigo-700 font-black rounded-full w-12 h-12 flex items-center justify-center text-lg flex-shrink-0">3</div>
+        <div class="flex-1">
+          <h3 class="text-xl font-bold text-gray-800 mb-2">☀️ 朝のルーティン (Morning Routine Wizard)</h3>
+          <p class="text-gray-700 mb-3">3 step wizard 形式で 体調 + 本日タスク確認 + 出勤打刻を 30 秒で完了。</p>
+          <div class="space-y-2 mb-3">
+            <div class="bg-indigo-50 rounded-lg p-3">
+              <p class="text-xs font-bold text-indigo-800 mb-1">STEP 1: ☀️ Check-in & 体調確認</p>
+              <p class="text-xs text-gray-700">「Good Morning, 佐藤さん!」 表示 + 現在時刻 + 体調 4 択 (🤩 元気 / 🙂 普通 / 🥱 眠い / 🤒 体調不良)</p>
+            </div>
+            <div class="bg-indigo-50 rounded-lg p-3">
+              <p class="text-xs font-bold text-indigo-800 mb-1">STEP 2: 📋 本日のタスク (優先度順)</p>
+              <p class="text-xs text-gray-700">retake → review → in-progress → todo の順で 担当 task が一覧。 受信 QC 依頼 (SHOT thread 経由) も統合表示。 前日退勤提出が gate (未提出だと表示されず Step 2 へ戻る)</p>
+            </div>
+            <div class="bg-indigo-50 rounded-lg p-3">
+              <p class="text-xs font-bold text-indigo-800 mb-1">STEP 3: 🎯 提出 → Dashboard 遷移</p>
+              <p class="text-xs text-gray-700">体調 + 出勤時刻 (ISO+TZ JST) を <code>POST /api/bff/routines</code> 送信 → サーバが cookie <code>score_routine_done</code> 設定 (次 5am まで有効) → /dashboard へ自動遷移</p>
+            </div>
+          </div>
+          <div class="bg-orange-50 border-l-4 border-orange-400 rounded-r-xl p-3">
+            <p class="text-xs font-bold text-orange-800 mb-1">💬 例えば</p>
+            <p class="text-sm text-gray-700">佐藤さんが 9:43 に「🙂 普通」 を選択 → STEP 2 で「桜咲く街 sq01 c05 Retake 1 件 + 担当 task 3 件」 を確認 → STEP 3 提出 → ダッシュボードへ。 体調が🤒 (体調不良) の日は 後日 PM が「無理させたかも」 と振り返れる稼働分析データになります。</p>
+          </div>
+        </div>
+      </div>
+    </section>
+
+    <!-- Step 4: ダッシュボード -->
+    <section class="step-card last bg-white rounded-2xl shadow-lg border-l-8 border-emerald-400 p-6 mb-8">
+      <div class="flex items-start gap-4">
+        <div class="bg-emerald-100 text-emerald-700 font-black rounded-full w-12 h-12 flex items-center justify-center text-lg flex-shrink-0">4</div>
+        <div class="flex-1">
+          <h3 class="text-xl font-bold text-gray-800 mb-2">🏠 ダッシュボード到達 → 業務開始</h3>
+          <p class="text-gray-700 mb-3">出勤時刻が🕘 chip で表示され、 本日の action item が全プロジェクト横断で集約表示されます。</p>
+          <div class="bg-emerald-50 rounded-lg p-3 mb-3">
+            <p class="text-xs font-bold text-emerald-800 mb-1">🔧 ダッシュボードに表示される内容</p>
+            <ul class="text-xs text-gray-700 space-y-1 list-disc list-inside">
+              <li><strong>🕘 出勤 HH:MM</strong> — 朝のルーティン提出時刻 (Dashboard header に常時表示)</li>
+              <li><strong>本日やるべきタスク</strong> — 自分担当 task を優先度順で 10 件まで</li>
+              <li><strong>📥 受信 QC/Review 依頼</strong> — SHOT thread 経由の連絡を統合 (紫 card)</li>
+              <li><strong>本日の Calendar イベント</strong> — 試写・mtg・納品日 (時刻順)</li>
+              <li><strong>upcoming milestones</strong> — 7 日以内の重要 deadline</li>
+            </ul>
+          </div>
+          <div class="bg-orange-50 border-l-4 border-orange-400 rounded-r-xl p-3">
+            <p class="text-xs font-bold text-orange-800 mb-1">💬 例えば</p>
+            <p class="text-sm text-gray-700">佐藤さんのダッシュボードには「🕘 出勤 09:43」 + 紫 card「🔁 桜咲く街 sq01 c05 Retake 発令 by 山田博」 が表示 → click で /retake_view 遷移 → 具体的な修正方針確認 → 作業着手、 という流れで 9:50 には実作業開始できます。</p>
+          </div>
+        </div>
+      </div>
+    </section>
+
+    <!-- まとめ -->
+    <section class="bg-gradient-to-br from-amber-100 via-orange-100 to-rose-100 rounded-2xl shadow p-6">
+      <h2 class="text-xl font-bold text-gray-800 mb-3">📊 まとめ — 1 日のスタート 4 step</h2>
+      <p class="text-sm text-gray-700 leading-relaxed">
+        ログイン (Step 1) → 必要なら退勤報告 (Step 2) → 朝のルーティン 3 step (Step 3) → ダッシュボード (Step 4) の <strong>4 step・約 1 分</strong> で 1 日の業務開始準備が完了します。
+        Score の特長は <strong>「提出忘れ防止」 と 「稼働記録自動化」</strong> を組み合わせて、 業務開始までの摩擦をゼロに保つ仕組みです。
+      </p>
+      <p class="text-xs text-gray-500 mt-3">
+        ※ 同日内の再ログインでは Step 2-3 を skip して即 Step 4 に到達 (cookie で 提出済 check)。
+      </p>
+    </section>
+
+  </main>
+  <footer class="text-center text-gray-400 text-xs py-6">Score Tutorial — 🌅 1 日のスタート (2026-06-08)</footer>
+</body>
+</html>

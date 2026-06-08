@@ -1,0 +1,83 @@
+{% extends "base.html" %}
+{% block title %}📝 議事録 — {{ minutes.title }} — Score{% endblock %}
+{% block content %}
+<style>body { background: linear-gradient(135deg, #E0F2FE 0%, #F3E8FF 50%, #FCE7F3 100%); }</style>
+<div class="flex min-h-screen text-slate-800">
+  {% include '_sidemenu.html' %}
+  <main class="flex-1 ml-24 p-8 overflow-y-auto">
+
+    <nav class="flex items-center gap-2 text-sm text-slate-500 mb-3">
+      <a href="/calendar" class="hover:text-purple-600">📅 Calendar</a>
+      <span class="mx-1">›</span>
+      <span translate="no">{{ minutes.project_name }}</span>
+      <span class="mx-1">›</span>
+      <span class="text-purple-600 font-bold">📝 議事録</span>
+    </nav>
+
+    <div class="max-w-5xl">
+      <h1 class="text-2xl font-black text-slate-800 mb-2">📝 {{ minutes.title }}</h1>
+      <p class="text-sm text-slate-500 mb-6">📅 {{ minutes.date }} {{ minutes.time }} · 📍 <span translate="no">{{ minutes.location }}</span> · 🎥 <a href="{{ minutes.zoom_url }}" target="_blank" class="text-indigo-600 hover:underline">Zoom 録画</a></p>
+
+      <!-- 参加者 -->
+      <section class="bg-white/60 backdrop-blur-xl border border-white/80 rounded-3xl shadow-xl p-5 mb-5">
+        <h2 class="text-sm font-black text-slate-700 mb-3">👥 参加者 ({{ minutes.participants|length }})</h2>
+        <div class="grid grid-cols-2 md:grid-cols-4 gap-3">
+          {% for p in minutes.participants %}
+          <div class="bg-slate-100 rounded-xl p-3 flex items-center gap-2">
+            <span class="text-xl">{{ p.emoji }}</span>
+            <div>
+              <p class="text-sm font-bold text-slate-700" translate="no">{{ p.name }}</p>
+              <p class="text-xs text-slate-500">{{ p.role }}</p>
+            </div>
+          </div>
+          {% endfor %}
+        </div>
+      </section>
+
+      <!-- アジェンダ -->
+      <section class="bg-white/60 backdrop-blur-xl border border-white/80 rounded-3xl shadow-xl p-5 mb-5">
+        <h2 class="text-sm font-black text-slate-700 mb-3">📋 アジェンダ</h2>
+        <ul class="space-y-2 text-sm text-slate-700">
+          {% for item in minutes.agenda %}
+          <li class="pl-2">{{ item }}</li>
+          {% endfor %}
+        </ul>
+      </section>
+
+      <!-- 決定事項 -->
+      <section class="bg-emerald-50 border-2 border-emerald-200 rounded-3xl shadow-xl p-5 mb-5">
+        <h2 class="text-sm font-black text-emerald-700 mb-3">✅ 決定事項</h2>
+        <ul class="space-y-2 text-sm text-emerald-900 font-medium">
+          {% for d in minutes.decisions %}
+          <li class="pl-2">{{ d }}</li>
+          {% endfor %}
+        </ul>
+      </section>
+
+      <!-- next action -->
+      <section class="bg-white/60 backdrop-blur-xl border border-white/80 rounded-3xl shadow-xl p-5 mb-5">
+        <h2 class="text-sm font-black text-slate-700 mb-3">🎯 next action (担当 / 期日付)</h2>
+        <div class="space-y-2">
+          {% for a in minutes.next_actions %}
+          <div class="bg-white rounded-xl border border-slate-200 p-3 flex items-center gap-3">
+            <span class="text-xs font-bold text-indigo-600 min-w-[120px]" translate="no">{{ a.who }}</span>
+            <span class="text-sm text-slate-700 flex-1">{{ a.what }}</span>
+            <span class="text-xs font-bold text-rose-600">📅 {{ a.when }}</span>
+          </div>
+          {% endfor %}
+        </div>
+      </section>
+
+      <!-- 関連 link -->
+      <section class="bg-indigo-50 border border-indigo-200 rounded-2xl p-4 mb-10">
+        <p class="text-xs font-black text-indigo-700 mb-2">🔗 関連 link</p>
+        <div class="flex flex-wrap gap-2">
+          <a href="/shot/1" class="bg-white hover:bg-indigo-100 border border-indigo-200 rounded-full px-3 py-1 text-xs text-indigo-700 font-bold">📽️ shot01 詳細</a>
+          <a href="/qc/1?task_id=15" class="bg-white hover:bg-indigo-100 border border-indigo-200 rounded-full px-3 py-1 text-xs text-indigo-700 font-bold">🎯 QC ビューア</a>
+          <a href="/messages?thread=280052" class="bg-white hover:bg-indigo-100 border border-indigo-200 rounded-full px-3 py-1 text-xs text-indigo-700 font-bold">💬 shot01 thread</a>
+        </div>
+      </section>
+    </div>
+  </main>
+</div>
+{% endblock %}

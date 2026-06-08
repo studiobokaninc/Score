@@ -34,6 +34,16 @@
         <p class="text-4xl mb-3">✨</p>
         <p class="text-lg font-black text-emerald-800">本日の action item はございませぬ</p>
         <p class="text-sm text-emerald-700 mt-2">ゆっくり休憩 or <a href="/calendar" class="underline">カレンダー御確認</a></p>
+        {# 殿御命 2026-06-08: action item 無し時 PM 確認 DM 動線 #}
+        {% if pm_contact and pm_contact.uid %}
+        <div class="mt-5 border-t border-emerald-200 pt-4">
+          <p class="text-xs text-emerald-700 mb-3">念のため <strong translate="no">{{ pm_contact.name }}</strong> PM に本日の動き 確認しませんか?</p>
+          <a href="/messages?dm_to={{ pm_contact.uid }}&dm_name={{ pm_contact.name }}&dm_prefill=お疲れ様です。本日対応すべき task が見当たらず候。何か御願いしたい案件あれば御教示頂きたく候。"
+             class="inline-flex items-center gap-2 bg-indigo-600 hover:bg-indigo-700 text-white font-bold rounded-full px-5 py-2.5 text-sm shadow-sm transition">
+            📨 PM に確認 DM 送信
+          </a>
+        </div>
+        {% endif %}
       </section>
       {% endif %}
 

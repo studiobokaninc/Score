@@ -90,7 +90,7 @@
               {% set _a0 = _ns_pick.a or asset_list[0] %}
               {% set _bn0 = (_a0.file_path or '').split('/')[-1] %}
               {% set _ext0 = _bn0.lower().split('.')[-1] if '.' in _bn0 else '' %}
-              {% set _url0 = 'http://192.168.44.253:8001/static/assets/' ~ _bn0 %}
+              {% set _url0 = ('/static/assets/' ~ _bn0) if (demo_mode or 'sample_' in _bn0) else ('http://192.168.44.253:8001/static/assets/' ~ _bn0) %}
               {% if _ext0 in ['png','jpg','jpeg','webp','gif'] %}
                 <img src="{{ _url0 }}" alt="{{ _bn0 }}" class="max-w-full max-h-[60vh] object-contain">
               {% elif _ext0 in ['mp4','mov','webm','m4v'] %}
@@ -147,8 +147,8 @@
           {% set _bnL = (_aL.file_path or '').split('/')[-1] if _aL else '' %}
           {% set _extR = _bnR.lower().split('.')[-1] if '.' in _bnR else '' %}
           {% set _extL = _bnL.lower().split('.')[-1] if '.' in _bnL else '' %}
-          {% set _urlR = ('http://192.168.44.253:8001/static/assets/' ~ _bnR) if _bnR else '' %}
-          {% set _urlL = ('http://192.168.44.253:8001/static/assets/' ~ _bnL) if _bnL else '' %}
+          {% set _urlR = (('/static/assets/' ~ _bnR) if (demo_mode or 'sample_' in _bnR) else ('http://192.168.44.253:8001/static/assets/' ~ _bnR)) if _bnR else '' %}
+          {% set _urlL = (('/static/assets/' ~ _bnL) if (demo_mode or 'sample_' in _bnL) else ('http://192.168.44.253:8001/static/assets/' ~ _bnL)) if _bnL else '' %}
           <div class="flex gap-4 items-stretch h-[60vh]">
             {# 左 player (比較元・古い側 or dropdown 選択) #}
             <div class="flex-1 relative bg-slate-900 rounded-3xl overflow-hidden flex items-center justify-center">
@@ -252,13 +252,14 @@
           <script>
             (function(){
               const _assets = {{ asset_list|tojson if asset_list else '[]' }};
+              const _demoMode = {{ 'true' if demo_mode else 'false' }};
               const _baseURL = 'http://192.168.44.253:8001/static/assets/';
               window.updateCompareAsset = function(val) {
                 const _a = _assets.find(a => String(a.id) === String(val));
                 if (!_a) return;
                 const _bn = (_a.file_path || '').split('/').pop();
                 const _ext = (_bn.split('.').pop() || '').toLowerCase();
-                const _url = _baseURL + _bn;
+                const _url = (_demoMode || _bn.indexOf('sample_') === 0) ? ('/static/assets/' + _bn) : (_baseURL + _bn);
                 const _player = document.getElementById('compare-left-player');
                 const _name = document.getElementById('compare-left-name');
                 if (_name) _name.textContent = _a.version || '?';
@@ -287,42 +288,71 @@
         </div>
 
         <script>
-        // 同期プレイヤー mock (実 video element 接続前の placeholder)
-        let _playInterval = null;
-        let _currentSec = 0;
-        const _maxSec = 250;
-        function _fmt(s) {
+        // 殿御命 2026-06-05 (#46): 同期プレイヤーを実 video element と連動
+        // 旧 placeholder (setInterval 100ms _currentSec++) は廃止 — video の currentTime/duration を実時間で同期
+        function _qcVideos() {
+          return Array.from(document.querySelectorAll('#main-player video, #compare-left-player video, #compare-right-player video'));
+        }
+        function _qcPrimary() { return _qcVideos()[0] || null; }
+        function _qcFmt(s) {
+          s = Math.max(0, Math.floor(Number(s) || 0));
           const m = String(Math.floor(s/60)).padStart(2,'0');
           const ss = String(s%60).padStart(2,'0');
           return `${m}:${ss}`;
         }
-        function _updateUI() {
-          document.getElementById('sync-timeline').value = _currentSec;
-          document.getElementById('sync-time').textContent = `${_fmt(_currentSec)} / ${_fmt(_maxSec)}`;
+        function _qcUpdateUI() {
+          const v = _qcPrimary();
+          if (!v) return;
+          const cur = v.currentTime || 0;
+          const dur = isFinite(v.duration) ? v.duration : 0;
+          const tl = document.getElementById('sync-timeline');
+          if (tl) {
+            if (dur > 0) tl.max = Math.ceil(dur);
+            tl.value = cur;
+          }
+          const tEl = document.getElementById('sync-time');
+          if (tEl) tEl.textContent = `${_qcFmt(cur)} / ${_qcFmt(dur)}`;
         }
         function togglePlayer(side) {
-          const btn = document.getElementById('sync-play-btn');
-          if (_playInterval) {
-            clearInterval(_playInterval);
-            _playInterval = null;
-            btn.textContent = '▶';
-            ['play-btn-left','play-btn-right'].forEach(id => document.getElementById(id).textContent = '▶');
-          } else {
-            _playInterval = setInterval(() => {
-              _currentSec++;
-              if (_currentSec >= _maxSec) {
-                _currentSec = 0;
-              }
-              _updateUI();
-            }, 100);
-            btn.textContent = '⏸';
-            ['play-btn-left','play-btn-right'].forEach(id => document.getElementById(id).textContent = '⏸');
-          }
+          const vs = _qcVideos();
+          if (vs.length === 0) return;
+          const isPaused = vs[0].paused;
+          vs.forEach(v => { if (isPaused) v.play().catch(()=>{}); else v.pause(); });
+          // play/pause event で button 更新 (attach 内 listener)
         }
         function seekTo(sec) {
-          _currentSec = Number(sec);
-          _updateUI();
+          _qcVideos().forEach(v => { try { v.currentTime = Number(sec); } catch(_){} });
+          _qcUpdateUI();
         }
+        function _qcAttach() {
+          _qcVideos().forEach(v => {
+            if (v._qcAttached) return;
+            v._qcAttached = true;
+            v.addEventListener('timeupdate', _qcUpdateUI);
+            v.addEventListener('loadedmetadata', _qcUpdateUI);
+            v.addEventListener('durationchange', _qcUpdateUI);
+            v.addEventListener('play', () => {
+              const btn = document.getElementById('sync-play-btn');
+              if (btn) btn.textContent = '⏸';
+              ['play-btn-left','play-btn-right'].forEach(id => { const el = document.getElementById(id); if (el) el.textContent = '⏸'; });
+            });
+            v.addEventListener('pause', () => {
+              const btn = document.getElementById('sync-play-btn');
+              if (btn) btn.textContent = '▶';
+              ['play-btn-left','play-btn-right'].forEach(id => { const el = document.getElementById(id); if (el) el.textContent = '▶'; });
+            });
+          });
+          _qcUpdateUI();
+        }
+        document.addEventListener('DOMContentLoaded', _qcAttach);
+        // asset 切替 (player.innerHTML 書換) 後も再 attach
+        const _qcObs = new MutationObserver(() => _qcAttach());
+        ['main-player','compare-left-player','compare-right-player'].forEach(id => {
+          const el = document.getElementById(id);
+          if (el) _qcObs.observe(el, { childList: true, subtree: true });
+        });
+        // 初期 attach (DOMContentLoaded 既発火対策)
+        if (document.readyState !== 'loading') _qcAttach();
         </script>
 
         <script>
@@ -381,7 +411,7 @@
             {% for a in asset_list %}
             {% set _bn = (a.file_path or '').split('/')[-1] %}
             {% set _ext = _bn.lower().split('.')[-1] if '.' in _bn else '' %}
-            {% set _url = 'http://192.168.44.253:8001/static/assets/' ~ _bn %}
+            {% set _url = ('/static/assets/' ~ _bn) if (demo_mode or 'sample_' in _bn) else ('http://192.168.44.253:8001/static/assets/' ~ _bn) %}
             <div id="asset-row-{{ a.id }}" onclick="selectAsset({{ a.id }},'{{ _url }}','{{ _ext }}','{{ a.version or '?' }}')"
               class="flex items-center justify-between p-3 rounded-2xl cursor-pointer hover:bg-indigo-50 transition-colors">
               <div class="flex items-center gap-2">

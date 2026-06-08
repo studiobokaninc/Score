@@ -501,13 +501,17 @@ class MockCalendarClient(CalendarClient):
         state = _read_state()
         for s in state.get("shots", []):
             if s.get("id") == shot_id:
-                return s
+                # 殿御命 2026-06-08: asset_list を attach (mock asset を shot_id で filter)
+                out = dict(s)
+                out["asset_list"] = [a for a in state.get("assets", []) if a.get("shot_id") == shot_id]
+                return out
         shot = self.get_shot(shot_id, actor_user_id)
         if shot is None:
             return {}
         return {"id": shot.shot_id, "project_id": shot.project_id,
                 "shot_code": shot.shot_code, "seq_code": shot.seq_code,
-                "status": shot.status, "name": shot.name}
+                "status": shot.status, "name": shot.name,
+                "asset_list": [a for a in state.get("assets", []) if a.get("shot_id") == shot_id]}
 
     def get_tasks(self, shot_id: int, actor_user_id: str | None = None) -> list[CalendarTask]:
         return [
@@ -723,6 +727,21 @@ class MockCalendarClient(CalendarClient):
             uid = 0
         return [t for t in state.get("tasks", []) if t.get("assignee_id") == uid]
 
+    def get_my_dm_threads(self, actor_user_id: str | None = None) -> list:
+        """殿御命 2026-06-08: 自分が participants な thread list を返す mock。
+        state.yaml の dm_threads section から filter。"""
+        state = _read_state()
+        try:
+            uid = int(actor_user_id) if actor_user_id else 0
+        except (ValueError, TypeError):
+            uid = 0
+        out = []
+        for thr in state.get("dm_threads", []) or []:
+            participants = thr.get("participants") or []
+            if uid in participants or str(uid) in [str(p) for p in participants]:
+                out.append(dict(thr))
+        return out
+
     def get_users(self, actor_user_id: str | None = None) -> list:
         """全 user 一覧 mock (state.users)。real Calendar API: GET /api/users 相当。"""
         state = _read_state()
@@ -747,14 +766,25 @@ class MockCalendarClient(CalendarClient):
             sid = s.get("id") or s.get("shot_id")
             if sid is not None:
                 shot_pid[sid] = s.get("project_id")
+        # 殿御命 2026-06-08: shotID + seqID を attach (pages_project_detail.py の seq_groups 構築用)
+        shot_info_map = {}
+        for s in shots:
+            sid = s.get("id") or s.get("shot_id")
+            if sid is not None:
+                shot_info_map[sid] = {
+                    "shot_code": s.get("shot_code") or s.get("name") or f"SHOT_{sid:03d}",
+                    "seq_code": s.get("seq_code", ""),
+                }
         out = []
         for t in state.get("tasks", []):
             sid = t.get("shot_id")
             if sid is not None and shot_pid.get(sid) == project_id:
-                # 整形: real BE 形式 (id, assigned_to, etc.) に近づける
                 entry = dict(t)
                 entry.setdefault("id", t.get("task_id") or t.get("id"))
                 entry.setdefault("assigned_to", t.get("assignee_id"))
+                _si = shot_info_map.get(sid, {})
+                entry.setdefault("shotID", _si.get("shot_code", ""))
+                entry.setdefault("seqID", _si.get("seq_code", ""))
                 out.append(entry)
         return out
 

@@ -14,38 +14,72 @@
     </div>
     <div class="max-w-5xl mx-auto mt-2">
       <h1 class="text-3xl font-bold flex items-center gap-3">📌 Review 依頼</h1>
-      <p class="mt-2 text-indigo-200">Compositor が Review 依頼を提出 → SHOT 関係者 thread (PM/Director/Lead + mention 主体) に自動投稿。Director の判定前段階で 部内意見集約。</p>
     </div>
   </header>
   <main class="max-w-5xl mx-auto py-10 px-6 space-y-8">
-    <section class="bg-white rounded-2xl shadow p-6">
-      <h2 class="text-xl font-bold text-gray-800 mb-4">📸 画面</h2>
-      <div class="screenshot-wrap cursor-pointer" onclick="openLightbox(this)">
-        <img src="../images/admin/messages.png" alt="Review 依頼 画面" loading="lazy" class="rounded-xl shadow-md w-full max-w-3xl mx-auto block">
-      </div>
+
+    <!-- 機能の目的 -->
+    <section class="bg-gradient-to-br from-indigo-50 to-white border-2 border-indigo-200 rounded-2xl p-6">
+      <h2 class="text-lg font-bold text-indigo-800 mb-2">📘 この機能の目的</h2>
+      <p class="text-gray-700 leading-relaxed">User が部内 (Lead) に Review 依頼を提出。Director 判定前段階の意見集約。 依頼 button 1 click で SHOT 関係者全員に thread + Push 自動配信される。</p>
     </section>
+
+    <section class="bg-white rounded-2xl shadow p-6">
+      <h2 class="text-xl font-bold text-gray-800 mb-4">📸 画面 (2 枚)</h2>
+      <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
+        <div class="bg-gray-50 rounded-xl p-4">
+          <p class="text-xs font-bold text-gray-700 mb-2">📤 [依頼する側] User → Review 提出 modal</p>
+          <div class="screenshot-wrap cursor-pointer bg-white rounded-lg overflow-hidden border border-gray-200" onclick="openLightbox(this)">
+            <img src="../images/admin/review_submit_modal.png" alt="📤 [依頼する側] User → Review 提出 modal" loading="lazy" class="w-full h-auto block" onerror="this.onerror=null; this.src=&quot;data:image/svg+xml;utf8,&lt;svg xmlns='http://www.w3.org/2000/svg' width='640' height='360' viewBox='0 0 640 360'&gt;&lt;rect width='640' height='360' fill='%23f3f4f6'/&gt;&lt;text x='50%' y='45%' text-anchor='middle' font-size='40' font-family='sans-serif'&gt;📷&lt;/text&gt;&lt;text x='50%' y='60%' text-anchor='middle' font-size='20' fill='%239ca3af' font-family='sans-serif' font-weight='bold'&gt;撮影待ち&lt;/text&gt;&lt;/svg&gt;&quot;;">
+          </div>
+          <p class="text-xs text-gray-600 italic mt-2">User (佐藤) が shot_detail で「📤 既存 asset で QC 依頼」 → modal で「📌 Review」 選択 + 加藤 Lead を mention + コメント記入 → 送信</p>
+        </div>
+        <div class="bg-gray-50 rounded-xl p-4">
+          <p class="text-xs font-bold text-gray-700 mb-2">📥 [される側] Lead が SHOT thread で受信</p>
+          <div class="screenshot-wrap cursor-pointer bg-white rounded-lg overflow-hidden border border-gray-200" onclick="openLightbox(this)">
+            <img src="../images/admin/review_submitted_message.png" alt="📥 [される側] Lead が SHOT thread で受信" loading="lazy" class="w-full h-auto block" onerror="this.onerror=null; this.src=&quot;data:image/svg+xml;utf8,&lt;svg xmlns='http://www.w3.org/2000/svg' width='640' height='360' viewBox='0 0 640 360'&gt;&lt;rect width='640' height='360' fill='%23f3f4f6'/&gt;&lt;text x='50%' y='45%' text-anchor='middle' font-size='40' font-family='sans-serif'&gt;📷&lt;/text&gt;&lt;text x='50%' y='60%' text-anchor='middle' font-size='20' fill='%239ca3af' font-family='sans-serif' font-weight='bold'&gt;撮影待ち&lt;/text&gt;&lt;/svg&gt;&quot;;">
+          </div>
+          <p class="text-xs text-gray-600 italic mt-2">加藤 Lead が SHOT 関係者 thread で「📌 Review 依頼」 + 階層 title + asset サムネ + QC ビューア緑 button を受信 → ▶ click で qc_viewer 遷移</p>
+        </div>
+      </div>
+      <p class="text-xs text-gray-500 italic text-center mt-4">📍 シナリオ: 佐藤 User が桜咲く街 sq01 c05 v03 完成 → 「📌 Review」 選択 + 加藤 Lead mention → 部内意見集約 → 加藤 OK後 山田 Director に QC 提出。</p>
+    </section>
+
+    <!-- 主な機能 -->
     <section class="bg-white rounded-2xl shadow p-6">
       <h2 class="text-xl font-bold text-gray-800 mb-4">✨ 主な機能</h2>
       <ul class="list-disc list-inside space-y-2">
-<li class="text-gray-700 leading-relaxed"><strong>提出種別 = Review</strong> — 部内レビュー目的・Director 判定前の意見集約</li>
-<li class="text-gray-700 leading-relaxed"><strong>SHOT 関係者 thread 自動作成</strong> — PM + Director + Lead + task assignees + mention で構成</li>
-<li class="text-gray-700 leading-relaxed"><strong>mention 主体</strong> — Director 自動補完なし。mention で送信先を 明示指定</li>
-<li class="text-gray-700 leading-relaxed"><strong>階層 title</strong> — proj / SEQ / SHOT / task の 4 階層を本文先頭に明記 (例: marukome / sq01 / c05 / comp)</li>
-<li class="text-gray-700 leading-relaxed"><strong>QC ビューア link 自動付与</strong> — 本文末尾に <code>/qc/{shot_id}?task_id&asset_id</code> 緑ボタン化</li>
-<li class="text-gray-700 leading-relaxed"><strong>Push + SSE 配信</strong> — 全 participants に通知 (sender は除外・但し mention 含 sender は配信)</li>
+        <li class="text-gray-700 leading-relaxed"><strong>提出種別 = Review</strong> — 部内レビュー目的・Director 判定前の意見集約</li>
+        <li class="text-gray-700 leading-relaxed"><strong>SHOT 関係者 thread 自動作成</strong> — PM + Director + Lead + assignees + mention で構成</li>
+        <li class="text-gray-700 leading-relaxed"><strong>mention 主体</strong> — Director 自動補完なし。mention で送信先を明示指定</li>
+        <li class="text-gray-700 leading-relaxed"><strong>階層 title</strong> — proj/SEQ/SHOT/task の 4 階層を本文先頭に明記</li>
+        <li class="text-gray-700 leading-relaxed"><strong>QC ビューア link 自動付与</strong> — 本文末尾に /qc/{shot_id}?task_id&asset_id 緑ボタン化</li>
+        <li class="text-gray-700 leading-relaxed"><strong>Push + SSE 配信</strong> — 全 participants に通知 (sender 除外・mention 含 sender は配信)</li>
+        <li class="text-gray-700 leading-relaxed"><strong>task status → review patch</strong> — 殿御命 2026-06-08 自動 patch 追加</li>
       </ul>
     </section>
+
+    <!-- 桜咲く街 具体例 -->
+    <section class="bg-gradient-to-br from-pink-50 to-purple-50 border border-pink-200 rounded-2xl p-6">
+      <h2 class="text-lg font-bold text-pink-800 mb-2">🌸 使用例 — 架空 project「桜咲く街」</h2>
+      <p class="text-gray-700 leading-relaxed text-sm">佐藤 User が桜咲く街 sq01 c05 v03 完成 → 「📌 Review」 選択 + 加藤 Lead mention → 部内意見集約 → 加藤 OK後 山田 Director に QC 提出。</p>
+    </section>
+
+    <!-- 操作方法 -->
     <section class="bg-white rounded-2xl shadow p-6">
       <h2 class="text-xl font-bold text-gray-800 mb-4">🛠 操作方法</h2>
       <ol class="list-decimal list-inside space-y-2">
-<li class="text-gray-700 leading-relaxed">/task/{task_id} で対象 asset card → 📤 既存 asset で QC 依頼 → modal で「📌 Review」選択</li>
-<li class="text-gray-700 leading-relaxed">mention 候補から PM / 他 user を選択 (必須・Director 不在時)</li>
-<li class="text-gray-700 leading-relaxed">補足コメント (任意) → 📤 送信</li>
-<li class="text-gray-700 leading-relaxed">受信側: msg → SHOT thread → ▶ QC ビューアで確認 click → 対象 asset 再生 → 部内コメント返信</li>
+        <li class="text-gray-700 leading-relaxed">shot_detail で対象 asset card → 📤 既存 asset で QC 依頼 → modal で「📌 Review」 選択</li>
+        <li class="text-gray-700 leading-relaxed">mention 候補から加藤 Lead を選択 (Director 不在時必須)</li>
+        <li class="text-gray-700 leading-relaxed">補足コメント (任意) → 📤 送信</li>
+        <li class="text-gray-700 leading-relaxed">受信側: msg → SHOT thread → ▶ QC ビューア確認 → 部内コメント返信</li>
       </ol>
     </section>
   </main>
-  <footer class="text-center text-gray-400 text-xs py-6">Score Tutorial — 機能リファレンス</footer>
+  <footer class="text-center text-gray-400 text-xs py-6">Score Tutorial — 機能リファレンス (2026-06-08 改訂)</footer>
+  <div id="lightbox" class="lightbox-overlay" onclick="closeLightbox()">
+    <img id="lightbox-img" src="" alt="">
+  </div>
   <script src="../js/nav.js"></script>
 </body>
 </html>

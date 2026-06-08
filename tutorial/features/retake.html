@@ -14,49 +14,110 @@
     </div>
     <div class="max-w-5xl mx-auto mt-2">
       <h1 class="text-3xl font-bold flex items-center gap-3">🔁 Retake 発令</h1>
-      <p class="mt-2 text-rose-200">Director が Retake を発令する画面 + 受信側の view-only リテイク確認 page。video player・timeline マーカー・オーバーペイント・コメント・参考素材添付を統合。</p>
     </div>
   </header>
   <main class="max-w-5xl mx-auto py-10 px-6 space-y-8">
-    <section class="bg-white rounded-2xl shadow p-6">
-      <h2 class="text-xl font-bold text-gray-800 mb-4">📸 画面</h2>
-      <div class="screenshot-wrap cursor-pointer" onclick="openLightbox(this)">
-        <img src="../images/admin/director_retake_input.png" alt="Retake 発令 画面" loading="lazy" class="rounded-xl shadow-md w-full max-w-3xl mx-auto block">
-      </div>
+
+    <!-- 機能の目的 -->
+    <section class="bg-gradient-to-br from-rose-50 to-white border-2 border-rose-200 rounded-2xl p-6">
+      <h2 class="text-lg font-bold text-rose-800 mb-2">📘 この機能の目的</h2>
+      <p class="text-gray-700 leading-relaxed">Director が Retake を発令する画面 + 受信側の view-only リテイク確認 page。video player・タイムラインマーカー・コメント・オーバーペイント・参考素材添付を統合。</p>
     </section>
+
+    <section class="bg-white rounded-2xl shadow p-6">
+      <h2 class="text-xl font-bold text-gray-800 mb-4">📸 画面 (6 枚)</h2>
+      <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+        <div class="bg-gray-50 rounded-xl p-4">
+          <p class="text-xs font-bold text-gray-700 mb-2">① 入力 page 全体 (動画 + 全体方針 + 参考素材)</p>
+          <div class="screenshot-wrap cursor-pointer bg-white rounded-lg overflow-hidden border border-gray-200" onclick="openLightbox(this)">
+            <img src="../images/admin/retake_full.png" alt="① 入力 page 全体 (動画 + 全体方針 + 参考素材)" loading="lazy" class="w-full h-auto block" onerror="this.onerror=null; this.src=&quot;data:image/svg+xml;utf8,&lt;svg xmlns='http://www.w3.org/2000/svg' width='640' height='360' viewBox='0 0 640 360'&gt;&lt;rect width='640' height='360' fill='%23f3f4f6'/&gt;&lt;text x='50%' y='45%' text-anchor='middle' font-size='40' font-family='sans-serif'&gt;📷&lt;/text&gt;&lt;text x='50%' y='60%' text-anchor='middle' font-size='20' fill='%239ca3af' font-family='sans-serif' font-weight='bold'&gt;撮影待ち&lt;/text&gt;&lt;/svg&gt;&quot;;">
+          </div>
+          <p class="text-xs text-gray-600 italic mt-2">/director_retake_input 全体図 — 動画 player が表示され、 リファレンス画像が添付された状態</p>
+        </div>
+        <div class="bg-gray-50 rounded-xl p-4">
+          <p class="text-xs font-bold text-gray-700 mb-2">② フレームプレビュー (実 video 表示)</p>
+          <div class="screenshot-wrap cursor-pointer bg-white rounded-lg overflow-hidden border border-gray-200" onclick="openLightbox(this)">
+            <img src="../images/admin/retake_video_player.png" alt="② フレームプレビュー (実 video 表示)" loading="lazy" class="w-full h-auto block" onerror="this.onerror=null; this.src=&quot;data:image/svg+xml;utf8,&lt;svg xmlns='http://www.w3.org/2000/svg' width='640' height='360' viewBox='0 0 640 360'&gt;&lt;rect width='640' height='360' fill='%23f3f4f6'/&gt;&lt;text x='50%' y='45%' text-anchor='middle' font-size='40' font-family='sans-serif'&gt;📷&lt;/text&gt;&lt;text x='50%' y='60%' text-anchor='middle' font-size='20' fill='%239ca3af' font-family='sans-serif' font-weight='bold'&gt;撮影待ち&lt;/text&gt;&lt;/svg&gt;&quot;;">
+          </div>
+          <p class="text-xs text-gray-600 italic mt-2">実 mp4 video player + TC overlay (現在の playhead 表示) + 再生中状態</p>
+        </div>
+        <div class="bg-gray-50 rounded-xl p-4">
+          <p class="text-xs font-bold text-gray-700 mb-2">③ オーバーペイント機能</p>
+          <div class="screenshot-wrap cursor-pointer bg-white rounded-lg overflow-hidden border border-gray-200" onclick="openLightbox(this)">
+            <img src="../images/admin/retake_paint.png" alt="③ オーバーペイント機能" loading="lazy" class="w-full h-auto block" onerror="this.onerror=null; this.src=&quot;data:image/svg+xml;utf8,&lt;svg xmlns='http://www.w3.org/2000/svg' width='640' height='360' viewBox='0 0 640 360'&gt;&lt;rect width='640' height='360' fill='%23f3f4f6'/&gt;&lt;text x='50%' y='45%' text-anchor='middle' font-size='40' font-family='sans-serif'&gt;📷&lt;/text&gt;&lt;text x='50%' y='60%' text-anchor='middle' font-size='20' fill='%239ca3af' font-family='sans-serif' font-weight='bold'&gt;撮影待ち&lt;/text&gt;&lt;/svg&gt;&quot;;">
+          </div>
+          <p class="text-xs text-gray-600 italic mt-2">video フレーム上に色付き drag 描画で修正箇所をハイライト + マーカー保存</p>
+        </div>
+        <div class="bg-gray-50 rounded-xl p-4">
+          <p class="text-xs font-bold text-gray-700 mb-2">④ タイムライン + マーカー</p>
+          <div class="screenshot-wrap cursor-pointer bg-white rounded-lg overflow-hidden border border-gray-200" onclick="openLightbox(this)">
+            <img src="../images/admin/retake_marker.png" alt="④ タイムライン + マーカー" loading="lazy" class="w-full h-auto block" onerror="this.onerror=null; this.src=&quot;data:image/svg+xml;utf8,&lt;svg xmlns='http://www.w3.org/2000/svg' width='640' height='360' viewBox='0 0 640 360'&gt;&lt;rect width='640' height='360' fill='%23f3f4f6'/&gt;&lt;text x='50%' y='45%' text-anchor='middle' font-size='40' font-family='sans-serif'&gt;📷&lt;/text&gt;&lt;text x='50%' y='60%' text-anchor='middle' font-size='20' fill='%239ca3af' font-family='sans-serif' font-weight='bold'&gt;撮影待ち&lt;/text&gt;&lt;/svg&gt;&quot;;">
+          </div>
+          <p class="text-xs text-gray-600 italic mt-2">タイムライン scrubber + 保存済マーカー (例 0:12 桜並木) が複数並ぶ状態</p>
+        </div>
+        <div class="bg-gray-50 rounded-xl p-4">
+          <p class="text-xs font-bold text-gray-700 mb-2">⑤ 参考素材添付 (drag&drop 状態)</p>
+          <div class="screenshot-wrap cursor-pointer bg-white rounded-lg overflow-hidden border border-gray-200" onclick="openLightbox(this)">
+            <img src="../images/admin/retake_reference.png" alt="⑤ 参考素材添付 (drag&drop 状態)" loading="lazy" class="w-full h-auto block" onerror="this.onerror=null; this.src=&quot;data:image/svg+xml;utf8,&lt;svg xmlns='http://www.w3.org/2000/svg' width='640' height='360' viewBox='0 0 640 360'&gt;&lt;rect width='640' height='360' fill='%23f3f4f6'/&gt;&lt;text x='50%' y='45%' text-anchor='middle' font-size='40' font-family='sans-serif'&gt;📷&lt;/text&gt;&lt;text x='50%' y='60%' text-anchor='middle' font-size='20' fill='%239ca3af' font-family='sans-serif' font-weight='bold'&gt;撮影待ち&lt;/text&gt;&lt;/svg&gt;&quot;;">
+          </div>
+          <p class="text-xs text-gray-600 italic mt-2">リファレンス画像 / 動画を drag&drop で添付した直後の thumb preview 表示</p>
+        </div>
+        <div class="bg-gray-50 rounded-xl p-4">
+          <p class="text-xs font-bold text-gray-700 mb-2">⑦ 受信側 /retake_view (User)</p>
+          <div class="screenshot-wrap cursor-pointer bg-white rounded-lg overflow-hidden border border-gray-200" onclick="openLightbox(this)">
+            <img src="../images/admin/retake_view_received.png" alt="⑦ 受信側 /retake_view (User)" loading="lazy" class="w-full h-auto block" onerror="this.onerror=null; this.src=&quot;data:image/svg+xml;utf8,&lt;svg xmlns='http://www.w3.org/2000/svg' width='640' height='360' viewBox='0 0 640 360'&gt;&lt;rect width='640' height='360' fill='%23f3f4f6'/&gt;&lt;text x='50%' y='45%' text-anchor='middle' font-size='40' font-family='sans-serif'&gt;📷&lt;/text&gt;&lt;text x='50%' y='60%' text-anchor='middle' font-size='20' fill='%239ca3af' font-family='sans-serif' font-weight='bold'&gt;撮影待ち&lt;/text&gt;&lt;/svg&gt;&quot;;">
+          </div>
+          <p class="text-xs text-gray-600 italic mt-2">User (佐藤) が受信する view-only page — パンくず + 対象 video (S1) + マーカー button 3 件 + コメント card + メタ (発令者 山田 / 期日) + 全体方針 + 参考素材 2 枚 inline + task thread link</p>
+        </div>
+      </div>
+      <p class="text-xs text-gray-500 italic text-center mt-4">📍 シナリオ: 山田 Director が桜咲く街 sq01 c05 v04 を Retake 発令 → 「桜花ピンク 10% 強化」 全体方針 + 0:12 マーカー + 参考画像 2 枚添付 → 佐藤 User が /retake_view で確認 → 修正着手。</p>
+    </section>
+
+    <!-- 主な機能 -->
     <section class="bg-white rounded-2xl shadow p-6">
       <h2 class="text-xl font-bold text-gray-800 mb-4">✨ 主な機能</h2>
       <ul class="list-disc list-inside space-y-2">
-<li class="text-gray-700 leading-relaxed"><strong>/director_retake_input (Director 発令 page)</strong></li>
-<li class="text-gray-700 leading-relaxed">  ・フレームプレビュー = 実 video player (mp4 自動再生・playhead ↔ video.currentTime 双方向 sync)</li>
-<li class="text-gray-700 leading-relaxed">  ・オーバーペイント canvas (drag 描画・色切替・マーカー保存 + 復元)</li>
-<li class="text-gray-700 leading-relaxed">  ・タイムライン scrubber (click/drag で playhead 移動)</li>
-<li class="text-gray-700 leading-relaxed">  ・参考素材添付 (image/video file 選択 + drag&drop + URL)</li>
-<li class="text-gray-700 leading-relaxed">  ・期日 default = 今日</li>
-<li class="text-gray-700 leading-relaxed">  ・プレビュー block 動的更新 (input 即時反映)</li>
-<li class="text-gray-700 leading-relaxed">  ・🚀 リテイクを発行 → /api/bff/retakes (multipart) → SHOT thread に「🔁 Retake 発令」 投稿</li>
-<li class="text-gray-700 leading-relaxed"><strong>/retake_view/{shot_id}/{task_id} (受信 view-only page)</strong></li>
-<li class="text-gray-700 leading-relaxed">  ・対象 asset 再生 (TC overlay リアルタイム + マーカー TC click でシーク + 自動 play)</li>
-<li class="text-gray-700 leading-relaxed">  ・メタ (優先度 / 期日 / 発令者名 / 発令日時)</li>
-<li class="text-gray-700 leading-relaxed">  ・全体方針 (Director 入力 direction 全文)</li>
-<li class="text-gray-700 leading-relaxed">  ・コメント card click → video seek + play</li>
-<li class="text-gray-700 leading-relaxed">  ・参考素材 inline 表示 (画像拡大 / 動画 player / URL link)</li>
-<li class="text-gray-700 leading-relaxed">  ・💬 task thread を見る link (messages 連動)</li>
+        <li class="text-gray-700 leading-relaxed"><strong>/director_retake_input (Director 発令 page)</strong></li>
+        <li class="text-gray-700 leading-relaxed">&nbsp;&nbsp;・フレームプレビュー = 実 video player (mp4 自動再生・playhead↔video.currentTime 双方向 sync)</li>
+        <li class="text-gray-700 leading-relaxed">&nbsp;&nbsp;・オーバーペイント canvas (drag 描画・色切替・マーカー保存 + 復元)</li>
+        <li class="text-gray-700 leading-relaxed">&nbsp;&nbsp;・タイムライン scrubber (click/drag で playhead 移動)</li>
+        <li class="text-gray-700 leading-relaxed">&nbsp;&nbsp;・参考素材添付 (image/video file 選択 + drag&drop + URL)</li>
+        <li class="text-gray-700 leading-relaxed">&nbsp;&nbsp;・期日 default = 今日</li>
+        <li class="text-gray-700 leading-relaxed">&nbsp;&nbsp;・プレビュー block 動的更新 (input 即時反映)</li>
+        <li class="text-gray-700 leading-relaxed">&nbsp;&nbsp;・🚀 リテイクを発行 → /api/bff/retakes (multipart) → SHOT thread 「🔁 Retake 発令」 投稿</li>
+        <li class="text-gray-700 leading-relaxed"><strong>/retake_view/{shot_id}/{task_id} (受信 view-only page)</strong></li>
+        <li class="text-gray-700 leading-relaxed">&nbsp;&nbsp;・対象 asset 再生 (TC overlay リアルタイム + マーカー TC click でシーク + 自動 play)</li>
+        <li class="text-gray-700 leading-relaxed">&nbsp;&nbsp;・メタ (優先度 / 期日 / 発令者名 / 発令日時)</li>
+        <li class="text-gray-700 leading-relaxed">&nbsp;&nbsp;・全体方針 (Director 入力 direction 全文)</li>
+        <li class="text-gray-700 leading-relaxed">&nbsp;&nbsp;・コメント card click → video seek + play</li>
+        <li class="text-gray-700 leading-relaxed">&nbsp;&nbsp;・参考素材 inline 表示 (画像拡大 / 動画 player / URL link)</li>
+        <li class="text-gray-700 leading-relaxed">&nbsp;&nbsp;・💬 task thread を見る link (messages 連動)</li>
       </ul>
     </section>
+
+    <!-- 桜咲く街 具体例 -->
+    <section class="bg-gradient-to-br from-pink-50 to-purple-50 border border-pink-200 rounded-2xl p-6">
+      <h2 class="text-lg font-bold text-pink-800 mb-2">🌸 使用例 — 架空 project「桜咲く街」</h2>
+      <p class="text-gray-700 leading-relaxed text-sm">山田 Director が桜咲く街 sq01 c05 v04 を Retake 発令 → 「桜花ピンク 10% 強化」 全体方針 + 0:12 マーカー + 参考画像 2 枚添付 → 佐藤 User が /retake_view で確認 → 修正着手。</p>
+    </section>
+
+    <!-- 操作方法 -->
     <section class="bg-white rounded-2xl shadow p-6">
       <h2 class="text-xl font-bold text-gray-800 mb-4">🛠 操作方法</h2>
       <ol class="list-decimal list-inside space-y-2">
-<li class="text-gray-700 leading-relaxed">Director: qc_viewer → 🔁 Retake link → /director_retake_input?shot_id&task_id&as_role=director</li>
-<li class="text-gray-700 leading-relaxed">全体方針 textarea 入力 + 参考素材 添付 (drag&drop or click) + 優先度 + 期日</li>
-<li class="text-gray-700 leading-relaxed">video player でマーカー保存 + コメント記入 → プレビュー block 即時反映</li>
-<li class="text-gray-700 leading-relaxed">🚀 リテイクを発行 → 「✅ 発行完了 — thread / push / sse」 表示</li>
-<li class="text-gray-700 leading-relaxed">Compositor (受信側): 通知 toast → SHOT thread → ▶ ボタン → /retake_view/{shot_id}/{task_id}</li>
-<li class="text-gray-700 leading-relaxed">video + マーカー button + コメント card で全内容確認 → 修正作業へ</li>
+        <li class="text-gray-700 leading-relaxed">Director: qc_viewer → 🔁 Retake link → /director_retake_input?shot_id&task_id&as_role=director</li>
+        <li class="text-gray-700 leading-relaxed">全体方針 textarea 入力 + 参考素材添付 (drag&drop or click) + 優先度 + 期日</li>
+        <li class="text-gray-700 leading-relaxed">video player でマーカー保存 + コメント記入 → プレビュー block 即時反映</li>
+        <li class="text-gray-700 leading-relaxed">🚀 リテイクを発行 → 「✅ 発行完了 — thread / push / sse」 表示</li>
+        <li class="text-gray-700 leading-relaxed">User (受信側): 通知 toast → SHOT thread → ▶ ボタン → /retake_view/{shot_id}/{task_id}</li>
+        <li class="text-gray-700 leading-relaxed">video + マーカー button + コメント card で全内容確認 → 修正作業へ</li>
       </ol>
     </section>
   </main>
-  <footer class="text-center text-gray-400 text-xs py-6">Score Tutorial — 機能リファレンス</footer>
+  <footer class="text-center text-gray-400 text-xs py-6">Score Tutorial — 機能リファレンス (2026-06-08 改訂)</footer>
+  <div id="lightbox" class="lightbox-overlay" onclick="closeLightbox()">
+    <img id="lightbox-img" src="" alt="">
+  </div>
   <script src="../js/nav.js"></script>
 </body>
 </html>
