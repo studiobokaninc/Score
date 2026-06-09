@@ -8,6 +8,7 @@ from jinja2 import Environment, FileSystemLoader
 
 from app.adapters.calendar_factory import get_calendar_client
 from app.deps import get_actor_id, get_actor_role
+from app.qc_delegation import is_qc_delegated
 from app.helpers.project_resolver import resolve_project_name
 
 router = APIRouter()
@@ -157,6 +158,8 @@ def get_qc_viewer(
             "role": (as_role if (as_role in ('director', 'pm', 'lead', 'user') and get_actor_role(actor_id) == 'admin') else get_actor_role(actor_id)),
             "actual_role": get_actor_role(actor_id),
             "preview_role": as_role if (as_role and get_actor_role(actor_id) == 'admin') else None,
+            # 殿御命 2026-06-09 (案A): この依頼で mention された user は委任で Approve/Retake 可
+            "can_qc": is_qc_delegated(actor_id, task_id=task_id, shot_id=id),
             "demo_mode": os.getenv("CALENDAR_MOCK", "0") == "1",
             "user": user,
             "asset_list": asset_list,

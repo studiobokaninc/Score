@@ -448,7 +448,8 @@
 
         <!-- QC アクションボタン (Director/PM/Admin = 判定権限ロール・status='reviewing'/'review' な task で判定可) -->
         {# 殿御命 2026-06-05: admin も Director と同等 判定対象 (上申不要・直接 Approve/Retake) #}
-        {% if role in ('director', 'pm', 'admin') %}
+        {# 殿御命 2026-06-09 (案A): can_qc = この依頼で mention された代理 user も Approve/Retake 可 #}
+        {% if role in ('director', 'pm', 'admin') or can_qc %}
         {# 殿御命 2026-06-05: Jinja2 for-scope 問題回避 — namespace で task_status を確実取得 #}
         {% set _ns_ts = namespace(s='') %}
         {% if task_id and tasks %}
@@ -468,7 +469,7 @@
         {% endif %}
         {% set _can_judge = (_task_status in ('reviewing', 'review')) or (not task_id and (_shot_in_review or _ns_judge.any_review)) %}
         <div class="bg-white/40 backdrop-blur-xl border border-white/60 rounded-3xl shadow-xl p-5 flex flex-col gap-3">
-          <h2 class="font-bold text-slate-800 mb-1"><span translate="no">QC</span> アクション <span class="text-xs text-slate-500 font-normal">(<span translate="no">{{ role | capitalize }}</span> 専用)</span></h2>
+          <h2 class="font-bold text-slate-800 mb-1"><span translate="no">QC</span> アクション <span class="text-xs text-slate-500 font-normal">{% if role in ('director', 'pm', 'admin') %}(<span translate="no">{{ role | capitalize }}</span> 専用){% else %}(代理 — この依頼で指名されています){% endif %}</span></h2>
           {% if _can_judge %}
           {# Reviewing 状態のみ Approve/Retake 判定可 #}
           {# 殿御命 2026-06-05 (C 案): Approve 実 API 化 #}

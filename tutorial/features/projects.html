@@ -21,7 +21,18 @@
     <!-- 機能の目的 -->
     <section class="bg-gradient-to-br from-blue-50 to-white border-2 border-blue-200 rounded-2xl p-6">
       <h2 class="text-lg font-bold text-blue-800 mb-2">📘 この機能の目的</h2>
-      <p class="text-gray-700 leading-relaxed">自分が参加する全プロジェクトを一覧表示。ステータス・進捗率・担当 Director でソート・フィルタ可能。</p>
+      <p class="text-gray-700 leading-relaxed">自分がアサインされた進行中プロジェクトを一覧表示。進捗率・担当 Director でソート・フィルタ可能。</p>
+    </section>
+
+    <!-- 表示ルール (殿御命 2026-06-09) -->
+    <section class="bg-amber-50 border-2 border-amber-300 rounded-2xl p-6">
+      <h2 class="text-lg font-bold text-amber-800 mb-2">👁 一覧に表示されるプロジェクト</h2>
+      <p class="text-gray-700 leading-relaxed mb-3">この一覧には、次の<strong>両方</strong>を満たすプロジェクトだけが表示されます。</p>
+      <ul class="list-disc list-inside space-y-1">
+        <li class="text-gray-700 leading-relaxed"><strong>自分がアサインされている</strong>プロジェクト（未アサインのものは表示されません）</li>
+        <li class="text-gray-700 leading-relaxed"><strong>進行中</strong>のプロジェクト（<span class="font-bold text-amber-700">完了 (completed)・中止 (cancelled)</span> は表示されません）</li>
+      </ul>
+      <p class="text-xs text-gray-500 italic mt-3">※ 完了・中止したプロジェクトや、自分が関わっていないプロジェクトで一覧が埋もれないよう、自動で絞り込まれます。</p>
     </section>
 
     <section class="bg-white rounded-2xl shadow p-6">
@@ -66,7 +77,7 @@
         <li class="text-gray-700 leading-relaxed"><strong>ステータス filter</strong> — 「進行中」「完了待ち」「納品済」 で絞込み</li>
         <li class="text-gray-700 leading-relaxed"><strong>進捗率表示</strong> — 各プロジェクトの全 SHOT Approved 率を視覚化</li>
         <li class="text-gray-700 leading-relaxed"><strong>納品日カウントダウン</strong> — 残日数で警告色 (赤 7 日以内・黄 14 日以内)</li>
-        <li class="text-gray-700 leading-relaxed"><strong>役割別表示</strong> — PM は全プロジェクト・User は参加分のみ</li>
+        <li class="text-gray-700 leading-relaxed"><strong>自動絞り込み</strong> — 自分がアサインされた進行中プロジェクトのみ表示（完了・中止・未アサインは非表示）</li>
         <li class="text-gray-700 leading-relaxed"><strong>各行 click でプロジェクト詳細遷移</strong> — SHOT 一覧へ即移動</li>
       </ul>
     </section>
@@ -88,7 +99,7 @@
       </ol>
     </section>
   </main>
-  <footer class="text-center text-gray-400 text-xs py-6">Score Tutorial — 機能リファレンス (2026-06-08 改訂)</footer>
+  <footer class="text-center text-gray-400 text-xs py-6">Score Tutorial — 機能リファレンス (2026-06-09 改訂)</footer>
   <div id="lightbox" class="lightbox-overlay" onclick="closeLightbox()">
     <img id="lightbox-img" src="" alt="">
   </div>

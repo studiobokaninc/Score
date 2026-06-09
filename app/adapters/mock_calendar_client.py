@@ -464,6 +464,7 @@ class MockCalendarClient(CalendarClient):
                 return CalendarUser(
                     user_id=u["user_id"], email=u["email"],
                     name=u["name"], role=u["role"],
+                    icon_url=u.get("avatar_url"),  # 殿御命 2026-06-08: sidemenu avatar 反映
                 )
         # default = 殿
         default_u = next((x for x in state.get("users", []) if x.get("user_id") == 99), None)
@@ -471,6 +472,7 @@ class MockCalendarClient(CalendarClient):
             return CalendarUser(
                 user_id=default_u["user_id"], email=default_u["email"],
                 name=default_u["name"], role=default_u["role"],
+                icon_url=default_u.get("avatar_url"),  # 殿御命 2026-06-08
             )
         # final fallback
         return CalendarUser(user_id=99, email="ryoji@studiobokan.com",
@@ -1126,10 +1128,22 @@ class MockCalendarClient(CalendarClient):
 
     def post_my_avatar(self, file_data: bytes, filename: str, content_type: str,
                        actor_user_id: str) -> dict:
-        """POST /api/me/avatar mock — state.users の avatar_url を更新して返す"""
-        import time as _time
+        """POST /api/me/avatar mock — 画像 bytes を score_be/uploads/avatars/ へ実体保存し
+        state.users の avatar_url を更新して返す (殿御命 2026-06-08: bytes 未保存 bug 修正)。"""
+        import time as _time, os as _os
         ts = int(_time.time())
-        avatar_url = f"/uploads/avatars/{actor_user_id}_{ts}_{filename}"
+        # path traversal 防止: filename は basename のみ採用
+        safe_name = _os.path.basename(filename or "avatar").replace("/", "_").replace("\\", "_") or "avatar"
+        stored_name = f"{actor_user_id}_{ts}_{safe_name}"
+        # score_be/uploads/avatars/ (app/adapters/ から 2 階層上 = score_be)
+        avatars_dir = _os.path.join(
+            _os.path.dirname(_os.path.dirname(_os.path.dirname(_os.path.abspath(__file__)))),
+            "uploads", "avatars",
+        )
+        _os.makedirs(avatars_dir, exist_ok=True)
+        with open(_os.path.join(avatars_dir, stored_name), "wb") as f:
+            f.write(file_data or b"")
+        avatar_url = f"/uploads/avatars/{stored_name}"
         def upd(state):
             for u in state.get("users", []):
                 if str(u.get("id")) == str(actor_user_id) or str(u.get("user_id")) == str(actor_user_id):

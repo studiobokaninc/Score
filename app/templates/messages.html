@@ -525,6 +525,17 @@ const threads = {
 
 let activeThread = null;
 
+// 殿御命 2026-06-08: msg 送信者アバター (名前から決定的に配色したイニシャル円)
+function _avatarChip(name, size) {
+  const n = (name || '?').trim();
+  const initial = (n[0] || '?').toUpperCase();
+  const colors = ['bg-rose-400','bg-amber-400','bg-emerald-400','bg-sky-400','bg-indigo-400','bg-purple-400','bg-pink-400','bg-teal-400'];
+  let h = 0; for (let i = 0; i < n.length; i++) h = (h * 31 + n.charCodeAt(i)) >>> 0;
+  const c = colors[h % colors.length];
+  const sz = size || 'w-8 h-8';
+  return `<div class="${sz} rounded-full ${c} text-white flex items-center justify-center text-xs font-black shrink-0" translate="no">${initial}</div>`;
+}
+
 function buildBubble(msg) {
   const isRight = msg.side === 'right';
   const roleBadge = msg.role
@@ -536,15 +547,17 @@ function buildBubble(msg) {
 
   if (isRight) {
     return `
-      <div class="flex justify-end">
+      <div class="flex justify-end gap-2 items-end">
         <div class="max-w-sm">
           <div class="text-[10px] text-slate-400 text-right mb-1">Sato · ${msg.time}</div>
           <div class="bg-indigo-50 border border-indigo-100 p-3 bubble-right text-sm text-slate-700">${msg.text}</div>
         </div>
+        ${_avatarChip('Sato')}
       </div>`;
   } else {
     return `
-      <div class="flex gap-3 items-end">
+      <div class="flex gap-2 items-end">
+        ${_avatarChip(msg.from)}
         <div class="max-w-sm">
           <div class="flex items-center gap-2 mb-1">
             <span class="text-xs font-bold text-slate-700">${msg.from}</span>
@@ -824,11 +837,13 @@ async function openRealThread(threadId) {
         const time = (m.created_at || '').slice(11, 16);
         const date = (m.created_at || '').slice(0, 10);
         return `
-          <div class="flex ${isMe ? 'justify-end' : 'justify-start'}">
+          <div class="flex ${isMe ? 'justify-end' : 'justify-start'} gap-2 items-end">
+            ${isMe ? '' : _avatarChip(senderName)}
             <div class="max-w-xl">
               <div class="text-[10px] text-slate-400 mb-1 ${isMe ? 'text-right' : ''}">${_escapeHtml(senderName)} · ${_escapeHtml(date)} ${_escapeHtml(time)}</div>
               <div class="bg-${isMe ? 'indigo-50' : 'white'} border border-${isMe ? 'indigo-100' : 'slate-200'} p-3 ${isMe ? 'bubble-right' : 'bubble-left'} text-sm text-slate-700 whitespace-pre-wrap">${_renderDmBody(m.body || '')}</div>
             </div>
+            ${isMe ? _avatarChip('自分') : ''}
           </div>`;
       }).join('') || '<p class="text-center text-slate-400 text-xs">(まだメッセージなし)</p>';
     } else {
@@ -841,10 +856,10 @@ async function openRealThread(threadId) {
   // 殿御命 2026-06-05 (nibu Phase 2): server 既読 mark + localStorage 二重管理
   fetch('/api/bff/dm/threads/' + t.thread_id + '/read', { method: 'POST', credentials: 'include' }).catch(() => {});
   try { localStorage.setItem('score_dm_read_' + t.thread_id, t.updated_at || ''); } catch(e) {}
-  // active row 強調
+  // active row 強調 (殿御命 2026-06-09: demo と同等の明瞭ハイライト = 左太線+背景)
   document.querySelectorAll('[data-real-thread-row]').forEach(el => el.classList.remove('bg-indigo-50', 'border-l-4', 'border-indigo-400'));
   const rowEl = document.querySelector(`[data-real-thread-row="${t.thread_id}"]`);
-  if (rowEl) rowEl.classList.add('bg-indigo-50');
+  if (rowEl) rowEl.classList.add('bg-indigo-50', 'border-l-4', 'border-indigo-400');
   _recalcDmUnread();
   // dmMode を thread mode に切替 (sendMessage 用)
   dmMode = { threadId: t.thread_id, userName: nameLine };
@@ -891,13 +906,15 @@ function _recalcDmUnread() {
       if (isUnread) unread++;
       const rowEl = document.querySelector(`[data-real-thread-row="${tm.id}"]`);
       if (rowEl) {
-        rowEl.classList.toggle('bg-rose-50/50', isUnread);
+        // 殿御命 2026-06-09: 赤マークを行の左端 (truncate 外) に置きクリップ回避・背景も明瞭化
+        rowEl.classList.toggle('bg-rose-50', isUnread);
         let dot = rowEl.querySelector('.dm-unread-dot');
         if (isUnread && !dot) {
           const d = document.createElement('span');
-          d.className = 'dm-unread-dot inline-block w-2 h-2 bg-rose-500 rounded-full ml-1 shrink-0';
-          const titleEl = rowEl.querySelector('.font-bold');
-          if (titleEl) titleEl.appendChild(d);
+          d.className = 'dm-unread-dot w-2.5 h-2.5 bg-rose-500 rounded-full shrink-0 self-center';
+          const flex = rowEl.querySelector('div.flex.items-center');
+          if (flex) flex.insertBefore(d, flex.firstChild);
+          else { const t = rowEl.querySelector('.font-bold'); if (t) t.appendChild(d); }
         } else if (!isUnread && dot) {
           dot.remove();
         }

@@ -208,7 +208,7 @@
 
 <!-- アバター編集 modal -->
 <div id="avatar-modal" class="hidden fixed inset-0 bg-black/40 backdrop-blur-sm flex items-center justify-center z-50" onclick="if(event.target.id==='avatar-modal')_closeAvatarModal()">
-  <div class="bg-white rounded-3xl shadow-2xl p-6 w-[28rem] max-w-full" onclick="event.stopPropagation()">
+  <div class="bg-white rounded-3xl shadow-2xl p-6 w-[28rem] max-w-full max-h-[90vh] overflow-y-auto" onclick="event.stopPropagation()">
     <div class="flex items-center justify-between mb-4">
       <h3 class="text-lg font-black text-slate-800">🖼 アバター編集</h3>
       <button onclick="_closeAvatarModal()" class="text-slate-400 hover:text-slate-600 text-xl leading-none">×</button>
@@ -381,6 +381,7 @@ function _linkGoogle() {
 function _onAvatarChange(ev) {
   const f = ev.target.files[0];
   if (!f) return;
+  _pendingAvatarFile = f;  // 殿御命 2026-06-09: 確定時に実サーバへ upload する原本
   const reader = new FileReader();
   reader.onload = function(e){
     // 一時 stash (確定するまで本 storage に書き込まない)
@@ -393,7 +394,8 @@ function _onAvatarChange(ev) {
   reader.readAsDataURL(f);
 }
 
-let _pendingAvatar = null;  // modal 内で編集中の画像
+let _pendingAvatar = null;  // modal 内で編集中の画像 (dataURL・preview用)
+let _pendingAvatarFile = null;  // 殿御命 2026-06-09: 確定時に実サーバへ送る原本 File
 
 function _openAvatarModal() {
   const modal = document.getElementById('avatar-modal');
@@ -423,6 +425,7 @@ function _openAvatarModal() {
 function _closeAvatarModal() {
   document.getElementById('avatar-modal').classList.add('hidden');
   _pendingAvatar = null;
+  _pendingAvatarFile = null;
   // preview を 元 saved state に戻す
   const saved = localStorage.getItem(_profKey('avatar'));
   if (saved) {
@@ -432,16 +435,42 @@ function _closeAvatarModal() {
   }
 }
 function _confirmAvatar() {
+  const zoom = document.getElementById('avatar-zoom').value;
+  const x = document.getElementById('avatar-x').value;
+  const y = document.getElementById('avatar-y').value;
   if (_pendingAvatar) {
     localStorage.setItem(_profKey('avatar'), _pendingAvatar);
-    const zoom = document.getElementById('avatar-zoom').value;
-    const x = document.getElementById('avatar-x').value;
-    const y = document.getElementById('avatar-y').value;
     localStorage.setItem(_profKey('avatar_transform'), JSON.stringify({zoom, x, y}));
     // メイン display にも適用
     _applyAvatarToDisplay(document.getElementById('avatar-display'), _pendingAvatar, {zoom, x, y});
   }
-  document.getElementById('avatar-modal').classList.add('hidden');
+  // 殿御命 2026-06-09: 新規選択画像は実サーバ(/api/bff/me/avatar)へ upload → 永続化 + sidemenu 即反映
+  const saveBtn = document.getElementById('avatar-save-btn');
+  const closeModal = () => document.getElementById('avatar-modal').classList.add('hidden');
+  if (_pendingAvatarFile) {
+    if (saveBtn) { saveBtn.disabled = true; saveBtn.textContent = '⏳ 保存中...'; }
+    const fd = new FormData();
+    fd.append('file', _pendingAvatarFile);
+    fetch('/api/bff/me/avatar', {method: 'POST', body: fd, credentials: 'include'})
+      .then(r => r.json())
+      .then(data => {
+        if (data && data.avatar_url) {
+          const bust = `${data.avatar_url}?t=${Date.now()}`;
+          const sm = document.getElementById('sidemenu-avatar');
+          if (sm) sm.innerHTML = `<img src="${bust}" alt="avatar" class="w-full h-full object-cover">`;
+        } else if (data && data.error) {
+          alert('⚠️ アバター保存失敗: ' + data.error);
+        }
+      })
+      .catch(err => { console.error('avatar upload error', err); alert('⚠️ アバター保存に失敗しました (通信エラー)'); })
+      .finally(() => {
+        if (saveBtn) { saveBtn.disabled = false; saveBtn.textContent = '✓ 確定'; }
+        _pendingAvatarFile = null;
+        closeModal();
+      });
+  } else {
+    closeModal();
+  }
 }
 function _applyAvatarToDisplay(el, dataURL, tf) {
   if (!el) return;
@@ -504,9 +533,15 @@ function submitAvatar(ev) {
     .then(r => r.json())
     .then(data => {
       if (data.avatar_url) {
+        const bust = `${data.avatar_url}?t=${Date.now()}`;
         const display = document.getElementById('avatar-display');
-        display.style.backgroundImage = `url('${data.avatar_url}?t=${Date.now()}')`;
+        display.style.backgroundImage = `url('${bust}')`;
         display.innerHTML = '';
+        // 殿御命 2026-06-08: サイドメニューの icon も即時更新 (reload 不要)
+        const sm = document.getElementById('sidemenu-avatar');
+        if (sm) {
+          sm.innerHTML = `<img src="${bust}" alt="avatar" class="w-full h-full object-cover">`;
+        }
       }
     })
     .catch(err => console.error('avatar upload error', err));

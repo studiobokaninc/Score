@@ -31,19 +31,8 @@
 <div class="flex-1 {% if not _force_prompt %}ml-24{% endif %} overflow-y-auto pb-32">
 <div class="max-w-2xl mx-auto px-4 pt-8">
 
-  <!-- Mode switcher -->
-  <div class="bg-white/40 backdrop-blur-xl border border-white/60 rounded-3xl shadow-xl p-2 flex gap-2 mb-8">
-    <button id="btn-prev"
-      class="flex-1 py-3 rounded-xl font-bold text-sm transition-all text-slate-600"
-      onclick="setMode('prev')">
-      📅 前日振返り（遡及）
-    </button>
-    <button id="btn-today"
-      class="flex-1 py-3 rounded-xl font-bold text-sm transition-all text-slate-600"
-      onclick="setMode('today')">
-      🚪 本日退勤
-    </button>
-  </div>
+  {# 殿御命 2026-06-09: 前日/本日 切替タブ撤去。前日報告はログイン時に強制されるため通常退勤ページには不要。
+     表示する section は URL ?mode=previous (ログイン強制フロー) のみ前日・それ以外は本日。 #}
 
   <!-- 過去 7 日履歴 panel (nibu 殿納品 2026-06-01 GET /api/me/timecards 結線) -->
   {% if timecards_history %}
@@ -70,7 +59,7 @@
   {% endif %}
 
   <!-- ===== PREV MODE ===== -->
-  <div id="section-prev" class="space-y-6 fade-in">
+  <div id="section-prev" class="space-y-6 fade-in" style="display:none;">
     <!-- TODO Phase4: 日付を実データバインド -->
     <h1 class="text-2xl font-black text-slate-800">📅 昨日の退勤報告（遡及）</h1>
 
@@ -175,9 +164,11 @@ function setMode(m) {
   const btnPrev = document.getElementById('btn-prev');
   const btnToday = document.getElementById('btn-today');
 
-  prev.style.display = m === 'prev' ? 'block' : 'none';
-  today.style.display = m === 'today' ? 'block' : 'none';
+  if (prev) prev.style.display = m === 'prev' ? 'block' : 'none';
+  if (today) today.style.display = m === 'today' ? 'block' : 'none';
 
+  // 切替タブ撤去後 (殿御命 2026-06-09) は btn 不在ゆえ styling skip
+  if (!btnPrev || !btnToday) return;
   if (m === 'prev') {
     btnPrev.classList.add('bg-rose-500', 'text-white');
     btnPrev.classList.remove('text-slate-600');
@@ -378,7 +369,7 @@ function renderAssignedTasks(listEl, emptyEl, mode) {
 
   // Filter: approved は今日完了マーク付きのみ表示
   const visible = tasks.filter(t => {
-    const st = (t.status || '').toLowerCase();
+    const st = (t.status || '').toLowerCase().replace(/-/g, '_');  // 殿御命 2026-06-09: in-progress 等の表記揺れ吸収
     if (['approved','completed','done'].indexOf(st) >= 0) {
       return completedMarks[t.task_id] === TODAY_KEY;
     }
@@ -426,7 +417,7 @@ function renderAssignedTasks(listEl, emptyEl, mode) {
 
   for (const tk of visible) {
     const tid = tk.task_id;
-    const st = (tk.status || '').toLowerCase();
+    const st = (tk.status || '').toLowerCase().replace(/-/g, '_');  // 殿御命 2026-06-09: in-progress 等の表記揺れ吸収
     const {name, type} = _taskLabel(tk);
     const icon = _taskIconFor(type);
     const isWIP = WIP_STATUSES.indexOf(st) >= 0;
@@ -530,7 +521,7 @@ function renderAssignedTasks(listEl, emptyEl, mode) {
 // ===== Next-day priority tasks (system-presented) =====
 const DONE_STATUSES = ['approved', 'completed', 'done'];
 function _isTaskComplete(t) {
-  if (DONE_STATUSES.indexOf((t.status || '').toLowerCase()) >= 0) return true;
+  if (DONE_STATUSES.indexOf((t.status || '').toLowerCase().replace(/-/g, '_')) >= 0) return true;
   // 「完了」チェックボックス ON または今日完了マーク有 = コンプリート扱い
   const statusChg = _lsGet(LS_STATUS_CHG, {});
   if (statusChg[t.task_id] === 'complete') return true;

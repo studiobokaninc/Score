@@ -2,7 +2,7 @@ import os
 
 import httpx
 from fastapi import APIRouter, Depends, Form, Request
-from fastapi.responses import RedirectResponse
+from fastapi.responses import RedirectResponse, JSONResponse
 from fastapi.templating import Jinja2Templates
 from jinja2 import Environment, FileSystemLoader
 from pathlib import Path
@@ -236,6 +236,7 @@ def post_bug_report(
     description: str = Form(...),
     severity: str = Form(default="medium"),
     page_url: str = Form(default=""),
+    operation_log: str = Form(default=""),   # 殿御命 2026-06-09: client が直近操作を JSON で添付
     actor_id: str = Depends(get_actor_id),
     db: Session = Depends(get_db),
 ):
@@ -249,13 +250,56 @@ def post_bug_report(
         description=description.strip()[:5000],
         severity=sev_norm,
         page_url=page_url.strip()[:500] or None,
+        operation_log=(operation_log or "").strip()[:20000] or None,
+        user_agent=(request.headers.get("user-agent") or "")[:500] or None,
         status="open",
     )
     db.add(report)
     db.commit()
     db.refresh(report)
     # 303 redirect で GET 化 (POST-then-GET 慣習)
-    return RedirectResponse(url=f"/help?submitted={report.id}", status_code=303)
+    return RedirectResponse(url=f"/bug_report?submitted={report.id}", status_code=303)
+
+
+@router.get("/bug_report")
+def get_bug_report(request: Request, submitted: str | None = None,
+                   actor_id: str = Depends(get_actor_id)):
+    """殿御命 2026-06-09: バグ報告 専用ページ (サイドメニュー導線)。
+    閲覧 UI は持たない (殿御命: Score 内にバグ閲覧 IF 不要)。送信のみ。"""
+    user = _safe_user(actor_id)
+    return _templates.TemplateResponse(
+        request=request, name="bug_report.html",
+        context={"user": user, "active": "bug_report", "submitted": submitted,
+                 "demo_mode": os.getenv("CALENDAR_MOCK", "0") == "1"},
+    )
+
+
+@router.get("/api/bug_reports/export.csv")
+def export_bug_reports_csv(actor_id: str = Depends(get_actor_id), db: Session = Depends(get_db)):
+    """殿御命 2026-06-09: 全バグ報告を CSV ダウンロード (admin 限定・こちら側で閲覧用)。
+    Score 内に閲覧 UI は作らず、この CSV を落として修正対象を選ぶ運用。"""
+    from app.deps import get_actor_role
+    import csv as _csv, io as _io
+    from fastapi.responses import Response as _Response
+    if get_actor_role(actor_id) != "admin":
+        return JSONResponse(status_code=403, content={"detail": "admin 限定"})
+    rows = db.query(BugReport).order_by(BugReport.created_at.desc()).all()
+    buf = _io.StringIO()
+    buf.write("﻿")  # Excel 用 BOM (日本語文字化け防止)
+    w = _csv.writer(buf)
+    w.writerow(["id", "created_at", "severity", "status", "reporter_name", "reporter_user_id",
+                "title", "description", "page_url", "user_agent", "operation_log"])
+    for r in rows:
+        w.writerow([
+            r.id, r.created_at.isoformat() if r.created_at else "", r.severity, r.status,
+            r.reporter_name or "", r.reporter_user_id or "", r.title or "",
+            r.description or "", r.page_url or "", r.user_agent or "", r.operation_log or "",
+        ])
+    return _Response(
+        content=buf.getvalue(),
+        media_type="text/csv; charset=utf-8",
+        headers={"Content-Disposition": "attachment; filename=score_bug_reports.csv"},
+    )
 
 
 @router.get("/meetings/{meeting_id}")
@@ -409,6 +453,23 @@ def get_projects(request: Request, actor_id: str = Depends(get_actor_id)):
             projects = client.get_my_projects(actor_user_id=actor_id)
     except httpx.ConnectError:
         projects = []
+    # 殿御命 2026-06-09: /projects 表示は ① completed/cancelled 除外 ② 自分アサイン分のみ
+    _EXCLUDED_STATUS = {"completed", "complete", "cancelled", "canceled", "archived"}
+    try:
+        _mine = client.get_my_projects(actor_user_id=actor_id)
+        _mine = _mine if isinstance(_mine, list) else (_mine or {}).get("projects", [])
+        _assigned_ids = {p.get("id") for p in _mine if isinstance(p, dict)}
+    except Exception:
+        _assigned_ids = None  # 取得失敗時は assignment 絞り込みを skip (status filter のみ適用)
+
+    def _project_visible(p):
+        if (p.get("status") or "").lower() in _EXCLUDED_STATUS:
+            return False
+        if _assigned_ids is not None and p.get("id") not in _assigned_ids:
+            return False
+        return True
+
+    projects = [p for p in (projects or []) if isinstance(p, dict) and _project_visible(p)]
     # 各 project 別の議事録を fetch (Calendar /projects/{id}/meetings)
     # test data filter: タイトルが test/sample/dummy 系の物は除外 (nibu 殿削除依頼後 filter 除去予定)
     _TEST_PATTERNS = ("テスト", "test", "更新されたテスト", "サンプル", "ダミー", "dummy")

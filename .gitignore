@@ -24,3 +24,9 @@ app/data/score_mock_state.yaml
 *.db
 *.sqlite
 *.sqlite3
+
+# user upload 画像 (avatar 等・mock 実体保存)
+uploads/
+
+# 検証用スクショ (殿 login テスト等)
+tutorial/test_*.png

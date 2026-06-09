@@ -57,6 +57,8 @@
       <span class="text-xl">🚪</span><span>退勤</span></a>
     <a href="/settings/notifications" class="flex flex-col items-center gap-0.5 py-2.5 w-full rounded-2xl {% if active == 'settings' %}bg-indigo-100 text-indigo-600 font-bold{% else %}text-slate-500 hover:bg-white/40{% endif %} text-xs transition-all">
       <span class="text-xl">⚙️</span><span>通知設定</span></a>
+    <a href="/bug_report" class="flex flex-col items-center gap-0.5 py-2.5 w-full rounded-2xl {% if active == 'bug_report' %}bg-rose-100 text-rose-600 font-bold{% else %}text-slate-500 hover:bg-white/40{% endif %} text-xs transition-all">
+      <span class="text-xl">🐛</span><span>バグ報告</span></a>
   </nav>
   <!-- 言語切替 button (sidemenu 内部に統合) -->
   <button onclick="openLanguageModalSidemenu()" title="言語切替" class="mt-2 flex flex-col items-center gap-0.5 py-1.5 w-full rounded-2xl text-slate-500 hover:bg-white/40 text-[9px] transition-all">
@@ -65,7 +67,7 @@
   </button>
   <!-- user icon = /profile への 設定 入口 -->
   <a href="/profile" title="プロフィール設定" class="mt-2 flex flex-col items-center gap-1 group">
-    <div class="w-10 h-10 rounded-full overflow-hidden bg-indigo-600 text-white flex items-center justify-center font-black group-hover:ring-2 group-hover:ring-indigo-400 transition-all relative">
+    <div id="sidemenu-avatar" class="w-10 h-10 rounded-full overflow-hidden bg-indigo-600 text-white flex items-center justify-center font-black group-hover:ring-2 group-hover:ring-indigo-400 transition-all relative">
       {% if user and user.icon_url %}
       <img src="{{ user.icon_url }}" alt="{{ user.name or 'user' }}" class="w-full h-full object-cover" onerror="this.style.display='none';this.nextElementSibling.style.display='flex';">
       <span class="hidden w-full h-full items-center justify-center" translate="no">{{ (user.name or 'U')[:1] | upper }}</span>
@@ -137,5 +139,66 @@ function closeLanguageModalSidemenu() { document.getElementById('language-modal-
   window.addEventListener('pageshow', _updateMsgUnread);
   // messages page で localStorage 既読 mark 後の即時反映用 (custom event)
   window.addEventListener('score:dm-read-updated', _updateMsgUnread);
+})();
+</script>
+
+<script>
+// 殿御命 2026-06-09: 操作ログ採取 — バグ報告に直近操作を自動添付する全 page 共通ロガー。
+// sessionStorage の ring buffer (直近 80 件)。記録は「種別・対象ラベル・時刻」のみ。入力値(PII)は記録しない。
+(function(){
+  if (window._scoreOpLogInit) return;
+  window._scoreOpLogInit = true;
+  var KEY = 'score_op_log', MAX = 80;
+  function _now(){ try { return new Date().toISOString(); } catch(e){ return ''; } }
+  function _push(kind, detail){
+    try {
+      var arr = JSON.parse(sessionStorage.getItem(KEY) || '[]');
+      arr.push({ t: _now(), k: kind, d: String(detail).slice(0, 200) });
+      if (arr.length > MAX) arr = arr.slice(arr.length - MAX);
+      sessionStorage.setItem(KEY, JSON.stringify(arr));
+    } catch(e){}
+  }
+  window._scoreOpLog = _push;
+  // 1) ページ遷移
+  _push('nav', location.pathname + location.search);
+  // 2) クリック対象 (button / a / [role=button]) のラベルのみ
+  document.addEventListener('click', function(ev){
+    try {
+      var el = ev.target.closest('button, a, [role=button], [onclick]');
+      if (!el) return;
+      var label = (el.getAttribute('aria-label') || el.getAttribute('title') || (el.textContent||'').trim() || el.id || el.tagName).slice(0, 60);
+      var tag = el.tagName.toLowerCase() + (el.id ? '#'+el.id : '');
+      _push('click', tag + ' : ' + label);
+    } catch(e){}
+  }, true);
+  // 3) fetch 呼出 (method + path + status) — body は記録しない
+  if (window.fetch && !window._scoreFetchWrapped) {
+    window._scoreFetchWrapped = true;
+    var _origFetch = window.fetch;
+    window.fetch = function(){
+      var args = arguments;
+      var url = '', method = 'GET';
+      try {
+        var a0 = args[0];
+        url = (typeof a0 === 'string') ? a0 : (a0 && a0.url) || '';
+        method = (args[1] && args[1].method) || (a0 && a0.method) || 'GET';
+        try { url = new URL(url, location.origin).pathname; } catch(e2){}
+      } catch(e){}
+      return _origFetch.apply(this, args).then(function(r){
+        _push('api', method + ' ' + url + ' -> ' + (r && r.status));
+        return r;
+      }).catch(function(err){
+        _push('api', method + ' ' + url + ' -> ERR ' + (err && err.message));
+        throw err;
+      });
+    };
+  }
+  // 4) JS エラー
+  window.addEventListener('error', function(ev){
+    try { _push('error', (ev.message||'') + ' @' + (ev.filename||'').split('/').pop() + ':' + (ev.lineno||'')); } catch(e){}
+  });
+  window.addEventListener('unhandledrejection', function(ev){
+    try { _push('error', 'promise: ' + ((ev.reason && ev.reason.message) || ev.reason || '')); } catch(e){}
+  });
 })();
 </script>

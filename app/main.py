@@ -67,6 +67,12 @@ _static_dir = _Path(__file__).parent / "static"
 _static_dir.mkdir(exist_ok=True)
 app.mount("/static", StaticFiles(directory=str(_static_dir)), name="static")
 
+# 殿御命 2026-06-08: avatar 等の user upload 画像配信用 (/uploads/*)
+# mock の post_my_avatar が score_be/uploads/ 配下へ実体保存 → ここで配信
+_uploads_dir = _Path(__file__).parent.parent / "uploads"
+_uploads_dir.mkdir(exist_ok=True)
+app.mount("/uploads", StaticFiles(directory=str(_uploads_dir)), name="uploads")
+
 # 殿御命 2026-06-08: tutorial を score_be 経由で配信 (/tutorial)
 _tutorial_dir = _Path(__file__).parent.parent / "tutorial"
 if _tutorial_dir.exists():
@@ -92,6 +98,24 @@ def serve_sw_at_root():
 # 起動時に DB table を auto-create (alembic migration を待たず)
 from app.database import Base, engine
 Base.metadata.create_all(bind=engine)
+
+# 殿御命 2026-06-09: 既存 SQLite への列追加 (create_all は既存テーブルを ALTER せぬため idempotent migration)
+def _ensure_columns():
+    from sqlalchemy import text as _sql_text
+    _migrations = [
+        ("bug_reports", "operation_log", "TEXT"),
+        ("bug_reports", "user_agent", "VARCHAR"),
+    ]
+    try:
+        with engine.begin() as conn:
+            for table, col, coltype in _migrations:
+                existing = [r[1] for r in conn.execute(_sql_text(f"PRAGMA table_info({table})"))]
+                if col not in existing:
+                    conn.execute(_sql_text(f"ALTER TABLE {table} ADD COLUMN {col} {coltype}"))
+    except Exception as _e:
+        import sys as _sys
+        print(f"[migration] skip/err: {_e}", file=_sys.stderr)
+_ensure_columns()
 
 app.include_router(bff.router, prefix="")
 app.include_router(pages_dashboard.router)

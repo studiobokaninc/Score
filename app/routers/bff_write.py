@@ -571,6 +571,31 @@ async def post_asset_upload(
 
         mention_uids = _resolve_uids(mentions)
 
+        # 殿御命 2026-06-09 (案A): mention された user に『この依頼 1 件限定』で Approve/Retake を委任 (DB 記録)。
+        # グローバル昇格ではなく依頼単位。後で QC viewer 表示時・approve/retake 時に参照する。
+        try:
+            if mention_uids:
+                _asset_id_d = (result.get("id") or result.get("asset_id")) if isinstance(result, dict) else None
+                from app.database import SessionLocal as _SL
+                from app.models import QcDelegation as _QD
+                _uids_csv = "," + ",".join(str(u) for u in sorted(mention_uids)) + ","
+                _db = _SL()
+                try:
+                    _db.add(_QD(
+                        task_id=str(task_id) if task_id is not None else None,
+                        shot_id=str(shot_id) if shot_id is not None else None,
+                        asset_id=str(_asset_id_d) if _asset_id_d is not None else None,
+                        submission_type=submission_type if submission_type in ("qc", "review") else "qc",
+                        mentioned_uids=_uids_csv,
+                        requested_by=str(actor_id),
+                        status="open",
+                    ))
+                    _db.commit()
+                finally:
+                    _db.close()
+        except Exception as _de:
+            import sys as _s; print(f"[qc_delegation] skip: {_de}", file=_s.stderr)
+
         # 殿御命 2026-06-05 (C 案): Director 不在 project は mention 必須
         # PM は project 未設定でも fallback で必ず含む (殿御方針「両方とも PM 必須」)
         FALLBACK_PM_CUID = 52
@@ -801,12 +826,11 @@ async def push_subscribe(request: Request, actor_id: str = Depends(get_actor_id)
         raise HTTPException(status_code=400, detail="subscription endpoint 必須")
     store = _push_store_read()
     key = str(cuid)
-    subs = store.get(key, [])
-    if not any(s.get("endpoint") == body.get("endpoint") for s in subs):
-        subs.append(body)
-        store[key] = subs
-        _push_store_write(store)
-    return JSONResponse(content={"ok": True, "cuid": int(cuid), "total_subs": len(subs)})
+    # 殿御命 2026-06-09: 1 user 1 購読に統一。複数 origin/端末/再購読で同一 user に複数 endpoint が
+    # 溜まると OS 通知が重複する (殿: Chrome push が 2 個)。最後に subscribe した 1 件のみ保持。
+    store[key] = [body]
+    _push_store_write(store)
+    return JSONResponse(content={"ok": True, "cuid": int(cuid), "total_subs": 1})
 
 
 @router.post("/api/bff/push/test")
@@ -1299,7 +1323,12 @@ async def upload_my_avatar(
     file: UploadFile = File(...),
     actor_id: str = Depends(get_actor_id),
 ):
-    """Avatar image upload → Calendar POST /api/me/avatar pass-through"""
+    """Avatar image upload → Calendar POST /api/me/avatar pass-through.
+
+    殿御命 2026-06-09: Calendar は upload を受け avatar_url(/uploads/...) を返すが、
+    その画像を自身では配信しておらず (全パス 404)、相対 URL ゆえブラウザは Score origin に
+    取りに行き 404 → アバター真っ白。対策として Calendar が返した URL と同一パスで
+    Score 側にローカル複製を保存し、Score の /uploads mount で配信して表示を担保する。"""
     client = get_calendar_client()
     content = await file.read()
     result = client.post_my_avatar(
@@ -1308,5 +1337,22 @@ async def upload_my_avatar(
         content_type=file.content_type or "application/octet-stream",
         actor_user_id=actor_id,
     )
+    # avatar_url が /uploads/ 配下なら Score にも同一パスで複製保存 (real mode で Calendar 未配信を補う)
+    try:
+        avatar_url = result.get("avatar_url", "") if isinstance(result, dict) else ""
+        if isinstance(avatar_url, str) and avatar_url.startswith("/uploads/"):
+            rel = avatar_url[len("/uploads/"):].split("?")[0].lstrip("/")
+            uploads_root = _os.path.join(
+                _os.path.dirname(_os.path.dirname(_os.path.dirname(_os.path.abspath(__file__)))),
+                "uploads",
+            )
+            dest = _os.path.normpath(_os.path.join(uploads_root, rel))
+            # path traversal 防止: uploads_root 配下に限定
+            if dest.startswith(_os.path.abspath(uploads_root) + _os.sep):
+                _os.makedirs(_os.path.dirname(dest), exist_ok=True)
+                with open(dest, "wb") as f:
+                    f.write(content)
+    except Exception:
+        pass  # 複製失敗は致命でない (Calendar 側保存は成功・表示のみ best-effort)
     return JSONResponse(content=result, headers={"X-Actor-User-Id": actor_id})
 # touch 1780901283

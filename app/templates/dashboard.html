@@ -187,23 +187,6 @@
       </section>
       {% endif %}
 
-      {# === 後輩レビュー (Calendar /api/me/retakes 自然発生・lead/director 時のみ表示) === #}
-      {% if my_retakes %}
-      <section>
-        <h2 class="font-black text-slate-800 text-base mb-3 flex items-center gap-2">
-          👥 後輩レビュー <span class="text-xs bg-violet-100 text-violet-700 rounded-full px-2 py-0.5 font-bold">{{ my_retakes_total }}</span>
-        </h2>
-        <div class="space-y-2">
-          {% for r in my_retakes %}
-          <a href="/task/{{ r.task_id }}" class="block bg-violet-50 hover:bg-violet-100 border border-violet-200 rounded-2xl p-3 transition-all">
-            <p class="text-sm font-bold text-violet-900 truncate"><span translate="no">{{ r.shot_code }}</span> <span translate="no">{{ r.task_type }}</span></p>
-            <p class="text-[10px] text-violet-700 mt-0.5"><span translate="no">{{ r.project_name }}</span>{% if r.assignee_id %} · 担当 user_{{ r.assignee_id }}{% endif %}</p>
-          </a>
-          {% endfor %}
-        </div>
-      </section>
-      {% endif %}
-
       {# === 本日やるべきタスク (my_tasks) === #}
       <section>
         <h2 class="font-black text-slate-800 text-base mb-3 flex items-center gap-2">

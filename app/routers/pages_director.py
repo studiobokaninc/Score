@@ -5,6 +5,7 @@ from jinja2 import Environment, FileSystemLoader
 from pathlib import Path
 from app.deps import get_actor_id, get_actor_role
 from app.adapters.calendar_factory import get_calendar_client
+from app.qc_delegation import is_qc_delegated
 
 router = APIRouter()
 _env = Environment(
@@ -24,8 +25,15 @@ def get_director_retake_input(
     actual_role = get_actor_role(actor_id)
     # admin 元 user は as_role=director で進入可
     role = "director" if (as_role == "director" and actual_role == "admin") else actual_role
-    if role != "director":
-        raise HTTPException(status_code=403, detail="director role required (or admin with ?as_role=director)")
+    # 殿御命 2026-06-09: admin=Director 同等で直接可・pm も可・案A 委任 user も この依頼に限り可
+    _delegated = is_qc_delegated(actor_id, task_id=task_id, shot_id=shot_id)
+    if role not in ("director", "pm", "admin") and not _delegated:
+        # 殿御命 2026-06-09: 権限なき者 (push/link 経由含む) は生 JSON 403 でなく QC ビューアへ誘導
+        from fastapi.responses import RedirectResponse as _RR
+        if shot_id:
+            _q = f"?task_id={task_id}" if task_id else ""
+            return _RR(url=f"/qc/{shot_id}{_q}", status_code=303)
+        return _RR(url="/dashboard", status_code=303)
     client = get_calendar_client()
     try:
         user = client.get_me(actor_user_id=actor_id)
@@ -45,6 +53,8 @@ def get_director_retake_input(
     task_type = ""
     latest_asset = None
     asset_list = []
+    assignee_name = ""   # 殿御命 2026-06-09: 通知先 = 実 assignee
+    assignee_uid = None
     if shot_id:
         # shot DTO
         try:
@@ -88,6 +98,22 @@ def get_director_retake_input(
                         break
             except Exception:
                 pass
+        # 殿御命 2026-06-09: 通知先表示を実 assignee に (ハードコード 'Sato' 撤廃)
+        if task_id:
+            try:
+                if hasattr(client, "get_task"):
+                    _tr = client.get_task(int(task_id), actor_user_id=actor_id) or {}
+                    _au = _tr.get("assigned_to") or _tr.get("assignee_id") if isinstance(_tr, dict) else None
+                    if _au is not None:
+                        assignee_uid = int(_au)
+                        for u in (client.get_users(actor_user_id=actor_id) or []):
+                            if isinstance(u, dict):
+                                _uid = u.get("id") or u.get("user_id")
+                                if _uid is not None and int(_uid) == assignee_uid:
+                                    assignee_name = (u.get("name") or u.get("full_name") or (u.get("email") or "").split("@")[0]) or ""
+                                    break
+            except Exception:
+                pass
 
     return _templates.TemplateResponse(
         request=request, name="director_retake_input.html",
@@ -104,6 +130,8 @@ def get_director_retake_input(
             "task_type": task_type,
             "latest_asset": latest_asset,
             "asset_list": asset_list,
+            "assignee_name": assignee_name,
+            "assignee_uid": assignee_uid,
         },
     )
 
