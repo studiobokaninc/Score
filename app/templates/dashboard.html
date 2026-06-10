@@ -20,7 +20,6 @@
     <div class="px-8 pt-6 pb-2">
       <p class="text-xs text-slate-500">{{ today_str }} {{ today_weekday_jp }}{% if clock_in_time %} ・ <span class="inline-flex items-center gap-1 text-indigo-600 font-bold">🕘 出勤 {{ clock_in_time }}</span>{% endif %}</p>
       <h1 class="text-2xl font-black text-slate-800">{{ greeting_emoji if greeting_emoji is defined else '☀️' }} {{ t(greeting_key, trans, name=(user.name or 'ユーザ')) if (trans is defined and greeting_key is defined) else 'おはよう、' + (user.name or 'ユーザ') + ' さん' }}</h1>
-      <p class="text-sm text-slate-500 mt-1">本日の action item を全プロジェクト横断で表示しております</p>
       {% include '_birthday_banner.html' %}
     </div>
 

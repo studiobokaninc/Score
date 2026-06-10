@@ -119,6 +119,19 @@ class CalendarClient:
             resp = httpx.request(method, url, **kwargs)
         return resp
 
+    def _abs_avatar(self, url):
+        """殿御命 2026-06-10 (ニブ Q1 回答対応): Calendar が返す相対 avatar_url
+        (/static/uploads/avatars/.. ・/uploads/avatars/.. ・/api/users/{id}/avatar) を
+        Calendar 絶対 URL に書換える。Score frontend は相対だと Score origin に取りに行き 404 になるため。
+        Calendar 配信は無認証ゆえ <img> から直接取得可。"""
+        if not url or not isinstance(url, str):
+            return url
+        if url.startswith("http://") or url.startswith("https://"):
+            return url
+        if url.startswith("/"):
+            return self.base_url.rstrip("/") + url
+        return url
+
     def get_me(self, actor_user_id: str | None = None) -> CalendarUser:
         """GET /api/me — 自分のプロフィール取得 (calender_api_complete_list.md §8)"""
         resp = httpx.get(f"{self.base_url}/api/me", headers=self._headers(actor_user_id))
@@ -132,7 +145,7 @@ class CalendarClient:
             email=d["email"],
             role=d["role"],
             name=name,
-            icon_url=d.get("avatar_url") or d.get("iconUrl") or None,
+            icon_url=self._abs_avatar(d.get("avatar_url") or d.get("iconUrl")) or None,
         )
 
     def get_shots(self, project_id: int, actor_user_id: str | None = None) -> list[CalendarShot]:
@@ -348,7 +361,11 @@ class CalendarClient:
             timeout=60.0,
         )
         resp.raise_for_status()
-        return resp.json()
+        _r = resp.json()
+        # 殿御命 2026-06-10: 返り avatar_url を Calendar 絶対 URL に書換え
+        if isinstance(_r, dict) and _r.get("avatar_url"):
+            _r["avatar_url"] = self._abs_avatar(_r["avatar_url"])
+        return _r
 
     def patch_task(self, task_id: int, body: dict, actor_user_id: str | None = None) -> dict:
         """殿御命 2026-06-03: task status/progress 更新 pass-through
@@ -844,7 +861,11 @@ class CalendarClient:
             headers=self._headers(actor_user_id),
         )
         resp.raise_for_status()
-        return resp.json()
+        _p = resp.json()
+        # 殿御命 2026-06-10: avatar_url を Calendar 絶対 URL に書換え (frontend が Calendar から直接取得)
+        if isinstance(_p, dict) and _p.get("avatar_url"):
+            _p["avatar_url"] = self._abs_avatar(_p["avatar_url"])
+        return _p
 
     def patch_my_profile(self, body: dict, actor_user_id: str) -> dict:
         """PATCH /api/me/profile — 自身の profile 更新
