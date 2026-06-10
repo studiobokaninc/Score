@@ -1,0 +1,78 @@
+/* 殿御命 2026-06-10: ダークテーマ本実装 (override 方式)
+   全テンプレに dark: を撒く代わりに、html.dark の時に主要な明色ユーティリティを暗色へ再マップ。
+   accent 色 (indigo/rose/emerald/amber 等) はそのまま (暗背景でも視認可)。
+   注: 属性セレクタで bg-white/40 等の opacity 変種もまとめて捕捉。 */
+
+/* ベース背景: near-black に cobalt-navy の濃淡 (light と同要領=単一 cobalt accent の色味を dark にも) */
+html.dark, html.dark body {
+  background: linear-gradient(135deg, #04060d 0%, #08122a 52%, #0e2444 100%) !important;
+  color: #e2e8f0;
+}
+/* 全画面 wrapper は透過 */
+html.dark body > .min-h-screen { background-color: transparent !important; }
+/* メインもサイドメニューと同じ半透明 glass → body グラデを透かす (殿御命 2026-06-10: サイドと統一) */
+html.dark main { background-color: rgba(13, 20, 38, 0.28) !important; }
+
+/* 白系サーフェス (カード/入力/ガラス) → よく透けるダークガラス (背景グラデを透かす glassmorphism) */
+html.dark [class*="bg-white"] { background-color: rgba(15, 23, 42, 0.48) !important; }
+html.dark .bg-white { background-color: rgba(15, 22, 38, 0.66) !important; }
+/* サイドメニュー: 透けつつ やや締める */
+html.dark .score-sidemenu { background-color: rgba(13, 20, 38, 0.42) !important; }
+
+/* 淡灰サーフェス → 暗めのダーク */
+html.dark [class*="bg-slate-50"],
+html.dark [class*="bg-slate-100"],
+html.dark [class*="bg-gray-50"],
+html.dark [class*="bg-gray-100"] { background-color: #1e293b !important; }
+
+/* 濃い本文テキスト → 明色 */
+html.dark [class*="text-slate-9"],
+html.dark [class*="text-slate-8"],
+html.dark [class*="text-slate-7"],
+html.dark [class*="text-gray-9"],
+html.dark [class*="text-gray-8"],
+html.dark [class*="text-gray-7"] { color: #e2e8f0 !important; }
+
+/* 中間テキスト → 薄明色 */
+html.dark [class*="text-slate-6"],
+html.dark [class*="text-slate-5"],
+html.dark [class*="text-gray-6"],
+html.dark [class*="text-gray-5"] { color: #94a3b8 !important; }
+
+/* ボーダー → 控えめな明線 */
+html.dark [class*="border-white"],
+html.dark [class*="border-slate-2"],
+html.dark [class*="border-slate-1"],
+html.dark [class*="border-gray-2"],
+html.dark [class*="border-gray-1"] { border-color: rgba(148, 163, 184, 0.22) !important; }
+
+/* placeholder */
+html.dark ::placeholder { color: #64748b !important; }
+
+/* 入力欄の文字色保険 */
+html.dark input, html.dark textarea, html.dark select { color: #e2e8f0 !important; }
+
+/* ── 淡色ハイライト (bg-{color}-50/100) → 色相維持のダーク tinted (殿御命 2026-06-10) ── */
+html.dark .bg-rose-50, html.dark .bg-rose-100 { background-color: rgba(244,63,94,0.16) !important; }
+html.dark .bg-amber-50, html.dark .bg-amber-100, html.dark .bg-yellow-50, html.dark .bg-yellow-100 { background-color: rgba(245,158,11,0.15) !important; }
+html.dark .bg-emerald-50, html.dark .bg-emerald-100, html.dark .bg-green-50, html.dark .bg-green-100 { background-color: rgba(16,185,129,0.15) !important; }
+html.dark .bg-indigo-50, html.dark .bg-indigo-100, html.dark .bg-blue-50, html.dark .bg-blue-100, html.dark .bg-sky-50, html.dark .bg-sky-100 { background-color: rgba(59,130,246,0.18) !important; }
+html.dark .bg-purple-50, html.dark .bg-purple-100, html.dark .bg-violet-50, html.dark .bg-violet-100, html.dark .bg-pink-50, html.dark .bg-pink-100 { background-color: rgba(139,92,246,0.16) !important; }
+html.dark .bg-cyan-50, html.dark .bg-cyan-100, html.dark .bg-teal-50, html.dark .bg-teal-100 { background-color: rgba(20,184,166,0.16) !important; }
+html.dark .bg-orange-50, html.dark .bg-orange-100 { background-color: rgba(249,115,22,0.16) !important; }
+html.dark .border-rose-200 { border-color: rgba(244,63,94,0.35) !important; }
+html.dark .border-amber-200 { border-color: rgba(245,158,11,0.30) !important; }
+html.dark .border-emerald-200 { border-color: rgba(16,185,129,0.30) !important; }
+/* hover の淡色化 */
+html.dark .hover\:bg-rose-100:hover { background-color: rgba(244,63,94,0.24) !important; }
+html.dark .hover\:bg-white\/40:hover, html.dark .hover\:bg-white\/60:hover, html.dark .hover\:bg-white\/50:hover { background-color: rgba(148,163,184,0.14) !important; }
+
+/* 色付きテキスト(濃) → 明るく (dark で可読・色相維持) */
+html.dark [class*="text-rose-9"], html.dark [class*="text-rose-8"], html.dark [class*="text-rose-7"], html.dark [class*="text-rose-6"] { color: #fda4af !important; }
+html.dark [class*="text-amber-9"], html.dark [class*="text-amber-8"], html.dark [class*="text-amber-7"], html.dark [class*="text-amber-6"], html.dark [class*="text-yellow-7"], html.dark [class*="text-yellow-6"], html.dark [class*="text-orange-7"], html.dark [class*="text-orange-6"] { color: #fdba74 !important; }
+html.dark [class*="text-emerald-9"], html.dark [class*="text-emerald-8"], html.dark [class*="text-emerald-7"], html.dark [class*="text-emerald-6"], html.dark [class*="text-green-7"] { color: #6ee7b7 !important; }
+html.dark [class*="text-purple-7"], html.dark [class*="text-purple-6"], html.dark [class*="text-violet-7"], html.dark [class*="text-pink-7"], html.dark [class*="text-pink-6"] { color: #d8b4fe !important; }
+html.dark [class*="text-cyan-7"], html.dark [class*="text-cyan-6"], html.dark [class*="text-teal-7"], html.dark [class*="text-sky-7"], html.dark [class*="text-sky-6"] { color: #67e8f9 !important; }
+html.dark [class*="text-blue-7"], html.dark [class*="text-blue-6"], html.dark [class*="text-indigo-7"] { color: #93c5fd !important; }
+
+/* 既に暗い accent ボタン上の白文字は維持 (text-white は触らない) */

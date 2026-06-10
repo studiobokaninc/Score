@@ -1,3 +1,8 @@
+{# 殿御命 2026-06-10: ダークテーマ — 全ページ共通で dark.css 読込 + theme class 適用 (FOUC 最小化のため最優先で実行) #}
+<script>try{ if (localStorage.getItem('score_theme') === 'dark') document.documentElement.classList.add('dark'); }catch(e){}</script>
+<link rel="stylesheet" href="/static/theme.css">
+<link rel="stylesheet" href="/static/dark.css">
+
 {% if demo_mode %}
 <style>
   /* DEMO banner (fixed top:0, ~30px) 対応:
@@ -200,5 +205,28 @@ function closeLanguageModalSidemenu() { document.getElementById('language-modal-
   window.addEventListener('unhandledrejection', function(ev){
     try { _push('error', 'promise: ' + ((ev.reason && ev.reason.message) || ev.reason || '')); } catch(e){}
   });
+})();
+</script>
+
+<script>
+// 殿御命 2026-06-10: プロフィール編集のズーム/位置調整 (avatar_transform) をサイドメニューにも適用。
+// 調整が無ければ既定の object-cover (img) のまま。
+(function(){
+  var uid = '{{ user.user_id if user else "" }}';
+  var iconUrl = '{{ (user.icon_url if (user and user.icon_url) else "") | safe }}';
+  if (!uid || !iconUrl) return;
+  try {
+    var raw = localStorage.getItem('score_profile_' + uid + '_avatar_transform');
+    if (!raw) return;
+    var tf = JSON.parse(raw);
+    if (!tf || !tf.zoom) return;
+    var sm = document.getElementById('sidemenu-avatar');
+    if (!sm) return;
+    sm.innerHTML = '';
+    sm.style.backgroundImage = "url('" + iconUrl + "')";
+    sm.style.backgroundSize = tf.zoom + '%';
+    sm.style.backgroundPosition = tf.x + '% ' + tf.y + '%';
+    sm.style.backgroundRepeat = 'no-repeat';
+  } catch(e) {}
 })();
 </script>

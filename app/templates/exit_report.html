@@ -73,7 +73,7 @@
     <!-- Assigned tasks (interactive: WIP 進捗率 / 状態変更 chk / 空時=新規入力) -->
     <div class="bg-white/40 backdrop-blur-xl border border-white/60 rounded-3xl shadow-xl p-6">
       <h2 class="text-sm font-black text-slate-500 uppercase tracking-widest mb-4">📊 アサインタスク（直近）</h2>
-      <p class="text-[10px] text-slate-400 mb-3">※ 完了済タスクは「今日完了」マーク付のみ表示。WIP は進捗率を、完了・QC・レビューへの変更はチェックで指定。</p>
+      <p class="text-[10px] text-slate-400 mb-3">※ 完了済タスクは「今日完了」マーク付のみ表示。WIP は進捗率を、QC・レビューへの変更はチェックで指定（完了は Calendar 側で操作）。</p>
       <div id="prev-task-list" class="space-y-3" data-mode="previous"></div>
       <div id="prev-empty-task" class="hidden mt-3"></div>
     </div>
@@ -112,7 +112,7 @@
     <!-- Assigned tasks (interactive: WIP 進捗率 / 状態変更 chk / 空時=新規入力) -->
     <div class="bg-white/40 backdrop-blur-xl border border-white/60 rounded-3xl shadow-xl p-6">
       <h2 class="text-sm font-black text-slate-500 uppercase tracking-widest mb-4">📊 アサインタスク（直近）</h2>
-      <p class="text-[10px] text-slate-400 mb-3">※ 完了済タスクは「今日完了」マーク付のみ表示。WIP は進捗率を、完了・QC・レビューへの変更はチェックで指定。</p>
+      <p class="text-[10px] text-slate-400 mb-3">※ 完了済タスクは「今日完了」マーク付のみ表示。WIP は進捗率を、QC・レビューへの変更はチェックで指定（完了は Calendar 側で操作）。</p>
       <div id="today-task-list" class="space-y-3" data-mode="current"></div>
       <div id="today-empty-task" class="hidden mt-3"></div>
     </div>
@@ -455,11 +455,8 @@ function renderAssignedTasks(listEl, emptyEl, mode) {
           class="w-full accent-indigo-500 cursor-pointer">
       </div>` : ''}
       <div class="flex flex-wrap items-center gap-3 text-xs">
+        {# 殿御命 2026-06-10: task の「完了」は Calendar のみで操作可能 → Score から ✅完了 チェックを撤去 #}
         <span class="text-[10px] text-slate-500">状態変更:</span>
-        <label class="flex items-center gap-1 cursor-pointer">
-          <input type="checkbox" data-status-change value="complete" ${chg === 'complete' ? 'checked' : ''} class="accent-emerald-500">
-          <span class="text-emerald-700 font-bold">✅ 完了</span>
-        </label>
         <label class="flex items-center gap-1 cursor-pointer">
           <input type="checkbox" data-status-change value="qc" ${chg === 'qc' ? 'checked' : ''} class="accent-cyan-500">
           <span class="text-cyan-700 font-bold">🔍 QC</span>

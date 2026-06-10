@@ -171,7 +171,7 @@
         </div>
         <div>
           <label class="block text-xs font-bold text-slate-500 mb-1">テーマ</label>
-          <select id="profile-theme" class="w-full bg-white/80 border border-slate-200 rounded-xl px-3 py-2 text-sm">
+          <select id="profile-theme" onchange="_applyTheme(this.value)" class="w-full bg-white/80 border border-slate-200 rounded-xl px-3 py-2 text-sm">
             <option value="auto">自動 (システム)</option>
             <option value="light">Light</option>
             <option value="dark">Dark</option>
@@ -264,6 +264,13 @@
 <script>
 const _USER_ID = "{{ user.user_id }}";
 function _profKey(k){ return `score_profile_${_USER_ID}_${k}`; }
+// 殿御命 2026-06-10: テーマ適用 (即時 + 全ページ共通の score_theme に解決値を保存)
+function _applyTheme(theme) {
+  let dark = (theme === 'dark');
+  if (theme === 'auto') { try { dark = window.matchMedia('(prefers-color-scheme: dark)').matches; } catch(e){} }
+  try { localStorage.setItem('score_theme', dark ? 'dark' : 'light'); } catch(e){}
+  document.documentElement.classList.toggle('dark', dark);
+}
 async function _saveProfile() {
   const selectedSkills = Array.from(document.querySelectorAll('input[name="skill"]:checked')).map(i => i.value);
   // settings_json 集約 (Calendar 側 schema 準拠)
@@ -340,6 +347,8 @@ function _loadProfile() {
         const el = document.getElementById('profile-' + k);
         if (el && s[k]) el.value = s[k];
       });
+      // 殿御命 2026-06-10: 読込時に theme を適用
+      try { _applyTheme(document.getElementById('profile-theme').value); } catch(e){}
     } catch(e) {}
   }
   // skills (JSON array)
