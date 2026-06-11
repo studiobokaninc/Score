@@ -41,6 +41,22 @@
 html.dark .text-indigo-600 { color: #60a5fa !important; }
 html.dark .bg-indigo-600 { background-color: #2563eb !important; }
 
+/* ── purple/violet/fuchsia accent → cobalt に統合 (taste: 単一accent・紫tell排除・殿御命 2026-06-10) ── */
+.bg-purple-600, .bg-violet-600, .bg-fuchsia-600 { background-color: #2563eb !important; }
+.bg-purple-700, .bg-violet-700, .bg-fuchsia-700 { background-color: #1d4ed8 !important; }
+.bg-purple-500, .bg-violet-500 { background-color: #3b82f6 !important; }
+.hover\:bg-purple-700:hover, .hover\:bg-violet-700:hover, .hover\:bg-purple-600:hover { background-color: #1d4ed8 !important; }
+.text-purple-600, .text-violet-600, .text-fuchsia-600 { color: #2563eb !important; }
+.text-purple-700, .text-violet-700, .text-fuchsia-700 { color: #1d4ed8 !important; }
+.text-purple-800, .text-purple-900, .text-violet-800, .text-violet-900 { color: #1e40af !important; }
+.border-purple-200, .border-violet-200, .border-purple-300 { border-color: #93c5fd !important; }
+/* gradient (logo 等 from-indigo-600→to-violet/purple = 紫tell) → cobalt mono */
+.from-indigo-600, .from-purple-600, .from-violet-600 { --tw-gradient-from: #2563eb var(--tw-gradient-from-position) !important; }
+.from-purple-500, .from-violet-500 { --tw-gradient-from: #3b82f6 var(--tw-gradient-from-position) !important; }
+.to-violet-600, .to-purple-600 { --tw-gradient-to: #1d4ed8 var(--tw-gradient-to-position) !important; }
+.to-violet-500, .to-purple-500 { --tw-gradient-to: #2563eb var(--tw-gradient-to-position) !important; }
+.via-purple-300, .via-purple-500, .via-violet-300 { --tw-gradient-via: #60a5fa !important; }
+
 /* ── Light: 淡色グラデ背景 (青→紫→桃) → cobalt系の淡いトーン (taste: 単一accent・脱pastel・但し色味は残す) ── */
 html:not(.dark) .from-\[\#E0F2FE\] { --tw-gradient-from: #cfe0ff var(--tw-gradient-from-position) !important; --tw-gradient-stops: var(--tw-gradient-from), var(--tw-gradient-via, #dde9ff), var(--tw-gradient-to) !important; }
 html:not(.dark) .via-\[\#F3E8FF\] { --tw-gradient-via: #dde9ff !important; }
@@ -49,6 +65,47 @@ html:not(.dark) .to-\[\#FCE7F3\] { --tw-gradient-to: #b3ccff var(--tw-gradient-t
 html.dark .from-\[\#E0F2FE\], html.dark .via-\[\#F3E8FF\], html.dark .to-\[\#FCE7F3\] { --tw-gradient-from: #070b14 !important; --tw-gradient-via: #0b1120 !important; --tw-gradient-to: #1e293b !important; }
 
 /* ── Light: dark に倣い glass を統一 (殿御命 2026-06-10) — 白ガラスを半透明にし cobalt グラデを透かす ── */
+/* body に cobalt 系グラデを fixed で (独立body/base継承どちらでも効く) */
+html:not(.dark), html:not(.dark) body { background: linear-gradient(135deg, #cfe0ff 0%, #dde9ff 52%, #b3ccff 100%) fixed !important; }
+html:not(.dark) body { background-image: linear-gradient(135deg, #cfe0ff 0%, #dde9ff 52%, #b3ccff 100%) !important; background-attachment: fixed !important; }
 html:not(.dark) [class*="bg-white"] { background-color: rgba(255, 255, 255, 0.52) !important; }
 html:not(.dark) .score-sidemenu { background-color: rgba(255, 255, 255, 0.42) !important; }
-html:not(.dark) main { background-color: rgba(255, 255, 255, 0.30) !important; }
+html:not(.dark) main,
+html:not(.dark) .ml-24.h-screen.overflow-y-auto,
+html:not(.dark) .ml-24.min-h-screen { background-color: rgba(255, 255, 255, 0.30) !important; }
+/* nested main は二重オーバーレイ回避で透過 */
+html:not(.dark) .ml-24.h-screen.overflow-y-auto main,
+html:not(.dark) .ml-24.min-h-screen main { background-color: transparent !important; }
+
+/* ── redesign-skill: distinctive font + 見出しタイポ (殿御命 2026-06-10) ── */
+body, .font-sans, button, input, textarea, select {
+  font-family: 'Outfit', 'Noto Sans JP', ui-sans-serif, system-ui, -apple-system, sans-serif !important;
+}
+/* 大見出しは negative tracking + tight leading で締める (taste: 見出しを強く) */
+h1, h2, .text-5xl, .text-4xl, .text-3xl, .text-2xl {
+  letter-spacing: -0.025em !important;
+  line-height: 1.12 !important;
+  text-wrap: balance;
+}
+.text-xl { letter-spacing: -0.015em !important; }
+/* 数字・コード(translate=no)は等幅 (data-heavy 文脈で桁を揃える) */
+[translate="no"], .tabular-nums, time { font-variant-numeric: tabular-nums; }
+
+/* ── redesign-skill: interaction 磨き (hover lift / active press / smooth / focus) ── */
+a[class*="rounded-2xl"], a[class*="rounded-3xl"], a[class*="rounded-xl"], button[class*="rounded"] {
+  transition: transform .2s ease, box-shadow .2s ease, background-color .2s ease, border-color .2s ease !important;
+}
+a[class*="rounded-2xl"]:hover, a[class*="rounded-3xl"]:hover { transform: translateY(-2px); }
+a[class*="rounded"]:active, button[class*="rounded"]:active { transform: translateY(0) scale(.985); }
+/* focus-visible ring (a11y・keyboard) */
+a:focus-visible, button:focus-visible, [tabindex]:focus-visible, input:focus-visible, select:focus-visible {
+  outline: 2px solid #3b82f6 !important; outline-offset: 2px;
+}
+
+/* ── redesign-skill: shadow を背景の色相に tint (generic な黒影を排す) ── */
+html:not(.dark) [class*="shadow-xl"], html:not(.dark) [class*="shadow-2xl"], html:not(.dark) [class*="shadow-lg"] {
+  box-shadow: 0 14px 36px -14px rgba(30, 58, 120, 0.22), 0 4px 10px -6px rgba(30, 58, 120, 0.12) !important;
+}
+html.dark [class*="shadow-xl"], html.dark [class*="shadow-2xl"], html.dark [class*="shadow-lg"] {
+  box-shadow: 0 20px 44px -14px rgba(2, 6, 20, 0.75), 0 6px 14px -8px rgba(2, 6, 20, 0.6) !important;
+}

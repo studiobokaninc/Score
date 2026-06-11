@@ -73,8 +73,8 @@
     if (Notification.permission !== 'default') return;
     const b = document.createElement('div');
     b.id = 'score-push-onboard';
-    b.style.cssText = 'position:fixed;top:0;left:0;right:0;background:linear-gradient(90deg,#6366f1,#8b5cf6);color:white;padding:10px 16px;display:flex;align-items:center;justify-content:center;gap:16px;z-index:9998;font-family:system-ui,sans-serif;font-size:13px;font-weight:bold;box-shadow:0 2px 8px rgba(0,0,0,0.15);';
-    b.innerHTML = '<span>🔔 重要通知を OS で受け取る</span><button id="score-push-yes" style="background:white;color:#6366f1;border:none;padding:6px 14px;border-radius:8px;font-weight:900;cursor:pointer;">有効化</button><button id="score-push-no" style="background:rgba(255,255,255,0.2);color:white;border:none;padding:6px 12px;border-radius:8px;cursor:pointer;">あとで</button>';
+    b.style.cssText = 'position:fixed;top:0;left:0;right:0;background:linear-gradient(90deg,#2563eb,#1d4ed8);color:white;padding:10px 16px;display:flex;align-items:center;justify-content:center;gap:16px;z-index:9998;font-family:\'Outfit\',\'Noto Sans JP\',system-ui,sans-serif;font-size:13px;font-weight:bold;box-shadow:0 2px 8px rgba(0,0,0,0.15);';
+    b.innerHTML = '<span>🔔 重要通知を OS で受け取る</span><button id="score-push-yes" style="background:white;color:#2563eb;border:none;padding:6px 14px;border-radius:8px;font-weight:900;cursor:pointer;">有効化</button><button id="score-push-no" style="background:rgba(255,255,255,0.2);color:white;border:none;padding:6px 12px;border-radius:8px;cursor:pointer;">あとで</button>';
     document.body.appendChild(b);
     document.getElementById('score-push-yes').onclick = async () => {
       if (window.scorePushEnable) {
