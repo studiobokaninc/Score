@@ -488,9 +488,15 @@ def get_projects(request: Request, actor_id: str = Depends(get_actor_id)):
             project_meetings[pid] = []
     from app.helpers.colors import attach_project_palettes
     projects = attach_project_palettes(projects)
+    # 殿御命 2026-06-11: サイドメニューのユーザーアイコン用に user を渡す (他ページと統一・欠落で fallback「U」になっていた)
+    try:
+        user = client.get_me(actor_user_id=actor_id)
+    except Exception:
+        user = None
     return _templates.TemplateResponse(
         request=request, name="projects.html",
         context={
+            "user": user,
             "projects": projects,
             "project_meetings": project_meetings,
             "demo_mode": os.getenv("CALENDAR_MOCK", "0") == "1",
