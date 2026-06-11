@@ -13,13 +13,10 @@
   <link rel="stylesheet" href="/static/theme.css">
   <link rel="stylesheet" href="/static/dark.css">
   <style>
-    body {
-      background: linear-gradient(135deg, #0f172a 0%, #1e293b 100%);
-      min-height: 100vh;
-    }
+    body { min-height: 100vh; }
   </style>
 </head>
-<body class="text-slate-800 font-sans" {% if user and user.user_id %}data-my-cuid="{{ user.user_id }}"{% endif %}>
+<body class="text-slate-800 font-sans bg-gradient-to-br from-[#E0F2FE] via-[#F3E8FF] to-[#FCE7F3]" {% if user and user.user_id %}data-my-cuid="{{ user.user_id }}"{% endif %}>
   <div class="min-h-screen">
     {% block content %}{% endblock %}
   </div>
