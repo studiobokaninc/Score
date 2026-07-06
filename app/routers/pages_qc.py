@@ -81,13 +81,18 @@ def get_qc_viewer(
     task_name = (getattr(selected_task, "name", None) or getattr(selected_task, "type", None)) if selected_task else None
 
     # 殿御命 2026-06-03 Phase B: real asset_list 取得 (nibu 仕様: /api/me/shots/{id}.asset_list)
+    # cmd_059④ 真因修正: task_id 指定時は「shot取得→task_idフィルタ」だと shot_id 不整合の
+    # asset (cmd_058①と同種・shot_id=None の孤立task 等) が取得段階で漏れる。
+    # get_assets_by_task(task_id) で直接取得する経路に変更 (根治・pages_shot.py と同方針)。
     asset_list = []
     try:
-        if hasattr(client, "get_shot_detail"):
+        if task_id and hasattr(client, "get_assets_by_task"):
+            asset_list = list(client.get_assets_by_task(task_id, actor_user_id=actor_id) or [])
+        elif hasattr(client, "get_shot_detail"):
             shot_dict = client.get_shot_detail(id, actor_user_id=actor_id) or {}
             asset_list = list(shot_dict.get("asset_list", []) or [])
-        if task_id and asset_list:
-            asset_list = [a for a in asset_list if (a.get("task_id") if isinstance(a, dict) else getattr(a, "task_id", None)) == task_id]
+            if task_id:
+                asset_list = [a for a in asset_list if (a.get("task_id") if isinstance(a, dict) else getattr(a, "task_id", None)) == task_id]
         asset_list.sort(key=lambda a: (a.get("created_at") if isinstance(a, dict) else "") or "", reverse=True)
     except Exception:
         asset_list = []

@@ -307,15 +307,18 @@ def get_task_detail(
     except Exception:
         project_members = []
 
-    # 殿御命 2026-06-03: task に紐付く asset 一覧取得 (nibu 仕様: /api/me/shots/{id}.asset_list 経由)
-    # 2026-06-03 修正: get_shot() は CalendarShot DTO で asset_list 持たぬ → get_shot_detail() (dict) 経由が正
+    # cmd_058 真因修正: shot_detail().asset_list 経由だと shot に紐付かぬ task
+    # (PM task 等・shot_id=None) の asset が永久に一覧不可視となる不具合があった
+    # (upload 自体は成功するが shot_id 側から辿れず孤立)。
+    # task_id で直接取得する経路 (get_assets_by_task) に変更し、shot 紐付けの
+    # 有無に関わらず asset history が表示されるようにする。
     asset_list = []
     try:
-        if found_shot_id and hasattr(client, "get_shot_detail"):
+        if hasattr(client, "get_assets_by_task"):
+            asset_list = list(client.get_assets_by_task(task_id, actor_user_id=actor_id) or [])
+        elif found_shot_id and hasattr(client, "get_shot_detail"):
             shot_dict = client.get_shot_detail(found_shot_id, actor_user_id=actor_id) or {}
             asset_list = list(shot_dict.get("asset_list", []) or [])
-        # task_id で絞り込み (task page なら同 task のみ表示)
-        if task_id and asset_list:
             asset_list = [a for a in asset_list if (a.get("task_id") if isinstance(a, dict) else getattr(a, "task_id", None)) == task_id]
         # created_at 降順
         asset_list.sort(key=lambda a: (a.get("created_at") if isinstance(a, dict) else getattr(a, "created_at", "")) or "", reverse=True)

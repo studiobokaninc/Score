@@ -1095,6 +1095,11 @@ class MockCalendarClient(CalendarClient):
         state = _read_state()
         return [a for a in state.get("assets", []) if a.get("shot_id") == shot_id]
 
+    def get_assets_by_task(self, task_id: int, actor_user_id: str | None = None) -> list[dict]:
+        """task_id に紐づく asset 一覧 (shot 未紐付き task 対応・cmd_058)。"""
+        state = _read_state()
+        return [a for a in state.get("assets", []) if a.get("task_id") == task_id]
+
     def post_asset(self, file_data: bytes, filename: str, content_type: str,
                    actor_user_id: str,
                    task_id: int | None = None,

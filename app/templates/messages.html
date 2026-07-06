@@ -292,7 +292,7 @@
 
       <div class="border-t border-white/40 p-4 bg-white/20 shrink-0 relative">
         <!-- @ mention autocomplete dropdown -->
-        <div id="mention-dropdown" class="hidden absolute bottom-20 left-4 right-4 bg-white border border-slate-200 rounded-2xl shadow-2xl z-50 max-h-48 overflow-y-auto"></div>
+        <div id="mention-dropdown" class="hidden absolute bottom-20 left-4 right-4 border border-slate-200 rounded-2xl shadow-2xl z-50 max-h-48 overflow-y-auto" style="background-color: white;"></div>
         <div class="flex gap-3">
           <input type="text" id="mainInput" placeholder="メッセージを入力... (@ で mention)"
             oninput="handleMentionInput(event)"
@@ -712,6 +712,14 @@ function deleteThread(id, ev) {
         else if (targetThread.startsWith('dm') || targetThread.startsWith('dyn_')) switchTab('dm');
         else if (targetThread === 'system_notice' || targetThread === 'morning') switchTab('notice');
         showThread(targetThread);
+      } else if (targetThread.startsWith('task')) {
+        // cmd_059②-再: task.thread_id 未設定タスクの仮キー ('task'+task_id) — mock 一覧にも
+        // 存在せず、これまで無反応(サイレント no-op)だった。numeric branch と同様に案内表示する。
+        // 注: 自動 thread 作成は未実装 (bff 側に task thread 新規作成 API なし) のため
+        // 「送信すれば作れる」旨は表示しない — 案内のみに留める。
+        switchTab('shot');
+        const area = document.getElementById('conv-messages');
+        if (area) area.innerHTML = '<div class="text-center text-amber-700 py-12 px-6"><p class="text-3xl mb-2">💬</p><p class="text-sm font-bold">この task にはまだ thread がありません</p><p class="text-xs text-amber-600 mt-2">左の一覧から SHOT thread を選択するか、Calendar 側で最初のコメント・QC依頼を行うと thread が作成されます</p></div>';
       }
     }, 200);
   }
@@ -990,11 +998,17 @@ async function startDM(userId, userName, calendarUid) {
 }
 
 // ===== @mention 機能 (Discord 風 autocomplete) =====
+// Calendar /api/users (admin JWT, server-side fetch済) からユーザ一覧を埋め込み
+const mentionUsers = [
+  {% for u in dm_candidates %}
+  { name: {{ u.name | tojson }}, email: {{ u.email | tojson }}, initial: {{ u.initial | tojson }}, color: "{{ u.color }}" },
+  {% endfor %}
+];
+
 function _getActiveParticipants() {
-  // active thread の members 文字列を name list に parse
+  // active thread の members 文字列を name list に parse (fallback用)
   if (!activeThread || !threads[activeThread]) return [];
   const members = threads[activeThread].members || '';
-  // "PM Tanaka, Director Yamada, Kato, Sato" → ["Tanaka", "Yamada", "Kato", "Sato"]
   return members.split(/[,、]/)
     .map(s => s.replace(/\(.*?\)/g, '').trim())
     .map(s => s.replace(/^(PM|Director|Lighting Lead|担当|MattePaint|Composite|Animation|FX|Look)\s+/i, ''))
@@ -1013,18 +1027,36 @@ function handleMentionInput(ev) {
     return;
   }
   const query = text.substring(lastAt + 1).toLowerCase();
-  const participants = _getActiveParticipants();
-  const matches = participants.filter(p => p.toLowerCase().includes(query));
-  if (matches.length === 0) {
+  // Calendar 全ユーザを優先。未取得時はスレッド参加者にフォールバック
+  let candidates;
+  if (mentionUsers.length > 0) {
+    candidates = mentionUsers.filter(u =>
+      u.name.toLowerCase().includes(query) || u.email.toLowerCase().includes(query)
+    );
+  } else {
+    candidates = _getActiveParticipants()
+      .filter(p => p.toLowerCase().includes(query))
+      .map(p => ({ name: p, initial: p[0] || '?', color: 'bg-indigo-400', email: '' }));
+  }
+  if (candidates.length === 0) {
     dropdown.classList.add('hidden');
     return;
   }
-  dropdown.innerHTML = matches.map(name =>
-    `<div class="px-4 py-2 cursor-pointer hover:bg-indigo-50 text-sm flex items-center gap-2" onclick="insertMention('${name}')">
-      <span class="w-6 h-6 rounded-full bg-indigo-100 text-indigo-700 flex items-center justify-center text-xs font-bold">@</span>
-      <span class="font-bold text-slate-700" translate="no">${name}</span>
+  const slice = candidates.slice(0, 20);
+  dropdown.innerHTML = slice.map((u, i) =>
+    `<div class="px-4 py-2 cursor-pointer hover:bg-indigo-50 text-sm flex items-center gap-2" data-mention-idx="${i}" style="background-color: white;">
+      <span class="w-6 h-6 rounded-full ${u.color} text-white flex items-center justify-center text-xs font-bold shrink-0">${_escapeHtml(u.initial)}</span>
+      <div class="min-w-0">
+        <span class="font-bold text-slate-700 block" translate="no">${_escapeHtml(u.name)}</span>
+        ${u.email ? `<span class="text-[10px] text-slate-400 truncate block" translate="no">${_escapeHtml(u.email)}</span>` : ''}
+      </div>
     </div>`
   ).join('');
+  dropdown.querySelectorAll('[data-mention-idx]').forEach(el => {
+    el.addEventListener('click', function() {
+      insertMention(slice[parseInt(this.dataset.mentionIdx, 10)].name);
+    });
+  });
   dropdown.classList.remove('hidden');
 }
 function handleMentionKeydown(ev) {

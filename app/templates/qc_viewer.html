@@ -93,8 +93,19 @@
               {% set _url0 = ('/static/assets/' ~ _bn0) if (demo_mode or 'sample_' in _bn0) else ('http://192.168.44.253:8001/static/assets/' ~ _bn0) %}
               {% if _ext0 in ['png','jpg','jpeg','webp','gif'] %}
                 <img src="{{ _url0 }}" alt="{{ _bn0 }}" class="max-w-full max-h-[60vh] object-contain">
-              {% elif _ext0 in ['mp4','mov','webm','m4v'] %}
+              {% elif _ext0 in ['mp4','webm','m4v'] %}
                 <video src="{{ _url0 }}" controls autoplay class="max-w-full max-h-[60vh]"></video>
+              {% elif _ext0 == 'mov' %}
+                <div class="relative w-full flex flex-col items-center justify-center">
+                  <video src="{{ _url0 }}" controls autoplay class="max-w-full max-h-[60vh]"
+                         onerror="this.style.display='none';this.nextElementSibling.style.display='flex'"></video>
+                  <div style="display:none" class="flex-col items-center text-white text-center p-6 gap-3">
+                    <div class="text-5xl">🎬</div>
+                    <p class="text-amber-300 font-bold">⚠️ .mov は Chrome/Edge 非対応</p>
+                    <p class="text-xs opacity-70 mt-1">Safari または VLC でご視聴ください</p>
+                    <a href="{{ _url0 }}" download class="mt-3 bg-indigo-600 hover:bg-indigo-700 text-white px-4 py-2 rounded-xl text-sm">⬇️ ダウンロード</a>
+                  </div>
+                </div>
               {% elif _ext0 == 'exr' %}
                 <div class="text-center text-white p-8"><div class="text-6xl mb-4">🎞️</div><p class="text-lg font-bold">EXR ブラウザ表示不可</p><p class="text-sm mt-2 opacity-70">cmd_474 で proxy mov 自動生成予定</p></div>
               {% else %}
@@ -156,8 +167,16 @@
               <div id="compare-left-player" class="w-full h-full flex items-center justify-center">
                 {% if _extL in ['png','jpg','jpeg','webp','gif'] %}
                   <img src="{{ _urlL }}" alt="{{ _bnL }}" class="max-w-full max-h-full object-contain">
-                {% elif _extL in ['mp4','mov','webm','m4v'] %}
+                {% elif _extL in ['mp4','webm','m4v'] %}
                   <video src="{{ _urlL }}" controls class="max-w-full max-h-full"></video>
+                {% elif _extL == 'mov' %}
+                  <video src="{{ _urlL }}" controls class="max-w-full max-h-full"
+                         onerror="this.style.display='none';this.nextElementSibling.style.display='flex'"></video>
+                  <div style="display:none" class="flex-col items-center text-white text-center p-4 gap-2">
+                    <div class="text-3xl">🎬</div>
+                    <p class="text-amber-300 text-xs font-bold">⚠️ .mov Chrome非対応</p>
+                    <a href="{{ _urlL }}" download class="bg-indigo-600 text-white px-3 py-1 rounded-lg text-xs">⬇️ DL</a>
+                  </div>
                 {% elif _extL == 'exr' %}
                   <div class="text-center text-white p-4"><div class="text-4xl mb-2">🎞️</div><p class="text-xs">EXR proxy 未生成</p></div>
                 {% else %}
@@ -172,8 +191,16 @@
               <div id="compare-right-player" class="w-full h-full flex items-center justify-center">
                 {% if _extR in ['png','jpg','jpeg','webp','gif'] %}
                   <img src="{{ _urlR }}" alt="{{ _bnR }}" class="max-w-full max-h-full object-contain">
-                {% elif _extR in ['mp4','mov','webm','m4v'] %}
+                {% elif _extR in ['mp4','webm','m4v'] %}
                   <video src="{{ _urlR }}" controls class="max-w-full max-h-full"></video>
+                {% elif _extR == 'mov' %}
+                  <video src="{{ _urlR }}" controls class="max-w-full max-h-full"
+                         onerror="this.style.display='none';this.nextElementSibling.style.display='flex'"></video>
+                  <div style="display:none" class="flex-col items-center text-white text-center p-4 gap-2">
+                    <div class="text-3xl">🎬</div>
+                    <p class="text-amber-300 text-xs font-bold">⚠️ .mov Chrome非対応</p>
+                    <a href="{{ _urlR }}" download class="bg-indigo-600 text-white px-3 py-1 rounded-lg text-xs">⬇️ DL</a>
+                  </div>
                 {% elif _extR == 'exr' %}
                   <div class="text-center text-white p-4"><div class="text-4xl mb-2">🎞️</div><p class="text-xs">EXR proxy 未生成</p></div>
                 {% else %}
@@ -265,8 +292,15 @@
                 if (_name) _name.textContent = _a.version || '?';
                 if (['png','jpg','jpeg','webp','gif'].includes(_ext)) {
                   _player.innerHTML = '<img src="' + _url + '" alt="' + _bn + '" class="max-w-full max-h-full object-contain">';
-                } else if (['mp4','mov','webm','m4v'].includes(_ext)) {
+                } else if (['mp4','webm','m4v'].includes(_ext)) {
                   _player.innerHTML = '<video src="' + _url + '" controls class="max-w-full max-h-full"></video>';
+                } else if (_ext === 'mov') {
+                  const _movCanPlay = document.createElement('video').canPlayType('video/quicktime') !== '';
+                  if (_movCanPlay) {
+                    _player.innerHTML = '<video src="' + _url + '" controls class="max-w-full max-h-full"></video>';
+                  } else {
+                    _player.innerHTML = '<div style="display:flex;flex-direction:column;align-items:center;color:#fff;text-align:center;padding:1.5rem;gap:.5rem"><div style="font-size:2.5rem">🎬</div><p style="color:#fbbf24;font-weight:700;font-size:.8rem">⚠️ .mov Chrome/Edge 非対応</p><a href="' + _url + '" download style="margin-top:.5rem;background:#4f46e5;color:#fff;padding:.3rem .8rem;border-radius:.5rem;font-size:.75rem;text-decoration:none">⬇️ DL</a></div>';
+                  }
                 } else if (_ext === 'exr') {
                   _player.innerHTML = '<div class="text-center text-white p-4"><div class="text-4xl mb-2">🎞️</div><p class="text-xs">EXR proxy 未生成</p></div>';
                 } else {
@@ -838,11 +872,18 @@
       const dl = document.getElementById('player-download');
       const basename = url.split('/').pop();
       const imgExt = ['png','jpg','jpeg','webp','gif'];
-      const vidExt = ['mp4','mov','webm','m4v'];
+      const vidExt = ['mp4','webm','m4v'];
       if (imgExt.includes(ext)) {
         player.innerHTML = '<img src="' + url + '" alt="' + basename + '" class="max-w-full max-h-[60vh] object-contain">';
       } else if (vidExt.includes(ext)) {
         player.innerHTML = '<video src="' + url + '" controls autoplay class="max-w-full max-h-[60vh]"></video>';
+      } else if (ext === 'mov') {
+        const _canMov = document.createElement('video').canPlayType('video/quicktime') !== '';
+        if (_canMov) {
+          player.innerHTML = '<video src="' + url + '" controls autoplay class="max-w-full max-h-[60vh]"></video>';
+        } else {
+          player.innerHTML = '<div style="display:flex;flex-direction:column;align-items:center;color:#fff;text-align:center;padding:2rem;gap:.75rem"><div style="font-size:4rem">🎬</div><p style="color:#fbbf24;font-weight:700;font-size:1rem">⚠️ .mov は Chrome/Edge 非対応</p><p style="font-size:.75rem;opacity:.7">Safari または VLC でご視聴ください / ffmpeg で .mp4 変換を推奨</p><a href="' + url + '" download style="margin-top:.5rem;background:#4f46e5;color:#fff;padding:.5rem 1.25rem;border-radius:.75rem;font-size:.875rem;text-decoration:none">⬇️ ダウンロード</a></div>';
+        }
       } else if (ext === 'exr') {
         player.innerHTML = '<div class="text-center text-white p-8"><div class="text-6xl mb-4">🎞️</div><p class="text-lg font-bold">EXR ブラウザ表示不可</p><p class="text-sm mt-2 opacity-70">cmd_474 で proxy mov 自動生成予定</p></div>';
       } else {

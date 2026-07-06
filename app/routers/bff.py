@@ -6,7 +6,7 @@ from sqlalchemy.orm import Session
 
 from app.adapters.calendar_factory import get_calendar_client
 from app.auth import verify_jwt
-from app.deps import get_db
+from app.deps import get_actor_id, get_db
 from app.models import ScoreUserRole
 
 router = APIRouter()
@@ -54,6 +54,21 @@ def get_shots(
     return JSONResponse(
         content=[asdict(s) for s in shots],
         headers={"X-Actor-User-Id": jwt_sub},
+    )
+
+
+@router.get("/api/bff/users")
+def get_all_users(
+    actor_id: str = Depends(get_actor_id),
+):
+    """Calendar 全ユーザ一覧 (admin JWT) — 送信先セレクトの全ユーザー表示用"""
+    client = get_calendar_client()
+    users = client.get_users(actor_user_id=actor_id) or []
+    return JSONResponse(
+        content=[
+            {"id": u.get("id"), "name": u.get("name") or u.get("email", ""), "email": u.get("email", "")}
+            for u in users if isinstance(u, dict)
+        ]
     )
 
 

@@ -509,15 +509,55 @@ async def post_asset_upload(
     # server side size check (client side JS と二重防壁)
     if len(content) > 500 * 1024 * 1024:
         raise HTTPException(status_code=413, detail=f"File too large: {len(content)//1024//1024}MB > 500MB (QC/review max・実データ納品は別経路)")
-    result = client.post_asset(
-        file_data=content,
-        filename=file.filename or "upload.bin",
-        content_type=file.content_type or "application/octet-stream",
-        actor_user_id=actor_id,
-        task_id=task_id,
-        shot_id=shot_id,
-        version=version,
-    )
+    # .mov → .mp4 自動トランスコード (cmd_059)
+    _filename = file.filename or "upload.bin"
+    _content_type = file.content_type or "application/octet-stream"
+    if _filename.lower().endswith('.mov') or _content_type == 'video/quicktime':
+        import subprocess as _sp, tempfile as _tf
+        try:
+            import imageio_ffmpeg as _iff
+            _ffmpeg_exe = _iff.get_ffmpeg_exe()
+        except Exception:
+            _ffmpeg_exe = 'ffmpeg'  # fallback: system ffmpeg
+        _tmp_in = _tf.NamedTemporaryFile(suffix='.mov', delete=False)
+        _tmp_out = _tmp_in.name[:-4] + '.mp4'
+        try:
+            _tmp_in.write(content)
+            _tmp_in.close()
+            _proc = _sp.run(
+                [_ffmpeg_exe, '-y', '-i', _tmp_in.name,
+                 '-c:v', 'libx264', '-c:a', 'aac', '-movflags', '+faststart',
+                 _tmp_out],
+                capture_output=True, timeout=300,
+            )
+            if _proc.returncode == 0 and _os.path.exists(_tmp_out):
+                with open(_tmp_out, 'rb') as _f:
+                    content = _f.read()
+                _filename = (_filename[:-4] if _filename.lower().endswith('.mov') else _filename) + '.mp4'
+                _content_type = 'video/mp4'
+            else:
+                _err = _proc.stderr.decode('utf-8', errors='replace')[:300]
+                raise HTTPException(status_code=422, detail=f".mov→.mp4 変換失敗: {_err}")
+        except FileNotFoundError:
+            raise HTTPException(status_code=503, detail="ffmpeg 未インストール — imageio-ffmpeg が requirements.txt に追加済のため docker.exe restart で自動解決します")
+        finally:
+            if _os.path.exists(_tmp_in.name):
+                _os.unlink(_tmp_in.name)
+            if _os.path.exists(_tmp_out):
+                _os.unlink(_tmp_out)
+    try:
+        result = client.post_asset(
+            file_data=content,
+            filename=_filename,
+            content_type=_content_type,
+            actor_user_id=actor_id,
+            task_id=task_id,
+            shot_id=shot_id,
+            version=version,
+        )
+    except Exception as _e:
+        _cal_body = getattr(getattr(_e, "response", None), "text", str(_e))[:300]
+        raise HTTPException(status_code=502, detail=f"Calendar /api/assets エラー: {_cal_body}")
     # 殿御命 2026-06-04 (cmd_476): review/QC 提出時 SHOT 関係者全員 thread に依頼 自動投稿
     # 御方針: QC=Director 自動 + PM 必須 / Review=mention 主体 + PM 必須
     #         SHOT thread = PM + Director + Lighting Lead + その SHOT の task assignee 全員
@@ -697,7 +737,9 @@ async def post_asset_upload(
             pass
 
         # QC ビューアリンク (殿御命 2026-06-05: task_id + asset_id 含めた正規 URL 自動生成)
-        import os as _os
+        # 注意: モジュール冒頭で `import os as _os` 済 (L2)。ここでローカル再import すると
+        # Python が _os を関数スコープ全体でローカル変数と解釈し、L533 の _os 参照が
+        # UnboundLocalError になる (cmd_064 .mov アップロード500の真因)。再importしないこと。
         public_base = _os.environ.get("SCORE_PUBLIC_URL", "").rstrip("/")
         qc_link = ""
         if shot_id:

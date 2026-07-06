@@ -73,14 +73,28 @@ class CalendarClient:
             return self._admin_token
 
     def resolve_email_to_user_id(self, email: str) -> int | None:
-        """GET /api/users (M2M) で全件取得し email に一致する整数 id を返す。不在は None (fail-closed)。"""
+        """GET /api/users で全件取得し email に一致する整数 id を返す。不在は None (fail-closed)。
+        CALENDAR_MOCK=0: admin JWT を使用 (m2m_token は /api/users に 401 を返すため)。
+        CALENDAR_MOCK=1: m2m_token を使用 (従来動作維持)。"""
         if email in self._user_id_cache:
             return self._user_id_cache[email]
-        resp = httpx.get(
-            f"{self.base_url}/api/users",
-            headers={"Authorization": f"Bearer {self.m2m_token}"},
-        )
-        resp.raise_for_status()
+        if os.environ.get("CALENDAR_MOCK", "0") == "1":
+            auth_token = self.m2m_token
+        else:
+            try:
+                auth_token = self._get_admin_token()
+            except Exception:
+                auth_token = self.m2m_token
+        try:
+            resp = httpx.get(
+                f"{self.base_url}/api/users",
+                headers={"Authorization": f"Bearer {auth_token}"},
+            )
+            resp.raise_for_status()
+        except Exception:
+            # ネットワークエラー (ReadTimeout 等) / HTTP エラー (401 等) 時は
+            # キャッシュせずに None 返す (次リクエストで再試行可能)
+            return None
         users = resp.json()
         result: int | None = None
         for u in users:
@@ -290,13 +304,32 @@ class CalendarClient:
         data = resp.json()
         return data if isinstance(data, list) else data.get("assets", [])
 
+    def get_assets_by_task(self, task_id: int, actor_user_id: str | None = None) -> list:
+        """GET /api/assets?task_id=N — task 紐付き asset 一覧。
+        cmd_058 修正: shot に紐付かぬ task (PM task 等・shot_id=None) でも asset を
+        取得できるよう、shot 経由ではなく task_id で直接取得する経路として新設。"""
+        resp = httpx.get(
+            f"{self.base_url}/api/assets",
+            params={"task_id": task_id},
+            headers=self._headers(actor_user_id),
+        )
+        if resp.status_code == 404:
+            return []
+        resp.raise_for_status()
+        data = resp.json()
+        return data if isinstance(data, list) else data.get("assets", [])
+
     def next_version(self, shot_id: int, task_id: int | None = None, actor_user_id: str | None = None) -> str:
         """δ version 採番: 既存 assets から max base_version 抽出→次連番/衝突時 a/b/c サフィックス。
-        殿御命 2026-06-03 hotfix: GET /api/assets は Calendar 側 405 未実装ゆえ
-        /api/me/shots/{id}.asset_list 経由 (get_shot_detail) で取得。"""
+        cmd_058 修正: shot_id が無い (shot 未紐付き task) 場合は task_id 経由で直接取得。"""
         try:
-            shot_dict = self.get_shot_detail(shot_id, actor_user_id=actor_user_id) or {}
-            assets = list(shot_dict.get("asset_list", []) or [])
+            if shot_id:
+                shot_dict = self.get_shot_detail(shot_id, actor_user_id=actor_user_id) or {}
+                assets = list(shot_dict.get("asset_list", []) or [])
+            elif task_id is not None:
+                assets = list(self.get_assets_by_task(task_id, actor_user_id=actor_user_id) or [])
+            else:
+                assets = []
         except Exception:
             assets = []
         if task_id is not None:

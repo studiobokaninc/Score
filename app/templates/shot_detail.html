@@ -154,6 +154,13 @@
           </div>
           {# 殿御命 2026-06-03: メンションは Review 時のみ表示 (QC は Dir+PM 自動) #}
           <div id="asset-mentions-block" class="hidden">
+            <div class="flex items-center gap-2 mb-1">
+              <label class="flex items-center gap-1 text-[10px] text-slate-500 cursor-pointer select-none">
+                <input type="checkbox" id="asset-mentions-all-toggle" class="accent-indigo-600">
+                全ユーザー表示
+              </label>
+              <span id="asset-mentions-all-status" class="text-[10px] text-slate-400"></span>
+            </div>
             <select id="asset-mentions" multiple size="3" class="w-full text-xs bg-white border border-slate-300 rounded-lg px-2 py-1.5">
               {% if project_members %}
                 {% for m in project_members %}
@@ -664,12 +671,21 @@
         <option value="review">📌 Review (mention 主体)</option>
       </select>
     </div>
-    <div class="mb-3">
-      <label class="text-xs font-bold text-white/60 mb-1 block">補足コメント (任意)</label>
-      <textarea id="qc-notify-comment" class="w-full bg-white/40 border border-white/60 rounded-xl p-2 text-sm text-white h-16 resize-none" placeholder="特記事項があれば"></textarea>
+    <div class="mb-3 relative">
+      <label class="text-xs font-bold text-white/60 mb-1 block">補足コメント (任意・@ で mention)</label>
+      <textarea id="qc-notify-comment" class="w-full bg-white/40 border border-white/60 rounded-xl p-2 text-sm text-white h-16 resize-none" placeholder="特記事項があれば (@ でユーザー mention)"
+        oninput="handleMentionInput(event, 'qc-notify-mention-dropdown')" onkeydown="handleMentionKeydown(event, 'qc-notify-mention-dropdown')"></textarea>
+      <div id="qc-notify-mention-dropdown" class="hidden absolute left-0 right-0 z-50 max-h-40 overflow-y-auto rounded-xl shadow-2xl border border-slate-200" style="background-color: white;"></div>
     </div>
     <div class="mb-3">
       <label class="text-xs font-bold text-white/60 mb-1 block">送信先 mention (Director 不在時 必須)</label>
+      <div class="flex items-center gap-2 mb-1">
+        <label class="flex items-center gap-1 text-[10px] text-white/60 cursor-pointer select-none">
+          <input type="checkbox" id="qc-notify-mentions-all-toggle" class="accent-indigo-400">
+          全ユーザー表示
+        </label>
+        <span id="qc-notify-mentions-all-status" class="text-[10px] text-white/40"></span>
+      </div>
       <select id="qc-notify-mentions" multiple size="3" class="w-full bg-white/40 border border-white/60 rounded-xl p-2 text-sm text-white">
         {% if project_members %}
           {% for m in project_members %}
@@ -701,12 +717,21 @@
         <option value="その他">その他</option>
       </select>
     </div>
-    <div class="mb-3">
-      <label class="text-xs font-bold text-white/60 mb-1 block">詳細説明</label>
-      <textarea id="trouble-body" class="w-full bg-white/40 border border-white/60 rounded-xl p-2 text-sm text-white h-20 resize-none" placeholder="発生状況・タイムコード・症状を記入"></textarea>
+    <div class="mb-3 relative">
+      <label class="text-xs font-bold text-white/60 mb-1 block">詳細説明 (@ で mention)</label>
+      <textarea id="trouble-body" class="w-full bg-white/40 border border-white/60 rounded-xl p-2 text-sm text-white h-20 resize-none" placeholder="発生状況・タイムコード・症状を記入 (@ でユーザー mention)"
+        oninput="handleMentionInput(event, 'trouble-mention-dropdown')" onkeydown="handleMentionKeydown(event, 'trouble-mention-dropdown')"></textarea>
+      <div id="trouble-mention-dropdown" class="hidden absolute left-0 right-0 z-50 max-h-40 overflow-y-auto rounded-xl shadow-2xl border border-slate-200" style="background-color: white;"></div>
     </div>
     <div class="mb-3">
       <label class="text-xs font-bold text-white/60 mb-1 block">送信先 mention (Lead 不在時 必須)</label>
+      <div class="flex items-center gap-2 mb-1">
+        <label class="flex items-center gap-1 text-[10px] text-white/60 cursor-pointer select-none">
+          <input type="checkbox" id="trouble-mentions-all-toggle" class="accent-indigo-400">
+          全ユーザー表示
+        </label>
+        <span id="trouble-mentions-all-status" class="text-[10px] text-white/40"></span>
+      </div>
       <select id="trouble-mentions" multiple size="3" class="w-full bg-white/40 border border-white/60 rounded-xl p-2 text-sm text-white">
         {% if project_members %}
           {% for m in project_members %}
@@ -1127,6 +1152,159 @@
       }
     });
   }
+</script>
+
+<script>
+  // 全ユーザー表示チェックボックス — /api/bff/users から Calendar 全ユーザを取得して select options を差し替える
+  (function() {
+    let _allUsersCache = null;
+
+    async function _fetchAllUsers(statusEl) {
+      if (_allUsersCache) return _allUsersCache;
+      if (statusEl) statusEl.textContent = '⏳ 読込中...';
+      try {
+        const r = await fetch('/api/bff/users', { credentials: 'include' });
+        if (!r.ok) throw new Error('HTTP ' + r.status);
+        _allUsersCache = await r.json();
+        return _allUsersCache;
+      } catch (e) {
+        if (statusEl) statusEl.textContent = '❌ ' + e.message;
+        return null;
+      }
+    }
+
+    function _buildOptions(users) {
+      return users.map(u =>
+        '<option value="' + u.id + '">' + (u.name || u.email || String(u.id)) + ' (' + (u.email || '') + ')</option>'
+      ).join('');
+    }
+
+    function _setupToggle(checkboxId, selectId, statusId, projectMembersHtml) {
+      const chk = document.getElementById(checkboxId);
+      const sel = document.getElementById(selectId);
+      const st  = document.getElementById(statusId);
+      if (!chk || !sel) return;
+      const originalHtml = sel.innerHTML;
+      chk.addEventListener('change', async function() {
+        if (chk.checked) {
+          const users = await _fetchAllUsers(st);
+          if (!users) { chk.checked = false; return; }
+          sel.innerHTML = _buildOptions(users);
+          if (st) st.textContent = users.length + '名';
+        } else {
+          sel.innerHTML = originalHtml;
+          if (st) st.textContent = '';
+        }
+      });
+    }
+
+    document.addEventListener('DOMContentLoaded', function() {
+      _setupToggle('asset-mentions-all-toggle',      'asset-mentions',      'asset-mentions-all-status',      null);
+      _setupToggle('qc-notify-mentions-all-toggle',  'qc-notify-mentions',  'qc-notify-mentions-all-status',  null);
+      _setupToggle('trouble-mentions-all-toggle',    'trouble-mentions',    'trouble-mentions-all-status',    null);
+    });
+  })();
+</script>
+
+<script>
+  {# cmd_058: messages.html (cmd_055/056) の @mention 機構をタスク詳細コメント欄へ移植。
+     candidate クリック挿入は data-mention-idx + addEventListener('click') 方式 (onclick 内 JSON.stringify は
+     HTML属性の " と衝突するため cmd_056 で禁止された)。dropdown 背景は透過防止のため background-color を明示指定。 #}
+  (function() {
+    let _mentionUsersCache = null;
+
+    async function _getMentionUsers() {
+      if (_mentionUsersCache) return _mentionUsersCache;
+      try {
+        const r = await fetch('/api/bff/users', { credentials: 'include' });
+        if (!r.ok) throw new Error('HTTP ' + r.status);
+        const users = await r.json();
+        _mentionUsersCache = users.map(function(u) {
+          return { id: u.id, name: u.name || u.email || ('user_' + u.id), email: u.email || '' };
+        });
+      } catch (e) {
+        _mentionUsersCache = [];
+      }
+      return _mentionUsersCache;
+    }
+
+    function _escMention(s) {
+      const d = document.createElement('div');
+      d.textContent = s == null ? '' : String(s);
+      return d.innerHTML;
+    }
+
+    function _insertMention(textarea, dropdown, name) {
+      const cursor = textarea.selectionStart;
+      const text = textarea.value;
+      const lastAt = text.lastIndexOf('@', cursor - 1);
+      if (lastAt < 0) return;
+      const before = text.substring(0, lastAt);
+      const after = text.substring(cursor);
+      textarea.value = before + '@' + name + ' ' + after;
+      const newPos = lastAt + name.length + 2;
+      textarea.focus();
+      textarea.setSelectionRange(newPos, newPos);
+      dropdown.classList.add('hidden');
+    }
+
+    window.handleMentionInput = async function(ev, dropdownId) {
+      const textarea = ev.target;
+      const dropdown = document.getElementById(dropdownId);
+      if (!dropdown) return;
+      const cursor = textarea.selectionStart;
+      const text = textarea.value.substring(0, cursor);
+      const lastAt = text.lastIndexOf('@');
+      if (lastAt < 0 || /\s/.test(text.substring(lastAt + 1))) {
+        dropdown.classList.add('hidden');
+        return;
+      }
+      const query = text.substring(lastAt + 1).toLowerCase();
+      const users = await _getMentionUsers();
+      const candidates = users.filter(function(u) {
+        return u.name.toLowerCase().includes(query) || u.email.toLowerCase().includes(query);
+      });
+      if (candidates.length === 0) {
+        dropdown.classList.add('hidden');
+        return;
+      }
+      const slice = candidates.slice(0, 8);
+      dropdown.innerHTML = slice.map(function(u, i) {
+        return '<div class="px-3 py-2 cursor-pointer hover:bg-indigo-50 text-sm" data-mention-idx="' + i + '" style="background-color: white;">' +
+          '<span class="font-bold text-slate-700" translate="no">' + _escMention(u.name) + '</span>' +
+          (u.email ? ' <span class="text-[10px] text-slate-400" translate="no">' + _escMention(u.email) + '</span>' : '') +
+          '</div>';
+      }).join('');
+      dropdown.querySelectorAll('[data-mention-idx]').forEach(function(el) {
+        el.addEventListener('click', function() {
+          _insertMention(textarea, dropdown, slice[parseInt(this.dataset.mentionIdx, 10)].name);
+        });
+      });
+      dropdown.classList.remove('hidden');
+    };
+
+    window.handleMentionKeydown = function(ev, dropdownId) {
+      const dropdown = document.getElementById(dropdownId);
+      if (!dropdown || dropdown.classList.contains('hidden')) return;
+      if (ev.key === 'Escape') {
+        dropdown.classList.add('hidden');
+        return;
+      }
+      if (ev.key === 'Enter') {
+        const first = dropdown.querySelector('[data-mention-idx]');
+        if (first) { first.click(); ev.preventDefault(); }
+      }
+    };
+
+    document.addEventListener('click', function(ev) {
+      [['qc-notify-mention-dropdown', 'qc-notify-comment'], ['trouble-mention-dropdown', 'trouble-body']].forEach(function(pair) {
+        const dd = document.getElementById(pair[0]);
+        if (dd && !dd.classList.contains('hidden') && ev.target.id !== pair[1] && !dd.contains(ev.target)) {
+          dd.classList.add('hidden');
+        }
+      });
+    });
+  })();
 </script>
 
 {% endblock %}
