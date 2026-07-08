@@ -52,7 +52,14 @@ async def _auth_redirect_handler(request: Request, exc: _HTTPExc):
         is_html = "text/html" in accept
         # ブラウザ SSR 経路 (HTML 受領可・/api/ 以外) は /login redirect
         if not is_api and is_html:
-            return RedirectResponse(url="/login?error=session_expired", status_code=303)
+            # subtask_070e: 元の遷移先 (通知の QC ビューアリンク等) を next= として保持し、
+            # 再ログイン後に post_login (auth_login.py) がそこへ戻せるようにする。
+            from urllib.parse import quote as _quote
+            original = path + (("?" + request.url.query) if request.url.query else "")
+            return RedirectResponse(
+                url=f"/login?error=session_expired&next={_quote(original, safe='')}",
+                status_code=303,
+            )
     # default JSON response (API / 401 以外)
     return JSONResponse(
         status_code=exc.status_code,

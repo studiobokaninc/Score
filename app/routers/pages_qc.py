@@ -10,6 +10,7 @@ from app.adapters.calendar_factory import get_calendar_client
 from app.deps import get_actor_id, get_actor_role
 from app.qc_delegation import is_qc_delegated
 from app.helpers.project_resolver import resolve_project_name
+from app.helpers.task_status import attach_status_meta, JUDGE_TARGET_STATUSES
 
 router = APIRouter()
 
@@ -36,7 +37,7 @@ def _resolve_task(client, shot_id: int, task_id: int | None, actor_id: str):
                     "shot_id": raw.get("shot_id") or shot_id,
                     "type": raw.get("type", "Unknown"),
                     "name": raw.get("name") or raw.get("type") or "task",
-                    "status": raw.get("status", "open"),
+                    "status": raw.get("status", "mk"),
                     "assignee_id": raw.get("assigned_to") or raw.get("assignee_id") or 0,
                     "thread_id": raw.get("thread_id"),
                 })()
@@ -71,6 +72,7 @@ def get_qc_viewer(
         tasks = client.get_tasks(id, actor_user_id=actor_id)
     except httpx.ConnectError:
         tasks = []
+    tasks = attach_status_meta(tasks, client)  # cmd_075: status_color/status_label 動的付与
     shot = client.get_shot(id, actor_user_id=actor_id)
     project_name = resolve_project_name(shot.project_id, actor_id) if shot else "-"
     project_id = shot.project_id if shot else None
@@ -96,6 +98,13 @@ def get_qc_viewer(
         asset_list.sort(key=lambda a: (a.get("created_at") if isinstance(a, dict) else "") or "", reverse=True)
     except Exception:
         asset_list = []
+
+    # 殿御命 2026-07-06 (cmd_068②③): .exr/.mov 等変換済 asset は DL リンクを原本ファイルへ差替え
+    _demo_mode = os.getenv("CALENDAR_MOCK", "0") == "1"
+    from app.helpers.asset_originals import resolve_download_url
+    for _a in asset_list:
+        if isinstance(_a, dict):
+            _a["download_url"] = resolve_download_url(_a, _demo_mode)
 
     # 殿御命 2026-06-05: project_members 取得 (mention 選択用・pages_shot.py から移植)
     project_members = []
@@ -158,6 +167,7 @@ def get_qc_viewer(
             "tasks": tasks, "shot_id": id, "project_name": project_name,
             "project_id": project_id, "seq_code": seq_code, "shot_code": shot_code,
             "task_id": task_id, "task_name": task_name,
+            "judge_target_statuses": tuple(JUDGE_TARGET_STATUSES),  # cmd_075: _can_judge 判定対象
             "project_members": project_members,  # 殿御命 2026-06-05: mention 選択用
             # 殿御命 2026-06-05 (B 案): admin role 元 user のみ as_role で別 role preview 可
             "role": (as_role if (as_role in ('director', 'pm', 'lead', 'user') and get_actor_role(actor_id) == 'admin') else get_actor_role(actor_id)),

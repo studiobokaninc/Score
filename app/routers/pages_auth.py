@@ -8,6 +8,10 @@ from typing import Optional
 from app.adapters.calendar_factory import get_calendar_client
 from app.adapters.dto import CalendarUser
 from app.deps import get_actor_id
+from app.helpers.task_status import (
+    attach_status_meta, STATUS_PRIORITY, COMPLETED_STATUSES,
+    WIP_STATUSES, STATUS_DEFAULT_PROGRESS,
+)
 
 router = APIRouter()
 _templates = Jinja2Templates(
@@ -20,8 +24,8 @@ _templates = Jinja2Templates(
 
 @router.get("/")
 @router.get("/login")
-def read_login(request: Request, error: Optional[str] = None):
-    context = {"error": error}
+def read_login(request: Request, error: Optional[str] = None, next: Optional[str] = None):
+    context = {"error": error, "next": next}
     return _templates.TemplateResponse(request=request, name="login.html", context=context)
 
 
@@ -107,7 +111,7 @@ def read_exit_report(request: Request, mode: Optional[str] = None, actor_id: str
                 for shot in shots:
                     tasks = client.get_tasks(shot.shot_id, actor_user_id=actor_id) or []
                     for t in tasks:
-                        if t.assignee_id == actor_uid and t.status != "approved":
+                        if t.assignee_id == actor_uid and t.status != "deliver":
                             my_tasks.append({
                                 "task_id": t.task_id,
                                 "shot_code": shot.shot_code or shot.name,
@@ -133,12 +137,18 @@ def read_exit_report(request: Request, mode: Optional[str] = None, actor_id: str
     except Exception:
         timecards_history = []
 
+    my_tasks = attach_status_meta(my_tasks, client)  # cmd_075: status_color/status_label 動的付与
     common = {
         "user": user,
         "active": "exit_report",
         "demo_mode": os.getenv("CALENDAR_MOCK", "0") == "1",
         "my_tasks": my_tasks,
         "timecards_history": timecards_history,
+        # cmd_075: TaskStatus 新19値の判定定数を JS へ single-source で渡す (ハードコード禁止)
+        "status_priority": STATUS_PRIORITY,
+        "completed_statuses": list(COMPLETED_STATUSES),
+        "wip_statuses": WIP_STATUSES,
+        "status_default_progress": STATUS_DEFAULT_PROGRESS,
     }
     if mode == "current":
         return _templates.TemplateResponse(

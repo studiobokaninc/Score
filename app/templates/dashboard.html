@@ -205,31 +205,32 @@
                   <p class="text-sm font-bold text-slate-800"><span translate="no">{{ t.shot_code }}</span> <span translate="no">{{ t.task_type }}</span></p>
                   <p class="text-xs text-slate-500">
                     {% if t.is_qc_inbox %}{% if t.kind == 'qc' %}🔍 受信 QC 依頼 (判定対応){% else %}📌 受信 Review 依頼 (確認対応){% endif %}
-                    {% elif t.status == 'retake' %}🔴 Retake 修正待ち(最優先)
-                    {% elif t.status == 'reviewing' %}⚠️ Reviewing(レビュー対応推奨)
-                    {% elif t.status == 'review' %}⚠️ Review 中(判定対応推奨)
-                    {% elif t.status == 'open' %}⏳ Open(本日着手)
-                    {% elif t.status in ('in_progress','in-progress') %}🔧 進行中
-                    {% elif t.status == 'todo' %}⏳ Todo
-                    {% elif t.status == 'delayed' %}⚠️ 遅延
+                    {% elif t.status == 'qc_fb' %}🔴 QC_FB 修正待ち(最優先)
+                    {% elif t.status in ('qc','v1qc') %}⚠️ 社内 QC(判定対応推奨)
+                    {% elif t.status in ('ap_fb','dir_fb') %}🟠 社外 FB(修正対応推奨)
+                    {% elif t.status == 'dir_wt' %}⏳ Dir チェック待ち
+                    {% elif t.status == 'mk' %}⏳ MK 未着手(本日着手)
+                    {% elif t.status in ('wip','modeling','lookdev','caching','rig','facial') %}🔧 進行中
+                    {% elif t.status in ('ap','fix','dir_ap') %}✅ 承認済
+                    {% elif t.status == 'wt' %}⏸ 停止
+                    {% elif t.status == 'omit' %}➖ 対象外
+                    {% elif t.status == 'deliver' %}✅ 納品完了
                     {% else %}{{ t.status | capitalize }}{% endif %}
                   </p>
                 </div>
                 {% if t.is_qc_inbox %}
                 <span class="text-xs font-bold bg-purple-100 text-purple-700 rounded-full px-2 py-0.5">📥 {{ t.kind | upper }}</span>
-                {% elif t.status == 'retake' %}
-                <span class="text-xs font-bold bg-rose-100 text-rose-700 rounded-full px-2 py-0.5"><span translate="no">Retake</span></span>
-                {% elif t.status in ('reviewing','review') %}
-                <span class="text-xs font-bold bg-amber-100 text-amber-700 rounded-full px-2 py-0.5"><span translate="no">Review</span></span>
-                {% elif t.status == 'open' %}
-                <span class="text-xs font-bold bg-slate-100 text-slate-600 rounded-full px-2 py-0.5"><span translate="no">Open</span></span>
+                {% else %}
+                {# cmd_075: 色/ラベルは Calendar API 動的取得 (status_color/status_label・ハードコード禁止) #}
+                <span class="text-xs font-bold rounded-full px-2 py-0.5" translate="no"
+                  style="background-color: {{ t.status_color or '#BDBDBD' }}22; color: {{ t.status_color or '#BDBDBD' }};">{{ t.status_label or t.status }}</span>
                 {% endif %}
                 <span class="text-slate-400">›</span>
               </a>
             </li>
             {% endfor %}
           </ol>
-          <p class="text-xs text-slate-400 mt-3">※ Retake > Reviewing > Open > 進行中 > Approved の優先度で sort 表示</p>
+          <p class="text-xs text-slate-400 mt-3">※ QC_FB > 社内QC/社外FB > MK未着手 > 進行中 > 承認済 の優先度で sort 表示</p>
           {% else %}
           <p class="text-xs text-slate-500">本日のアサインなし。お休みください、または PM に新規 task の問合せをどうぞ。</p>
           {% endif %}

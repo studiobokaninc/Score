@@ -4,6 +4,7 @@ from fastapi.responses import RedirectResponse
 from fastapi.templating import Jinja2Templates
 from app.deps import get_actor_id, get_actor_role
 from app.adapters.calendar_factory import get_calendar_client
+from app.helpers.task_status import RECEPTION_PENDING_STATUSES
 
 router = APIRouter()
 _templates = Jinja2Templates(directory="app/templates")
@@ -25,7 +26,8 @@ def get_pm_dashboard(request: Request, actor_id: str = Depends(get_actor_id)):
     except Exception:
         projects = []
 
-    # 受領待ち成果物 = 全 project の全 shot の tasks で status='reviewing' or 'retake' を集計
+    # 受領待ち成果物 = 全 project の全 shot の tasks で判定待ち (qc/v1qc/dir_wt) を集計
+    # qc_fb/ap_fb (再修正中) は受領待ちではないため含めない
     pending = []
     try:
         for proj in projects:
@@ -34,7 +36,7 @@ def get_pm_dashboard(request: Request, actor_id: str = Depends(get_actor_id)):
             for shot in shots:
                 tasks = client.get_tasks(shot.shot_id, actor_user_id=actor_id) or []
                 for t in tasks:
-                    if t.status in ("reviewing", "retake"):
+                    if t.status in RECEPTION_PENDING_STATUSES:
                         pending.append({
                             "task_id": t.task_id,
                             "shot_id": shot.shot_id,

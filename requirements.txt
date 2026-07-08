@@ -9,3 +9,5 @@ pytest>=7.0.0
 pytest-mock>=3.0.0
 jinja2>=3.0.0
 imageio-ffmpeg>=0.4.9
+OpenEXR>=3.4.0
+Pillow>=10.0.0

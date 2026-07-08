@@ -10,11 +10,19 @@ from app.auth import create_score_token, get_next_5am_jst
 router = APIRouter()
 
 
+def _safe_next_path(next: str | None) -> str | None:
+    """next= の open-redirect 対策: 自サイト内の相対パスのみ許可。"""
+    if not next or not next.startswith("/") or next.startswith("//") or "://" in next:
+        return None
+    return next
+
+
 @router.post("/api/auth/login")
 def post_login(
     request: Request,
     username: str = Form(...),
     password: str = Form(default=""),
+    next: str | None = Form(default=None),
 ):
     """Score login — Calendar /api/auth/token 経由で password 検証.
     CALENDAR_MOCK=1 時は password 検証 skip(mock 互換).
@@ -51,8 +59,10 @@ def post_login(
     _jst_today = (datetime.utcnow() + _td(hours=9)).date().isoformat()
     _routine_done = request.cookies.get("score_routine_done", "")
     routine_done_today = bool(_routine_done) and _routine_done[:10] == _jst_today
+    safe_next = _safe_next_path(next)
     if routine_done_today:
-        next_url = "/dashboard"
+        # subtask_070e: 通知の QC ビューアリンク等、当日routine提出済なら元の遷移先へ復帰
+        next_url = safe_next or "/dashboard"
     elif _has_prev_day_exit_submitted(client, str(user_id)):
         next_url = "/routine"
     else:

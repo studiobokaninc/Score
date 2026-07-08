@@ -123,7 +123,7 @@
       <div class="space-y-4">
         <div>
           <label class="block text-xs font-bold text-slate-500 mb-2">翌日優先タスク <span class="text-[10px] font-normal text-slate-400">（システムが優先度順で提示）</span></label>
-          <p class="text-[10px] text-slate-400 mb-2">優先度: retake → reviewing → in_progress → open。上位 5 件を既定選択。</p>
+          <p class="text-[10px] text-slate-400 mb-2">優先度: QC_FB → 社内QC/社外FB → MK未着手 → 進行中。上位 5 件を既定選択。</p>
           <div id="next-priority-list" class="space-y-1 mb-3 max-h-48 overflow-y-auto bg-white/40 border border-white/60 rounded-xl p-2"></div>
         </div>
         <div>
@@ -303,6 +303,11 @@ setMode(new URLSearchParams(location.search).get('mode') === 'previous' ? 'prev'
 
 // ===== Assigned tasks dynamic UI =====
 window.__MY_TASKS__ = {{ my_tasks | tojson }};
+// cmd_075 (2026-07-08): TaskStatus 新19値の判定定数 (Python task_status.py が single source)
+window.__STATUS_PRIORITY__ = {{ status_priority | tojson }};
+window.__WIP_STATUSES__ = {{ wip_statuses | tojson }};
+window.__DONE_STATUSES__ = {{ completed_statuses | tojson }};
+window.__STATUS_DEFAULT_PROGRESS__ = {{ status_default_progress | tojson }};
 
 const TODAY_KEY = (function(){ const d = new Date(); return d.getFullYear()+'-'+String(d.getMonth()+1).padStart(2,'0')+'-'+String(d.getDate()).padStart(2,'0'); })();
 const LS_COMPLETED = 'score_exit_completed_marks';      // {task_id: 'YYYY-MM-DD'}
@@ -319,8 +324,9 @@ function _lsSet(key, val) {
   try { localStorage.setItem(key, JSON.stringify(val)); } catch(e) {}
 }
 
-const TASK_PRIORITY = { 'retake': 0, 'reviewing': 1, 'in_progress': 2, 'open': 3, 'approved': 9 };
-const WIP_STATUSES = ['in_progress', 'open', 'retake', 'reviewing'];
+const TASK_PRIORITY = window.__STATUS_PRIORITY__ || {};
+const WIP_STATUSES = window.__WIP_STATUSES__ || [];
+const DONE_STATUSES = window.__DONE_STATUSES__ || [];
 
 function _taskIconFor(type) {
   if (type === 'Composite') return '🎨';
@@ -367,10 +373,10 @@ function renderAssignedTasks(listEl, emptyEl, mode) {
   const progress = _lsGet(LS_PROGRESS, {});
   const statusChg = _lsGet(LS_STATUS_CHG, {});
 
-  // Filter: approved は今日完了マーク付きのみ表示
+  // Filter: 完了 (deliver) は今日完了マーク付きのみ表示
   const visible = tasks.filter(t => {
-    const st = (t.status || '').toLowerCase().replace(/-/g, '_');  // 殿御命 2026-06-09: in-progress 等の表記揺れ吸収
-    if (['approved','completed','done'].indexOf(st) >= 0) {
+    const st = (t.status || '').toLowerCase().replace(/-/g, '_');
+    if (DONE_STATUSES.indexOf(st) >= 0) {
       return completedMarks[t.task_id] === TODAY_KEY;
     }
     return true;
@@ -415,22 +421,24 @@ function renderAssignedTasks(listEl, emptyEl, mode) {
   // sort by priority (retake first)
   visible.sort((a,b) => (TASK_PRIORITY[a.status]||5) - (TASK_PRIORITY[b.status]||5));
 
+  const STATUS_DEFAULT_PROGRESS = window.__STATUS_DEFAULT_PROGRESS__ || {};
   for (const tk of visible) {
     const tid = tk.task_id;
-    const st = (tk.status || '').toLowerCase().replace(/-/g, '_');  // 殿御命 2026-06-09: in-progress 等の表記揺れ吸収
+    const st = (tk.status || '').toLowerCase().replace(/-/g, '_');
     const {name, type} = _taskLabel(tk);
     const icon = _taskIconFor(type);
     const isWIP = WIP_STATUSES.indexOf(st) >= 0;
-    const isDone = ['approved','completed','done'].indexOf(st) >= 0;
-    const pct = (progress[tid] !== undefined) ? progress[tid] : (isDone ? 100 : (st === 'reviewing' ? 80 : (st === 'retake' ? 50 : 30)));
+    const isDone = DONE_STATUSES.indexOf(st) >= 0;
+    const pct = (progress[tid] !== undefined) ? progress[tid] : (STATUS_DEFAULT_PROGRESS[st] ?? 30);
     const chg = statusChg[tid] || '';
 
+    // cmd_075: 色/ラベルは Calendar API 動的取得 (status_color/status_label・ハードコード禁止)
     const statusBadge = (function(){
-      if (st === 'retake') return '<span class="px-2 py-0.5 bg-rose-100 text-rose-700 text-[10px] font-black rounded-full">🔴 Retake</span>';
-      if (st === 'reviewing') return '<span class="px-2 py-0.5 bg-amber-100 text-amber-700 text-[10px] font-black rounded-full">⚠️ Reviewing</span>';
-      if (isDone) return '<span class="px-2 py-0.5 bg-emerald-100 text-emerald-700 text-[10px] font-black rounded-full">✅ 完了（今日）</span>';
-      if (st === 'open') return '<span class="px-2 py-0.5 bg-slate-100 text-slate-600 text-[10px] font-black rounded-full">⏳ Open</span>';
-      return '<span class="px-2 py-0.5 bg-indigo-100 text-indigo-700 text-[10px] font-black rounded-full">🔧 In Progress</span>';
+      const color = tk.status_color || '#BDBDBD';
+      const label = tk.status_label || tk.status || '-';
+      const emoji = st === 'qc_fb' ? '🔴 ' : (isDone ? '✅ ' : (st === 'mk' ? '⏳ ' : ''));
+      const doneNote = isDone ? '（今日）' : '';
+      return '<span class="px-2 py-0.5 text-[10px] font-black rounded-full" style="background-color:' + color + '22;color:' + color + ';">' + emoji + label + doneNote + '</span>';
     })();
 
     const card = document.createElement('div');
@@ -516,7 +524,6 @@ function renderAssignedTasks(listEl, emptyEl, mode) {
 }
 
 // ===== Next-day priority tasks (system-presented) =====
-const DONE_STATUSES = ['approved', 'completed', 'done'];
 function _isTaskComplete(t) {
   if (DONE_STATUSES.indexOf((t.status || '').toLowerCase().replace(/-/g, '_')) >= 0) return true;
   // 「完了」チェックボックス ON または今日完了マーク有 = コンプリート扱い
@@ -561,12 +568,8 @@ function renderNextPriorityList() {
       <div class="flex-1 min-w-0">
         ${_breadcrumbHTML(lbl)}
       </div>
-      <span class="text-[10px] font-bold rounded-full px-2 py-0.5 shrink-0 mt-1 ${
-        tk.status === 'retake' ? 'bg-rose-100 text-rose-600' :
-        tk.status === 'reviewing' ? 'bg-amber-100 text-amber-600' :
-        tk.status === 'in_progress' ? 'bg-indigo-100 text-indigo-600' :
-        'bg-slate-100 text-slate-600'
-      }"><span translate="no">${tk.status}</span></span>
+      <span class="text-[10px] font-bold rounded-full px-2 py-0.5 shrink-0 mt-1" style="background-color:${tk.status_color || '#BDBDBD'}22;color:${tk.status_color || '#BDBDBD'};"
+      ><span translate="no">${tk.status_label || tk.status}</span></span>
     `;
     wrap.appendChild(row);
     const cb = row.querySelector('input[type="checkbox"]');

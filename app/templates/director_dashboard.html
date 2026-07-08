@@ -134,7 +134,8 @@
       {% endif %}
 
       <!-- (5) 本日のタスク (Director 自身担当の SHOT・state.shots loop で動的) -->
-      {% set _director_shots = (shots or []) | selectattr('status', 'in', ['in_progress', 'reviewing']) | list %}
+      {# cmd_075 (2026-07-08): shot.status は Calendar _recalc_shot_status の不変4値。'reviewing' は shot に存在しないため除去 #}
+      {% set _director_shots = (shots or []) | selectattr('status', 'in', ['in_progress']) | list %}
       {% if _director_shots %}
       <section>
         <h2 class="font-black text-slate-800 text-base mb-3">

@@ -3,15 +3,16 @@ from fastapi import APIRouter, Depends, Request
 from fastapi.templating import Jinja2Templates
 from app.deps import get_actor_id, get_actor_role
 from app.adapters.calendar_factory import get_calendar_client
+from app.helpers.task_status import STATUS_PRIORITY, COMPLETED_STATUSES
 
 router = APIRouter()
 _templates = Jinja2Templates(directory="app/templates")
 
 
 # Priority order: open tasks needing attention first
-# 殿御命 2026-06-05: review/in-progress/delayed/todo enum 追加 + 完了 enum 一括除外
-_TASK_PRIORITY = {"retake": 0, "reviewing": 1, "review": 1, "in_progress": 2, "in-progress": 2, "todo": 2, "delayed": 2, "open": 3, "approved": 9, "completed": 9, "complete": 9, "done": 9, "完了": 9}
-_COMPLETED_STATUSES = ("approved", "completed", "complete", "done", "完了")
+# cmd_075 (2026-07-08): TaskStatus 新19値対応 — STATUS_PRIORITY/COMPLETED_STATUSES へ集約
+_TASK_PRIORITY = STATUS_PRIORITY
+_COMPLETED_STATUSES = COMPLETED_STATUSES
 
 
 def _enrich_my_tasks(client, actor_id: str) -> list[dict]:

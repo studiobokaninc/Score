@@ -38,6 +38,7 @@
     </div>
     {% endif %}
     <form method="post" action="/api/auth/login">
+      {% if next %}<input type="hidden" name="next" value="{{ next }}">{% endif %}
       <!-- Email -->
       <div class="mb-4">
         <label class="block text-xs font-bold text-slate-500 mb-1 uppercase tracking-widest">メールアドレス</label>

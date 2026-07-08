@@ -5,6 +5,7 @@ from fastapi.responses import RedirectResponse
 from fastapi.templating import Jinja2Templates
 from app.deps import get_actor_id, get_actor_role
 from app.adapters.calendar_factory import get_calendar_client
+from app.helpers.task_status import STATUS_PRIORITY
 
 router = APIRouter()
 _templates = Jinja2Templates(directory="app/templates")
@@ -100,10 +101,9 @@ def get_lead_dashboard(request: Request, actor_id: str = Depends(get_actor_id)):
                 "assignee_id": getattr(tk, "assignee_id", None),
             })
     # sort: active 上位・updated_at 新しい順
-    _prio_order = {"retake": 0, "reviewing": 1, "open": 2, "todo": 2, "in_progress": 3, "delayed": 3, "approved": 9, "completed": 9, "done": 9}
-    active_tasks = [t for t in my_tasks if _prio_order.get(t.get("status", ""), 5) < 9]
-    done_tasks = [t for t in my_tasks if _prio_order.get(t.get("status", ""), 5) >= 9]
-    active_tasks.sort(key=lambda t: (_prio_order.get(t.get("status", ""), 5), t.get("updated_at", "")), reverse=False)
+    active_tasks = [t for t in my_tasks if STATUS_PRIORITY.get(t.get("status", ""), 5) < 9]
+    done_tasks = [t for t in my_tasks if STATUS_PRIORITY.get(t.get("status", ""), 5) >= 9]
+    active_tasks.sort(key=lambda t: (STATUS_PRIORITY.get(t.get("status", ""), 5), t.get("updated_at", "")), reverse=False)
     done_tasks.sort(key=lambda t: t.get("updated_at", ""), reverse=True)
     my_tasks = active_tasks + done_tasks
 
@@ -126,11 +126,11 @@ def get_lead_dashboard(request: Request, actor_id: str = Depends(get_actor_id)):
             "status": t.get("status"),
             "assignee_id": t.get("assignee_id"),
         }
-        if t.get("status") == "reviewing" and not is_self:
+        if t.get("status") == "qc" and not is_self:
             review_targets.append(entry)
-        elif t.get("status") == "retake" and not is_self:
+        elif t.get("status") == "qc_fb" and not is_self:
             team_retakes.append(entry)
-        if ttype == "Look" and t.get("status") in ("reviewing", "approved"):
+        if ttype == "Look" and t.get("status") in ("qc", "ap"):
             distribution_candidates.append(entry)
 
     return _templates.TemplateResponse(

@@ -103,7 +103,7 @@
                     <div class="text-5xl">🎬</div>
                     <p class="text-amber-300 font-bold">⚠️ .mov は Chrome/Edge 非対応</p>
                     <p class="text-xs opacity-70 mt-1">Safari または VLC でご視聴ください</p>
-                    <a href="{{ _url0 }}" download class="mt-3 bg-indigo-600 hover:bg-indigo-700 text-white px-4 py-2 rounded-xl text-sm">⬇️ ダウンロード</a>
+                    <a href="{{ _a0.download_url }}" download class="mt-3 bg-indigo-600 hover:bg-indigo-700 text-white px-4 py-2 rounded-xl text-sm">⬇️ ダウンロード</a>
                   </div>
                 </div>
               {% elif _ext0 == 'exr' %}
@@ -119,7 +119,7 @@
               {# 殿御命 2026-06-05: _a0 (asset_id 指定優先) を反映 #}
               <span id="player-meta">{% if asset_list %}{{ _a0.version or '?' }} — {{ (_a0.file_path or '').split('/')[-1] }}{% else %}提出物なし{% endif %}</span>
               {% if asset_list %}
-              <a id="player-download" href="http://192.168.44.253:8001/static/assets/{{ (_a0.file_path or '').split('/')[-1] }}" download
+              <a id="player-download" href="{{ _a0.download_url }}" download
                  class="bg-indigo-600 hover:bg-indigo-700 text-white px-3 py-1 rounded-lg">⬇️ ダウンロード</a>
               {% endif %}
             </div>
@@ -175,7 +175,7 @@
                   <div style="display:none" class="flex-col items-center text-white text-center p-4 gap-2">
                     <div class="text-3xl">🎬</div>
                     <p class="text-amber-300 text-xs font-bold">⚠️ .mov Chrome非対応</p>
-                    <a href="{{ _urlL }}" download class="bg-indigo-600 text-white px-3 py-1 rounded-lg text-xs">⬇️ DL</a>
+                    <a href="{{ _aL.download_url }}" download class="bg-indigo-600 text-white px-3 py-1 rounded-lg text-xs">⬇️ DL</a>
                   </div>
                 {% elif _extL == 'exr' %}
                   <div class="text-center text-white p-4"><div class="text-4xl mb-2">🎞️</div><p class="text-xs">EXR proxy 未生成</p></div>
@@ -199,7 +199,7 @@
                   <div style="display:none" class="flex-col items-center text-white text-center p-4 gap-2">
                     <div class="text-3xl">🎬</div>
                     <p class="text-amber-300 text-xs font-bold">⚠️ .mov Chrome非対応</p>
-                    <a href="{{ _urlR }}" download class="bg-indigo-600 text-white px-3 py-1 rounded-lg text-xs">⬇️ DL</a>
+                    <a href="{{ _aR.download_url }}" download class="bg-indigo-600 text-white px-3 py-1 rounded-lg text-xs">⬇️ DL</a>
                   </div>
                 {% elif _extR == 'exr' %}
                   <div class="text-center text-white p-4"><div class="text-4xl mb-2">🎞️</div><p class="text-xs">EXR proxy 未生成</p></div>
@@ -299,7 +299,7 @@
                   if (_movCanPlay) {
                     _player.innerHTML = '<video src="' + _url + '" controls class="max-w-full max-h-full"></video>';
                   } else {
-                    _player.innerHTML = '<div style="display:flex;flex-direction:column;align-items:center;color:#fff;text-align:center;padding:1.5rem;gap:.5rem"><div style="font-size:2.5rem">🎬</div><p style="color:#fbbf24;font-weight:700;font-size:.8rem">⚠️ .mov Chrome/Edge 非対応</p><a href="' + _url + '" download style="margin-top:.5rem;background:#4f46e5;color:#fff;padding:.3rem .8rem;border-radius:.5rem;font-size:.75rem;text-decoration:none">⬇️ DL</a></div>';
+                    _player.innerHTML = '<div style="display:flex;flex-direction:column;align-items:center;color:#fff;text-align:center;padding:1.5rem;gap:.5rem"><div style="font-size:2.5rem">🎬</div><p style="color:#fbbf24;font-weight:700;font-size:.8rem">⚠️ .mov Chrome/Edge 非対応</p><a href="' + (_a.download_url || _url) + '" download style="margin-top:.5rem;background:#4f46e5;color:#fff;padding:.3rem .8rem;border-radius:.5rem;font-size:.75rem;text-decoration:none">⬇️ DL</a></div>';
                   }
                 } else if (_ext === 'exr') {
                   _player.innerHTML = '<div class="text-center text-white p-4"><div class="text-4xl mb-2">🎞️</div><p class="text-xs">EXR proxy 未生成</p></div>';
@@ -446,7 +446,7 @@
             {% set _bn = (a.file_path or '').split('/')[-1] %}
             {% set _ext = _bn.lower().split('.')[-1] if '.' in _bn else '' %}
             {% set _url = ('/static/assets/' ~ _bn) if (demo_mode or 'sample_' in _bn) else ('http://192.168.44.253:8001/static/assets/' ~ _bn) %}
-            <div id="asset-row-{{ a.id }}" onclick="selectAsset({{ a.id }},'{{ _url }}','{{ _ext }}','{{ a.version or '?' }}')"
+            <div id="asset-row-{{ a.id }}" onclick="selectAsset({{ a.id }},'{{ _url }}','{{ _ext }}','{{ a.version or '?' }}','{{ a.download_url }}')"
               class="flex items-center justify-between p-3 rounded-2xl cursor-pointer hover:bg-indigo-50 transition-colors">
               <div class="flex items-center gap-2">
                 {# 殿御命 2026-06-03: サムネ実画像表示 (image/video の場合) #}
@@ -480,7 +480,7 @@
           {# 殿御命 2026-06-03: 「v04 と並べて比較」ボタン削除 (旧 mock・上部「📊 比較モードに切替」が現役) #}
         </div>
 
-        <!-- QC アクションボタン (Director/PM/Admin = 判定権限ロール・status='reviewing'/'review' な task で判定可) -->
+        <!-- QC アクションボタン (Director/PM/Admin = 判定権限ロール・判定待ち status な task で判定可) -->
         {# 殿御命 2026-06-05: admin も Director と同等 判定対象 (上申不要・直接 Approve/Retake) #}
         {# 殿御命 2026-06-09 (案A): can_qc = この依頼で mention された代理 user も Approve/Retake 可 #}
         {% if role in ('director', 'pm', 'admin') or can_qc %}
@@ -490,18 +490,19 @@
           {% for t in tasks %}{% if t.task_id == task_id %}{% set _ns_ts.s = t.status %}{% endif %}{% endfor %}
         {% endif %}
         {% set _task_status = _ns_ts.s %}
-        {# 殿御命 2026-06-05: Calendar enum 'review' も判定対象に追加 (旧 'reviewing' 後方互換) #}
+        {# cmd_075 (2026-07-08): shot.status は Calendar _recalc_shot_status の不変4値 (planning/in_progress/approved/completed) #}
         {% set _shot_in_review = false %}
         {% if shot and shot.status %}
-          {% if shot.status|string|lower in ['in_review', 'reviewing', 'review'] %}
+          {% if shot.status|string|lower in ['in_progress', 'approved'] %}
             {% set _shot_in_review = true %}
           {% endif %}
         {% endif %}
+        {# task.status は新19値体系 — judge_target_statuses (社内/社外 判定待ち) #}
         {% set _ns_judge = namespace(any_review=false) %}
         {% if not task_id and tasks %}
-          {% for t in tasks %}{% if t.status in ('reviewing', 'review') %}{% set _ns_judge.any_review = true %}{% endif %}{% endfor %}
+          {% for t in tasks %}{% if t.status in judge_target_statuses %}{% set _ns_judge.any_review = true %}{% endif %}{% endfor %}
         {% endif %}
-        {% set _can_judge = (_task_status in ('reviewing', 'review')) or (not task_id and (_shot_in_review or _ns_judge.any_review)) %}
+        {% set _can_judge = (_task_status in judge_target_statuses) or (not task_id and (_shot_in_review or _ns_judge.any_review)) %}
         <div class="bg-white/40 backdrop-blur-xl border border-white/60 rounded-3xl shadow-xl p-5 flex flex-col gap-3">
           <h2 class="font-bold text-slate-800 mb-1"><span translate="no">QC</span> アクション <span class="text-xs text-slate-500 font-normal">{% if role in ('director', 'pm', 'admin') %}(<span translate="no">{{ role | capitalize }}</span> 専用){% else %}(代理 — この依頼で指名されています){% endif %}</span></h2>
           {% if _can_judge %}
@@ -555,7 +556,7 @@
           <p class="text-xs text-amber-700 bg-amber-50 border border-amber-200 rounded-xl px-3 py-2 leading-relaxed">
             ⚠️ <strong>この SHOT には Task が 0 件</strong> です (Calendar 側で Task 設定が必要)<br>
             → SHOT.status = <span class="font-bold" translate="no">{{ shot.status if shot else '-' }}</span><br>
-            → Calendar UI で Task を追加 (Composite / Lighting / MattePaint 等) して Compositor 担当 + status=reviewing にしてください
+            → Calendar UI で Task を追加 (Composite / Lighting / MattePaint 等) して Compositor 担当 + status=qc にしてください
           </p>
           {% elif not task_id %}
           <div class="text-xs text-slate-600 bg-slate-50 border border-slate-100 rounded-xl px-3 py-2 leading-relaxed">
@@ -565,12 +566,9 @@
               <a href="?task_id={{ t.task_id }}{% if preview_role %}&as_role={{ preview_role }}{% endif %}{% if asset_id %}&asset_id={{ asset_id }}{% endif %}"
                 class="block px-2 py-1 rounded bg-white border border-slate-200 hover:border-indigo-300 hover:bg-indigo-50 transition">
                 <span class="font-bold" translate="no">{{ t.type or t.task_type or ('task ' ~ t.task_id) }}</span>
-                <span class="text-[10px] ml-2 px-1.5 rounded
-                  {% if t.status == 'reviewing' %}bg-amber-100 text-amber-700
-                  {% elif t.status == 'retake' %}bg-rose-100 text-rose-700
-                  {% elif t.status == 'approved' or t.status == 'completed' %}bg-emerald-100 text-emerald-700
-                  {% elif t.status == 'in_progress' %}bg-blue-100 text-blue-700
-                  {% else %}bg-slate-100 text-slate-600{% endif %}" translate="no">{{ t.status or '-' }}</span>
+                {# cmd_075: 色/ラベルは Calendar API 動的取得 (status_color/status_label・ハードコード禁止) #}
+                <span class="text-[10px] ml-2 px-1.5 rounded font-medium" translate="no"
+                  style="background-color: {{ t.status_color or '#BDBDBD' }}22; color: {{ t.status_color or '#BDBDBD' }}; border: 1px solid {{ t.status_color or '#BDBDBD' }}66;">{{ t.status_label or t.status or '-' }}</span>
               </a>
               {% endfor %}
             </div>
@@ -578,10 +576,10 @@
           {% else %}
           <p class="text-xs text-slate-500 bg-slate-50 border border-slate-100 rounded-xl px-3 py-2">
             ⚠️ 現 task status: <span class="font-bold" translate="no">{{ _task_status or '(未取得)' }}</span>
-            {% if _task_status == 'retake' %}<br>→ Compositor の Retake 修正待ち中・修正完了後(status=reviewing)に Approve/Retake 判定可能{% endif %}
-            {% if _task_status == 'open' %}<br>→ 未着手・Compositor が作業着手・提出待ち{% endif %}
-            {% if _task_status == 'in_progress' %}<br>→ Compositor 作業中・提出(status=reviewing)後に判定可能{% endif %}
-            {% if _task_status in ('approved', 'completed') %}<br>→ 既に承認済 ✓{% endif %}
+            {% if _task_status == 'qc_fb' %}<br>→ Compositor の QC_FB 修正待ち中・修正完了後(status=qc)に Approve/Retake 判定可能{% endif %}
+            {% if _task_status == 'mk' %}<br>→ 未着手・Compositor が作業着手・提出待ち{% endif %}
+            {% if _task_status in ('wip', 'modeling', 'lookdev', 'caching', 'rig', 'facial') %}<br>→ Compositor 作業中・提出(status=qc)後に判定可能{% endif %}
+            {% if _task_status in ('ap', 'fix', 'dir_ap', 'deliver') %}<br>→ 既に承認済 ✓{% endif %}
           </p>
           {% endif %}
           {% endif %}
@@ -866,11 +864,12 @@
       }
     }
 
-    function selectAsset(assetId, url, ext, version) {
+    function selectAsset(assetId, url, ext, version, downloadUrl) {
       const player = document.getElementById('main-player');
       const meta = document.getElementById('player-meta');
       const dl = document.getElementById('player-download');
       const basename = url.split('/').pop();
+      const dlUrl = downloadUrl || url;
       const imgExt = ['png','jpg','jpeg','webp','gif'];
       const vidExt = ['mp4','webm','m4v'];
       if (imgExt.includes(ext)) {
@@ -882,7 +881,7 @@
         if (_canMov) {
           player.innerHTML = '<video src="' + url + '" controls autoplay class="max-w-full max-h-[60vh]"></video>';
         } else {
-          player.innerHTML = '<div style="display:flex;flex-direction:column;align-items:center;color:#fff;text-align:center;padding:2rem;gap:.75rem"><div style="font-size:4rem">🎬</div><p style="color:#fbbf24;font-weight:700;font-size:1rem">⚠️ .mov は Chrome/Edge 非対応</p><p style="font-size:.75rem;opacity:.7">Safari または VLC でご視聴ください / ffmpeg で .mp4 変換を推奨</p><a href="' + url + '" download style="margin-top:.5rem;background:#4f46e5;color:#fff;padding:.5rem 1.25rem;border-radius:.75rem;font-size:.875rem;text-decoration:none">⬇️ ダウンロード</a></div>';
+          player.innerHTML = '<div style="display:flex;flex-direction:column;align-items:center;color:#fff;text-align:center;padding:2rem;gap:.75rem"><div style="font-size:4rem">🎬</div><p style="color:#fbbf24;font-weight:700;font-size:1rem">⚠️ .mov は Chrome/Edge 非対応</p><p style="font-size:.75rem;opacity:.7">Safari または VLC でご視聴ください / ffmpeg で .mp4 変換を推奨</p><a href="' + dlUrl + '" download style="margin-top:.5rem;background:#4f46e5;color:#fff;padding:.5rem 1.25rem;border-radius:.75rem;font-size:.875rem;text-decoration:none">⬇️ ダウンロード</a></div>';
         }
       } else if (ext === 'exr') {
         player.innerHTML = '<div class="text-center text-white p-8"><div class="text-6xl mb-4">🎞️</div><p class="text-lg font-bold">EXR ブラウザ表示不可</p><p class="text-sm mt-2 opacity-70">cmd_474 で proxy mov 自動生成予定</p></div>';
@@ -890,7 +889,7 @@
         player.innerHTML = '<div class="text-center text-white p-8"><div class="text-6xl mb-4">📦</div><p class="text-lg font-bold">' + (ext||'file').toUpperCase() + ' ファイル</p></div>';
       }
       if (meta) meta.textContent = version + ' — ' + basename;
-      if (dl) { dl.href = url; dl.classList.remove('hidden'); }
+      if (dl) { dl.href = dlUrl; dl.classList.remove('hidden'); }
       document.querySelectorAll('[id^="asset-row-"]').forEach(r => r.classList.remove('bg-indigo-100','ring-2','ring-indigo-400'));
       const row = document.getElementById('asset-row-' + assetId);
       if (row) row.classList.add('bg-indigo-100','ring-2','ring-indigo-400');

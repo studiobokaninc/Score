@@ -150,3 +150,20 @@ def test_get_shot_connect_error():
     import httpx as httpx_mod
     with unittest.mock.patch("httpx.get", side_effect=httpx_mod.ConnectError("")):
         assert CalendarClient().get_shot(2) is None
+
+
+def test_get_project_roles_unwraps_nested_roles_key():
+    """cmd_076: 実 Calendar API は {"project_id":.., "roles": {...}} で包んで返す。
+    flat dict に unwrap されないと director_uid が常に None になり QC 通知が壊れる。"""
+    payload = {"project_id": 73, "roles": {"director": 28, "pm": 31}}
+    with unittest.mock.patch("httpx.get", return_value=_mock_get(payload)):
+        roles = CalendarClient().get_project_roles(73)
+    assert roles == {"director": 28, "pm": 31}
+
+
+def test_get_project_roles_accepts_flat_shape():
+    """Calendar 側が将来 flat 形式に変わっても後方互換で動くこと。"""
+    payload = {"director": 28, "pm": 31}
+    with unittest.mock.patch("httpx.get", return_value=_mock_get(payload)):
+        roles = CalendarClient().get_project_roles(73)
+    assert roles == {"director": 28, "pm": 31}

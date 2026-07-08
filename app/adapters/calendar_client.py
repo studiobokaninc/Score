@@ -259,6 +259,19 @@ class CalendarClient:
         resp.raise_for_status()
         return resp.json()
 
+    def get_task_statuses(self, actor_user_id: str | None = None) -> list:
+        """GET /api/readonly/task-statuses — 全19値のステータス定義
+        (value/label/color/category) 一括取得。凡例・フィルタ・動的バッジ色に使用。
+        cmd_075: calendar_status_color_guide_for_score_2026-07-08.md §3 準拠。"""
+        resp = httpx.get(
+            f"{self.base_url}/api/readonly/task-statuses",
+            headers=self._headers(actor_user_id),
+            timeout=10.0,
+        )
+        resp.raise_for_status()
+        data = resp.json()
+        return data if isinstance(data, list) else data.get("statuses", [])
+
     # ─── 書込メソッド (calender_api_complete_list.md §8) ────────────────────
 
     def post_retakes(self, body: dict, actor_user_id: str) -> dict:
@@ -469,7 +482,11 @@ class CalendarClient:
     def get_project_roles(self, project_id: int, actor_user_id: str | None = None) -> dict:
         """殿御命 2026-06-05 (nibu Phase 2 EP): GET /api/projects/{id}/roles
         Response: {role_name: user_id, ...} (role 毎 first-wins・例 {"director": 53, "pm": 52})
-        404 (project 不在) の場合 {} 返却。"""
+        404 (project 不在) の場合 {} 返却。
+        cmd_076: Calendar 実装は {"project_id":.., "roles": {...}} で包んで返すため、
+        ここで unwrap して呼び出し側全員(bff_write.py 5箇所 + pages_dashboard.py +
+        pages_qc.py + shot_detail.html の Director 事前検査 fetch)が期待する flat dict に揃える。
+        Calendar 側が将来 flat 化された場合も動くよう両形式を許容する。"""
         try:
             resp = httpx.get(
                 f"{self.base_url}/api/projects/{project_id}/roles",
@@ -479,7 +496,10 @@ class CalendarClient:
             if resp.status_code == 404:
                 return {}
             resp.raise_for_status()
-            return resp.json() or {}
+            data = resp.json() or {}
+            if isinstance(data.get("roles"), dict):
+                return data["roles"]
+            return data
         except Exception:
             return {}
 

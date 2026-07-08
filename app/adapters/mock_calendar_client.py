@@ -108,27 +108,28 @@ _DEFAULT_STATE = {
     ],
 
     # Tasks (shot 配下 5 工程 × 各 user の assign)
+    # cmd_075 (2026-07-08): 新19値ステータスへ移行 (旧 approved/retake/reviewing/open/in_progress)
     "tasks": [
         # SHOT_001 (Ramps) — 殿 (Sato/Compositor 役割) と Yamada(Director レビュー)
-        {"task_id": 11, "shot_id": 1, "type": "Animation", "assignee_id": 30, "status": "approved"},
-        {"task_id": 12, "shot_id": 1, "type": "Lighting", "assignee_id": 30, "status": "retake"},
-        {"task_id": 13, "shot_id": 1, "type": "FX", "assignee_id": 30, "status": "reviewing"},
-        {"task_id": 14, "shot_id": 1, "type": "MattePaint", "assignee_id": 30, "status": "retake"},
-        {"task_id": 15, "shot_id": 1, "type": "Composite", "assignee_id": 30, "status": "open"},
+        {"task_id": 11, "shot_id": 1, "type": "Animation", "assignee_id": 30, "status": "ap"},
+        {"task_id": 12, "shot_id": 1, "type": "Lighting", "assignee_id": 30, "status": "qc_fb"},
+        {"task_id": 13, "shot_id": 1, "type": "FX", "assignee_id": 30, "status": "qc"},
+        {"task_id": 14, "shot_id": 1, "type": "MattePaint", "assignee_id": 30, "status": "qc_fb"},
+        {"task_id": 15, "shot_id": 1, "type": "Composite", "assignee_id": 30, "status": "mk"},
         # SHOT_002 (Ramps) — Suzuki がメイン
-        {"task_id": 21, "shot_id": 2, "type": "Animation", "assignee_id": 40, "status": "approved"},
-        {"task_id": 22, "shot_id": 2, "type": "Lighting", "assignee_id": 20, "status": "reviewing"},
-        {"task_id": 23, "shot_id": 2, "type": "Composite", "assignee_id": 40, "status": "retake"},
+        {"task_id": 21, "shot_id": 2, "type": "Animation", "assignee_id": 40, "status": "ap"},
+        {"task_id": 22, "shot_id": 2, "type": "Lighting", "assignee_id": 20, "status": "qc"},
+        {"task_id": 23, "shot_id": 2, "type": "Composite", "assignee_id": 40, "status": "qc_fb"},
         # SHOT_003 (Ramps) — Suzuki Compositor + Kato Look 統括
-        {"task_id": 31, "shot_id": 3, "type": "Animation", "assignee_id": 40, "status": "approved"},
-        {"task_id": 32, "shot_id": 3, "type": "Lighting", "assignee_id": 20, "status": "reviewing"},
-        {"task_id": 33, "shot_id": 3, "type": "Look", "assignee_id": 40, "status": "reviewing"},
-        {"task_id": 34, "shot_id": 3, "type": "FX", "assignee_id": 40, "status": "open"},
-        {"task_id": 35, "shot_id": 3, "type": "Composite", "assignee_id": 40, "status": "open"},
+        {"task_id": 31, "shot_id": 3, "type": "Animation", "assignee_id": 40, "status": "ap"},
+        {"task_id": 32, "shot_id": 3, "type": "Lighting", "assignee_id": 20, "status": "qc"},
+        {"task_id": 33, "shot_id": 3, "type": "Look", "assignee_id": 40, "status": "qc"},
+        {"task_id": 34, "shot_id": 3, "type": "FX", "assignee_id": 40, "status": "mk"},
+        {"task_id": 35, "shot_id": 3, "type": "Composite", "assignee_id": 40, "status": "mk"},
         # SHOT_004 (Ramps) — Sato 担当
-        {"task_id": 41, "shot_id": 4, "type": "Composite", "assignee_id": 30, "status": "open"},
+        {"task_id": 41, "shot_id": 4, "type": "Composite", "assignee_id": 30, "status": "mk"},
         # BALI_001 (Bali) — 殿が Compositor
-        {"task_id": 51, "shot_id": 5, "type": "Composite", "assignee_id": 99, "status": "in_progress"},
+        {"task_id": 51, "shot_id": 5, "type": "Composite", "assignee_id": 99, "status": "wip"},
     ],
 
     # Notifications (各 user 宛 — actor_user_id で filter)
@@ -523,6 +524,31 @@ class MockCalendarClient(CalendarClient):
             )
             for t in _read_state().get("tasks", [])
             if t.get("shot_id") == shot_id
+        ]
+
+    def get_task_statuses(self, actor_user_id: str | None = None) -> list:
+        """GET /api/readonly/task-statuses mock — 実 Calendar backend/app/status_meta.py の
+        19値定義を模倣 (calendar_status_color_guide_for_score_2026-07-08.md §4 準拠)。"""
+        return [
+            {"value": "mk", "label": "MK", "color": "#1E88E5", "category": "todo"},
+            {"value": "wt", "label": "WT", "color": "#E53935", "category": "held"},
+            {"value": "wip", "label": "WIP", "color": "#FFA726", "category": "in_progress"},
+            {"value": "modeling", "label": "Modeling", "color": "#FB8C00", "category": "in_progress"},
+            {"value": "lookdev", "label": "LookDev", "color": "#F57C00", "category": "in_progress"},
+            {"value": "caching", "label": "Caching", "color": "#E65100", "category": "in_progress"},
+            {"value": "rig", "label": "Rig", "color": "#FFB300", "category": "in_progress"},
+            {"value": "facial", "label": "Facial", "color": "#FDD835", "category": "in_progress"},
+            {"value": "qc_fb", "label": "QC_FB", "color": "#E91E63", "category": "review"},
+            {"value": "ap_fb", "label": "AP_FB", "color": "#D81B60", "category": "review"},
+            {"value": "dir_fb", "label": "Dir_FB", "color": "#C2185B", "category": "review"},
+            {"value": "v1qc", "label": "V1QC", "color": "#BA68C8", "category": "review"},
+            {"value": "qc", "label": "QC", "color": "#8E24AA", "category": "review"},
+            {"value": "dir_wt", "label": "Dir_WT", "color": "#26A69A", "category": "review"},
+            {"value": "ap", "label": "AP", "color": "#81C784", "category": "review"},
+            {"value": "dir_ap", "label": "Dir_AP", "color": "#4CAF50", "category": "review"},
+            {"value": "fix", "label": "FIX", "color": "#2E7D32", "category": "review"},
+            {"value": "deliver", "label": "Deliver", "color": "#757575", "category": "completed"},
+            {"value": "omit", "label": "Omit", "color": "#E0E0E0", "category": "held"},
         ]
 
     def get_my_projects(self, actor_user_id: str) -> list:

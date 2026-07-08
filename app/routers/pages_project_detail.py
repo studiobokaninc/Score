@@ -42,7 +42,7 @@ def get_project_detail(project_id: int, request: Request, actor_id: str = Depend
                 if t.get("assigned_to"):
                     members_ids.add(t["assigned_to"])
                 total_tasks += 1
-                if t.get("status") in ("completed", "approved", "done"):
+                if t.get("status") in ("deliver",):
                     completed_tasks += 1
     except Exception:
         pass
@@ -61,7 +61,7 @@ def get_project_detail(project_id: int, request: Request, actor_id: str = Depend
         all_proj_tasks = client.get_tasks_by_project(project_id, actor_user_id=actor_id) or []
         if all_proj_tasks:
             total_tasks = len(all_proj_tasks)
-            completed_tasks = sum(1 for t in all_proj_tasks if t.get("status") in ("completed", "approved", "done"))
+            completed_tasks = sum(1 for t in all_proj_tasks if t.get("status") in ("deliver",))
             # メンバー(全 task の assigned_to で再集計)
             members_ids_all = {t.get("assigned_to") for t in all_proj_tasks if t.get("assigned_to")}
             if members_ids_all:

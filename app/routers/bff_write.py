@@ -10,6 +10,7 @@ from typing import Optional
 
 from app.adapters.calendar_factory import get_calendar_client
 from app.deps import get_actor_id
+from app.helpers.task_status import NEW_TASK_STATUSES, OLD_TO_NEW_STATUS
 
 # 殿御命 2026-06-04 cmd_477: Web Push subscription store (簡易 file-based)
 _PUSH_STORE = _Path("/tmp/score_push_subs.json")
@@ -186,10 +187,9 @@ async def post_retakes(request: Request, actor_id: str = Depends(get_actor_id)):
                 proj_name = p.get("name") or ""
             except Exception: pass
 
-    # 殿御命 2026-06-05: Calendar enum に 'retake' なし → 'in-progress' に PATCH (Compositor 再作業)
-    # 並行で nibu 殿に 'retake' enum 追加依頼予定
+    # cmd_075 (2026-07-08): TaskStatus 新19値対応 — retake 発令 → 'qc_fb' (社内フィードバック) に PATCH
     if task_id and hasattr(client, "patch_task"):
-        try: client.patch_task(int(task_id), {"status": "in-progress"}, actor_user_id=actor_id)
+        try: client.patch_task(int(task_id), {"status": "qc_fb"}, actor_user_id=actor_id)
         except Exception: pass
 
     # SHOT thread に Retake 発令 投稿
@@ -509,11 +509,16 @@ async def post_asset_upload(
     # server side size check (client side JS と二重防壁)
     if len(content) > 500 * 1024 * 1024:
         raise HTTPException(status_code=413, detail=f"File too large: {len(content)//1024//1024}MB > 500MB (QC/review max・実データ納品は別経路)")
-    # .mov → .mp4 自動トランスコード (cmd_059)
     _filename = file.filename or "upload.bin"
     _content_type = file.content_type or "application/octet-stream"
+    # 殿御命 2026-07-06 (cmd_068②③): 変換前の原本を保持 (DL は常に原本を返す・プレビューのみ変換後)
+    _original_content = content
+    _original_filename = _filename
+    _needs_original_preserve = False
+    # .mov → .mp4 自動トランスコード (cmd_059)
     if _filename.lower().endswith('.mov') or _content_type == 'video/quicktime':
         import subprocess as _sp, tempfile as _tf
+        _needs_original_preserve = True
         try:
             import imageio_ffmpeg as _iff
             _ffmpeg_exe = _iff.get_ffmpeg_exe()
@@ -545,6 +550,49 @@ async def post_asset_upload(
                 _os.unlink(_tmp_in.name)
             if _os.path.exists(_tmp_out):
                 _os.unlink(_tmp_out)
+    # .exr → プレビューPNG 単純変換 (cmd_068・殿御命: トーンマップ不要・単純変換のみ)
+    elif _filename.lower().endswith('.exr') or _content_type in ('image/x-exr', 'image/aces'):
+        import tempfile as _tf
+        _needs_original_preserve = True
+        _tmp_in = _tf.NamedTemporaryFile(suffix='.exr', delete=False)
+        try:
+            _tmp_in.write(content)
+            _tmp_in.close()
+            import numpy as _np
+            import OpenEXR as _OpenEXR
+            from PIL import Image as _Image
+            import io as _io
+            try:
+                _exrf = _OpenEXR.File(_tmp_in.name)
+            except Exception as _e:
+                raise HTTPException(status_code=422, detail=f".exr 読込失敗 (破損または非対応形式): {str(_e)[:300]}")
+            _part = _exrf.parts[0]
+            _chs = _part.channels
+            if 'RGBA' in _chs:
+                _rgb = _chs['RGBA'].pixels[..., :3]
+            elif 'RGB' in _chs:
+                _rgb = _chs['RGB'].pixels[..., :3]
+            elif all(c in _chs for c in ('R', 'G', 'B')):
+                _rgb = _np.stack([_chs['R'].pixels, _chs['G'].pixels, _chs['B'].pixels], axis=-1)
+            else:
+                raise HTTPException(status_code=422, detail=f".exr: RGB相当のチャンネルが見つからず (channels={list(_chs.keys())})")
+            # 単純変換のみ (殿御命: トーンカーブ調整・露出/トーンマップ不要)。
+            # HDR float 値を [0,1] へ clamp → 簡易 sRGB ガンマのみ (真っ黒/白飛びの最低限回避)。
+            _rgb = _np.clip(_rgb.astype(_np.float32), 0.0, 1.0)
+            _rgb = _np.power(_rgb, 1.0 / 2.2)
+            _img8 = (_rgb * 255.0 + 0.5).astype(_np.uint8)
+            _buf = _io.BytesIO()
+            _Image.fromarray(_img8, 'RGB').save(_buf, format='PNG')
+            content = _buf.getvalue()
+            _filename = (_filename[:-4] if _filename.lower().endswith('.exr') else _filename) + '_preview.png'
+            _content_type = 'image/png'
+        except HTTPException:
+            raise
+        except Exception as _e:
+            raise HTTPException(status_code=422, detail=f".exr→PNG変換失敗: {str(_e)[:300]}")
+        finally:
+            if _os.path.exists(_tmp_in.name):
+                _os.unlink(_tmp_in.name)
     try:
         result = client.post_asset(
             file_data=content,
@@ -558,106 +606,125 @@ async def post_asset_upload(
     except Exception as _e:
         _cal_body = getattr(getattr(_e, "response", None), "text", str(_e))[:300]
         raise HTTPException(status_code=502, detail=f"Calendar /api/assets エラー: {_cal_body}")
+    # 殿御命 2026-07-06 (cmd_068②③): 変換を経た asset は原本を Score ローカルに保存
+    # (Calendar には変換後ファイルのみ送信されるため、DL 用の原本はここでしか保持できない)
+    if _needs_original_preserve:
+        try:
+            _asset_id_for_orig = result.get("id") or result.get("asset_id") if isinstance(result, dict) else None
+            if _asset_id_for_orig is not None:
+                from app.helpers.asset_originals import save_original as _save_original
+                _save_original(int(_asset_id_for_orig), _original_filename, _original_content)
+        except Exception as _e:
+            import sys as _s_orig
+            print(f"[asset_original] save skip: {_e}", file=_s_orig.stderr)
     # 殿御命 2026-06-04 (cmd_476): review/QC 提出時 SHOT 関係者全員 thread に依頼 自動投稿
     # 御方針: QC=Director 自動 + PM 必須 / Review=mention 主体 + PM 必須
     #         SHOT thread = PM + Director + Lighting Lead + その SHOT の task assignee 全員
     #         (殿御指摘 2026-06-04: 個別 DM ではなく SHOT 関係者 全員に届くべき)
     # 暫定 hardcode: Calendar 側に project.director_id / pm_id 解決 EP 不在 (Phase 2 nibu 殿差替)
-    if submission_type in ("qc", "review"):
-        # 殿御命 2026-06-05 (#46 動線修正): task status を 'review' に patch (in-progress → review)
-        # これにより qc_viewer の判定 block (_can_judge = status in ('review','reviewing')) が活性化する
+    # 殿御命 2026-07-07 (cmd_070③): 通常アップロード(submission_type 無指定)時も同じ SHOT thread へ
+    #   通知メッセージ(QC ビューアリンク付き)を投稿する。qc/review 提出時専用の副作用
+    #   (task status patch・QC delegation 記録・Director 必須チェック)はここから分離する。
+    is_qc_review = submission_type in ("qc", "review")
+    if is_qc_review:
+        # cmd_075 (2026-07-08): task status を 'qc' に patch (wip 等 → qc)
+        # これにより qc_viewer の判定 block (_can_judge = status in JUDGE_TARGET_STATUSES) が活性化する
+        # (通常アップロード時にこの副作用が起きるのは意図しない挙動のため qc/review 提出時限定)
         if task_id and hasattr(client, "patch_task"):
             try:
-                client.patch_task(int(task_id), {"status": "review"}, actor_user_id=actor_id)
+                client.patch_task(int(task_id), {"status": "qc"}, actor_user_id=actor_id)
             except Exception:
                 pass
-        # project / seq / shot / task 階層解決 (殿御命 2026-06-04/05: get_shot_detail 空時 get_shot DTO + get_tasks fallback)
-        proj_name = ""
-        seq_code = ""
-        shot_code = ""
-        task_type = ""
-        shot_assignee_uids: set[int] = set()
-        pid = None
-        if shot_id:
+    # project / seq / shot / task 階層解決 (殿御命 2026-06-04/05: get_shot_detail 空時 get_shot DTO + get_tasks fallback)
+    # (通知本文タイトル階層 + qc_link 構築に使うため submission_type 問わず実行)
+    proj_name = ""
+    seq_code = ""
+    shot_code = ""
+    task_type = ""
+    shot_assignee_uids: set[int] = set()
+    pid = None
+    if shot_id:
+        try:
+            shot_info = client.get_shot_detail(shot_id, actor_user_id=actor_id) or {}
+            shot_code = shot_info.get("shotID") or shot_info.get("name") or ""
+            seq_code = shot_info.get("seqID") or shot_info.get("seq_code") or shot_info.get("sequence") or ""
+            pid = shot_info.get("project_id")
+            # SHOT 内 全 task の assignee + 対象 task の type 取得
+            for tk in (shot_info.get("task_list") or shot_info.get("tasks") or []):
+                if isinstance(tk, dict):
+                    a = tk.get("assignee_id") or tk.get("assigned_to")
+                    if a is not None:
+                        try: shot_assignee_uids.add(int(a))
+                        except (ValueError, TypeError): pass
+                    if task_id and (tk.get("id") == task_id or tk.get("task_id") == task_id):
+                        task_type = tk.get("type") or tk.get("task_type") or ""
+        except Exception:
+            pass
+        # 殿御命 2026-06-05: fallback (get_shot_detail 空時)
+        if not shot_code or not seq_code or pid is None:
             try:
-                shot_info = client.get_shot_detail(shot_id, actor_user_id=actor_id) or {}
-                shot_code = shot_info.get("shotID") or shot_info.get("name") or ""
-                seq_code = shot_info.get("seqID") or shot_info.get("seq_code") or shot_info.get("sequence") or ""
-                pid = shot_info.get("project_id")
-                # SHOT 内 全 task の assignee + 対象 task の type 取得
-                for tk in (shot_info.get("task_list") or shot_info.get("tasks") or []):
-                    if isinstance(tk, dict):
-                        a = tk.get("assignee_id") or tk.get("assigned_to")
-                        if a is not None:
-                            try: shot_assignee_uids.add(int(a))
-                            except (ValueError, TypeError): pass
-                        if task_id and (tk.get("id") == task_id or tk.get("task_id") == task_id):
-                            task_type = tk.get("type") or tk.get("task_type") or ""
+                s_dto = client.get_shot(int(shot_id), actor_user_id=actor_id)
+                if s_dto:
+                    if not shot_code: shot_code = getattr(s_dto, "shot_code", "") or getattr(s_dto, "name", "")
+                    if not seq_code: seq_code = getattr(s_dto, "seq_code", "") or ""
+                    if pid is None: pid = getattr(s_dto, "project_id", None)
             except Exception:
                 pass
-            # 殿御命 2026-06-05: fallback (get_shot_detail 空時)
-            if not shot_code or not seq_code or pid is None:
-                try:
-                    s_dto = client.get_shot(int(shot_id), actor_user_id=actor_id)
-                    if s_dto:
-                        if not shot_code: shot_code = getattr(s_dto, "shot_code", "") or getattr(s_dto, "name", "")
-                        if not seq_code: seq_code = getattr(s_dto, "seq_code", "") or ""
-                        if pid is None: pid = getattr(s_dto, "project_id", None)
-                except Exception:
-                    pass
-            if not shot_code:
-                shot_code = f"SHOT_{shot_id:03d}"
-            # task_type fallback: get_tasks(shot_id)
-            if not task_type and task_id:
-                try:
-                    for tk in (client.get_tasks(int(shot_id), actor_user_id=actor_id) or []):
-                        tid = tk.get("id") or tk.get("task_id") if isinstance(tk, dict) else getattr(tk, "task_id", None)
-                        if tid == task_id:
-                            task_type = (tk.get("type") or tk.get("task_type") if isinstance(tk, dict) else getattr(tk, "type", "")) or ""
-                            break
-                except Exception:
-                    pass
-            # project_name: get_my_projects 経由 (sender 参加分)
-            if pid is not None and not proj_name:
-                try:
-                    for p in (client.get_my_projects(actor_user_id=actor_id) or []):
-                        if isinstance(p, dict) and p.get("id") == pid:
-                            proj_name = p.get("name") or ""
-                            break
-                except Exception:
-                    pass
-            # 殿御命 2026-06-05: sender 未参加でも get_project (admin) fallback
-            if pid is not None and not proj_name and hasattr(client, "get_project"):
-                try:
-                    p = client.get_project(int(pid), actor_user_id=actor_id) or {}
-                    proj_name = p.get("name") or ""
-                except Exception:
-                    pass
+        if not shot_code:
+            shot_code = f"SHOT_{shot_id:03d}"
+        # task_type fallback: get_tasks(shot_id)
+        if not task_type and task_id:
+            try:
+                for tk in (client.get_tasks(int(shot_id), actor_user_id=actor_id) or []):
+                    tid = tk.get("id") or tk.get("task_id") if isinstance(tk, dict) else getattr(tk, "task_id", None)
+                    if tid == task_id:
+                        task_type = (tk.get("type") or tk.get("task_type") if isinstance(tk, dict) else getattr(tk, "type", "")) or ""
+                        break
+            except Exception:
+                pass
+        # project_name: get_my_projects 経由 (sender 参加分)
+        if pid is not None and not proj_name:
+            try:
+                for p in (client.get_my_projects(actor_user_id=actor_id) or []):
+                    if isinstance(p, dict) and p.get("id") == pid:
+                        proj_name = p.get("name") or ""
+                        break
+            except Exception:
+                pass
+        # 殿御命 2026-06-05: sender 未参加でも get_project (admin) fallback
+        if pid is not None and not proj_name and hasattr(client, "get_project"):
+            try:
+                p = client.get_project(int(pid), actor_user_id=actor_id) or {}
+                proj_name = p.get("name") or ""
+            except Exception:
+                pass
 
-        # mention 列 → uid 解決
-        def _resolve_uids(raw_csv: str | None) -> set[int]:
-            uids: set[int] = set()
-            if not raw_csv:
-                return uids
-            for token in (m.strip() for m in raw_csv.split(",") if m.strip()):
-                if token.isdigit():
-                    uids.add(int(token))
-                elif "@" in token:
-                    try:
-                        for u in (client.get_users(actor_user_id=actor_id) or []):
-                            if isinstance(u, dict) and (u.get("email") or "").lower() == token.lower():
-                                uid = u.get("id") or u.get("user_id")
-                                if uid is not None:
-                                    uids.add(int(uid))
-                                break
-                    except Exception:
-                        pass
+    # mention 列 → uid 解決
+    def _resolve_uids(raw_csv: str | None) -> set[int]:
+        uids: set[int] = set()
+        if not raw_csv:
             return uids
+        for token in (m.strip() for m in raw_csv.split(",") if m.strip()):
+            if token.isdigit():
+                uids.add(int(token))
+            elif "@" in token:
+                try:
+                    for u in (client.get_users(actor_user_id=actor_id) or []):
+                        if isinstance(u, dict) and (u.get("email") or "").lower() == token.lower():
+                            uid = u.get("id") or u.get("user_id")
+                            if uid is not None:
+                                uids.add(int(uid))
+                            break
+                except Exception:
+                    pass
+        return uids
 
-        mention_uids = _resolve_uids(mentions)
+    mention_uids = _resolve_uids(mentions)
 
+    if is_qc_review:
         # 殿御命 2026-06-09 (案A): mention された user に『この依頼 1 件限定』で Approve/Retake を委任 (DB 記録)。
         # グローバル昇格ではなく依頼単位。後で QC viewer 表示時・approve/retake 時に参照する。
+        # (通常アップロードには承認/差戻し依頼の概念が無いため qc/review 提出時限定)
         try:
             if mention_uids:
                 _asset_id_d = (result.get("id") or result.get("asset_id")) if isinstance(result, dict) else None
@@ -681,106 +748,111 @@ async def post_asset_upload(
         except Exception as _de:
             import sys as _s; print(f"[qc_delegation] skip: {_de}", file=_s.stderr)
 
-        # 殿御命 2026-06-05 (C 案): Director 不在 project は mention 必須
-        # PM は project 未設定でも fallback で必ず含む (殿御方針「両方とも PM 必須」)
-        FALLBACK_PM_CUID = 52
-        from app.adapters.calendar_client import _to_calendar_uid
-        sender_cuid = _to_calendar_uid(actor_id)
-        sender_cuid_int = int(sender_cuid) if sender_cuid is not None else None
+    # 殿御命 2026-06-05 (C 案): Director 不在 project は mention 必須
+    # PM は project 未設定でも fallback で必ず含む (殿御方針「両方とも PM 必須」)
+    FALLBACK_PM_CUID = 52
+    from app.adapters.calendar_client import _to_calendar_uid
+    sender_cuid = _to_calendar_uid(actor_id)
+    sender_cuid_int = int(sender_cuid) if sender_cuid is not None else None
 
-        # project_id 解決して roles 取得
+    # project_id 解決して roles 取得
+    project_roles = {}
+    try:
+        shot_info_for_proj = client.get_shot_detail(shot_id, actor_user_id=actor_id) if shot_id else {}
+        project_id = shot_info_for_proj.get("project_id")
+        if project_id is not None and hasattr(client, "get_project_roles"):
+            project_roles = client.get_project_roles(int(project_id), actor_user_id=actor_id) or {}
+    except Exception:
         project_roles = {}
-        try:
-            shot_info_for_proj = client.get_shot_detail(shot_id, actor_user_id=actor_id) if shot_id else {}
-            project_id = shot_info_for_proj.get("project_id")
-            if project_id is not None and hasattr(client, "get_project_roles"):
-                project_roles = client.get_project_roles(int(project_id), actor_user_id=actor_id) or {}
-        except Exception:
-            project_roles = {}
 
-        director_uid = project_roles.get("director")
-        # 殿御命 2026-06-05 (C 案): Director 不在 + mention 無 → 拒否
-        if director_uid is None and not mention_uids:
-            raise HTTPException(
-                status_code=400,
-                detail="Director 未設定 project: 送信先を mention で指定してください (代替担当を選択して御願い致す)"
+    director_uid = project_roles.get("director")
+    # 殿御命 2026-06-05 (C 案): Director 不在 + mention 無 → 拒否 (qc/review 提出時限定。
+    # 通常アップロードにまでこの制約を課すと Director 未設定 project の通常アップロードが
+    # 全滅するため、is_qc_review でのみ強制する)
+    if is_qc_review and director_uid is None and not mention_uids:
+        raise HTTPException(
+            status_code=400,
+            detail="Director 未設定 project: 送信先を mention で指定してください (代替担当を選択して御願い致す)"
+        )
+
+    # SHOT thread participants 構築
+    shot_member_uids: set[int] = set()
+    # PM (必ず含む・hardcode fallback OK)
+    pm_uid = project_roles.get("pm")
+    shot_member_uids.add(int(pm_uid) if pm_uid is not None else FALLBACK_PM_CUID)
+    # Director (project 設定あれば追加・無ければ mention で代替)
+    if director_uid is not None:
+        shot_member_uids.add(int(director_uid))
+    # Lead (project 設定あれば追加・無ければ skip — 任意)
+    lead_uid = project_roles.get("lead") or project_roles.get("lighting_lead")
+    if lead_uid is not None:
+        shot_member_uids.add(int(lead_uid))
+    # SHOT 内 task assignees
+    shot_member_uids |= shot_assignee_uids
+    # mention (Director 不在時の代替担当 含む)
+    shot_member_uids |= mention_uids
+    # sender
+    if sender_cuid_int is not None:
+        shot_member_uids.add(sender_cuid_int)
+    participants = sorted(shot_member_uids)
+
+    # sender display name (本文末尾 署名用)
+    sender_name = actor_id
+    try:
+        me = client.get_me(actor_user_id=actor_id)
+        nm = getattr(me, "name", "") or (getattr(me, "email", "") or "").split("@")[0]
+        if nm: sender_name = nm
+    except Exception:
+        pass
+
+    # QC ビューアリンク (殿御命 2026-06-05: task_id + asset_id 含めた正規 URL 自動生成)
+    # 注意: モジュール冒頭で `import os as _os` 済 (L2)。ここでローカル再import すると
+    # Python が _os を関数スコープ全体でローカル変数と解釈し、L533 の _os 参照が
+    # UnboundLocalError になる (cmd_064 .mov アップロード500の真因)。再importしないこと。
+    public_base = _os.environ.get("SCORE_PUBLIC_URL", "").rstrip("/")
+    qc_link = ""
+    if shot_id:
+        path = f"/qc/{shot_id}"
+        qp = []
+        if task_id:
+            qp.append(f"task_id={task_id}")
+        # 提出されたばかりの asset id を埋める (result.id = 新 asset id)
+        _aid = result.get("id") if isinstance(result, dict) else None
+        if _aid:
+            qp.append(f"asset_id={_aid}")
+        if qp:
+            path += "?" + "&".join(qp)
+        qc_link = (public_base + path) if public_base else path
+
+    if len(participants) >= 2 and hasattr(client, "post_dm_thread"):
+        try:
+            thread_resp = client.post_dm_thread(
+                participant_ids=participants,
+                task_id=task_id,
+                actor_user_id=actor_id,
             )
-
-        # SHOT thread participants 構築
-        shot_member_uids: set[int] = set()
-        # PM (必ず含む・hardcode fallback OK)
-        pm_uid = project_roles.get("pm")
-        shot_member_uids.add(int(pm_uid) if pm_uid is not None else FALLBACK_PM_CUID)
-        # Director (project 設定あれば追加・無ければ mention で代替)
-        if director_uid is not None:
-            shot_member_uids.add(int(director_uid))
-        # Lead (project 設定あれば追加・無ければ skip — 任意)
-        lead_uid = project_roles.get("lead") or project_roles.get("lighting_lead")
-        if lead_uid is not None:
-            shot_member_uids.add(int(lead_uid))
-        # SHOT 内 task assignees
-        shot_member_uids |= shot_assignee_uids
-        # mention (Director 不在時の代替担当 含む)
-        shot_member_uids |= mention_uids
-        # sender
-        if sender_cuid_int is not None:
-            shot_member_uids.add(sender_cuid_int)
-        participants = sorted(shot_member_uids)
-
-        # sender display name (本文末尾 署名用)
-        sender_name = actor_id
-        try:
-            me = client.get_me(actor_user_id=actor_id)
-            nm = getattr(me, "name", "") or (getattr(me, "email", "") or "").split("@")[0]
-            if nm: sender_name = nm
-        except Exception:
-            pass
-
-        # QC ビューアリンク (殿御命 2026-06-05: task_id + asset_id 含めた正規 URL 自動生成)
-        # 注意: モジュール冒頭で `import os as _os` 済 (L2)。ここでローカル再import すると
-        # Python が _os を関数スコープ全体でローカル変数と解釈し、L533 の _os 参照が
-        # UnboundLocalError になる (cmd_064 .mov アップロード500の真因)。再importしないこと。
-        public_base = _os.environ.get("SCORE_PUBLIC_URL", "").rstrip("/")
-        qc_link = ""
-        if shot_id:
-            path = f"/qc/{shot_id}"
-            qp = []
-            if task_id:
-                qp.append(f"task_id={task_id}")
-            # 提出されたばかりの asset id を埋める (result.id = 新 asset id)
-            _aid = result.get("id") if isinstance(result, dict) else None
-            if _aid:
-                qp.append(f"asset_id={_aid}")
-            if qp:
-                path += "?" + "&".join(qp)
-            qc_link = (public_base + path) if public_base else path
-
-        if len(participants) >= 2 and hasattr(client, "post_dm_thread"):
-            try:
-                thread_resp = client.post_dm_thread(
-                    participant_ids=participants,
-                    task_id=task_id,
-                    actor_user_id=actor_id,
-                )
-                thread_id = thread_resp.get("thread_id") or thread_resp.get("id")
-                if thread_id and hasattr(client, "post_dm"):
-                    fname = result.get("filename", file.filename or "asset")
-                    ver = version or "version 未指定"
-                    head = "🔍 QC 依頼" if submission_type == "qc" else "📌 Review 依頼"
-                    # mention 表示
-                    mention_text = ""
-                    if mention_uids:
-                        names = []
-                        try:
-                            users = client.get_users(actor_user_id=actor_id) or []
-                            uid_to_name = {int(u.get("id") or u.get("user_id") or 0): (u.get("name") or (u.get("email") or "").split("@")[0]) for u in users if isinstance(u, dict)}
-                            names = [uid_to_name.get(u, f"uid {u}") for u in sorted(mention_uids)]
-                        except Exception:
-                            names = [f"uid {u}" for u in sorted(mention_uids)]
-                        mention_text = "宛先: " + ", ".join(names)
-                    # 殿御命 2026-06-04: タイトル階層化 (proj / seq / shot / task)
-                    hier = [p for p in (proj_name, seq_code, shot_code, task_type) if p]
-                    title_line = " / ".join(hier) if hier else "(対象未指定)"
+            thread_id = thread_resp.get("thread_id") or thread_resp.get("id")
+            if thread_id and hasattr(client, "post_dm"):
+                fname = result.get("filename", file.filename or "asset")
+                ver = version or "version 未指定"
+                # 殿御命 2026-07-07 (cmd_070③): 通常アップロード時は qc/review 提出時と
+                # 区別できる専用の見出し・文言を使う (既存 qc/review 文言の流用禁止)
+                head = ("🔍 QC 依頼" if submission_type == "qc" else "📌 Review 依頼") if is_qc_review else "📤 アップロード通知"
+                # mention 表示
+                mention_text = ""
+                if mention_uids:
+                    names = []
+                    try:
+                        users = client.get_users(actor_user_id=actor_id) or []
+                        uid_to_name = {int(u.get("id") or u.get("user_id") or 0): (u.get("name") or (u.get("email") or "").split("@")[0]) for u in users if isinstance(u, dict)}
+                        names = [uid_to_name.get(u, f"uid {u}") for u in sorted(mention_uids)]
+                    except Exception:
+                        names = [f"uid {u}" for u in sorted(mention_uids)]
+                    mention_text = "宛先: " + ", ".join(names)
+                # 殿御命 2026-06-04: タイトル階層化 (proj / seq / shot / task)
+                hier = [p for p in (proj_name, seq_code, shot_code, task_type) if p]
+                title_line = " / ".join(hier) if hier else "(対象未指定)"
+                if is_qc_review:
                     lines = [
                         f"{head}",
                         title_line,
@@ -788,45 +860,53 @@ async def post_asset_upload(
                         f"{ver} を提出致しました。御手隙の際に御確認願います。",
                         f"ファイル: {fname}",
                     ]
-                    if mention_text:
-                        lines.append(mention_text)
-                    if qc_link:
-                        # 殿御命 2026-06-04: 本文末尾は URL のみ (Score 側 JS で button 化)
-                        lines.append("")
-                        lines.append(qc_link)
+                else:
+                    lines = [
+                        f"{head}",
+                        title_line,
+                        "",
+                        f"{fname} がアップロードされました。",
+                        f"バージョン: {ver}",
+                    ]
+                if mention_text:
+                    lines.append(mention_text)
+                if qc_link:
+                    # 殿御命 2026-06-04: 本文末尾は URL のみ (Score 側 JS で button 化)
                     lines.append("")
-                    lines.append(f"— {sender_name}")
-                    body_text = "\n".join(lines)
-                    client.post_dm(int(thread_id), body_text, actor_user_id=actor_id)
-                    # 殿御命 2026-06-04 cmd_478: D 案 — user 設定で Push / SSE 振り分け配信
-                    from app.routers.pages_notif_settings import get_user_prefs
-                    from app.routers.sse_notifications import push_sse_event
-                    push_payload = {
-                        "title": f"{head}: {title_line}",
-                        "body": f"{ver} 提出 by {sender_name}",
-                        "url": f"/qc/{shot_id}" if shot_id else "/messages",
-                        "tag": f"score-review-{thread_id}",
-                    }
-                    cat_key = "qc_request" if submission_type == "qc" else "review_request"
-                    push_targets = []
-                    sse_targets = []
-                    skipped_by_pref = []
-                    for cuid in participants:
-                        if sender_cuid_int is not None and cuid == sender_cuid_int:
-                            continue  # sender 除外
-                        prefs = get_user_prefs(int(cuid))
-                        if not prefs.get("categories", {}).get(cat_key, True):
-                            skipped_by_pref.append(cuid)
-                            continue  # この種別が OFF
-                        if prefs.get("channels", {}).get("push", True):
-                            push_targets.append(cuid)
-                        if prefs.get("channels", {}).get("sse", True):
-                            sse_targets.append(cuid)
-                    push_result = _push_to_cuids(push_targets, push_payload) if push_targets else {"sent": 0, "failed": 0, "details": []}
-                    sse_result = push_sse_event(sse_targets, "notif", push_payload) if sse_targets else {"delivered": 0, "skipped_no_listener": 0}
-                    result = {**result, "review_thread_id": thread_id, "shot_thread_participants": participants, "push_result": push_result, "sse_result": sse_result, "skipped_by_pref": skipped_by_pref}
-            except Exception as e:
-                result = {**result, "review_thread_error": str(e)}
+                    lines.append(qc_link)
+                lines.append("")
+                lines.append(f"— {sender_name}")
+                body_text = "\n".join(lines)
+                client.post_dm(int(thread_id), body_text, actor_user_id=actor_id)
+                # 殿御命 2026-06-04 cmd_478: D 案 — user 設定で Push / SSE 振り分け配信
+                from app.routers.pages_notif_settings import get_user_prefs
+                from app.routers.sse_notifications import push_sse_event
+                push_payload = {
+                    "title": f"{head}: {title_line}",
+                    "body": (f"{ver} 提出 by {sender_name}" if is_qc_review else f"{fname} アップロード by {sender_name}"),
+                    "url": f"/qc/{shot_id}" if shot_id else "/messages",
+                    "tag": f"score-review-{thread_id}",
+                }
+                cat_key = ("qc_request" if submission_type == "qc" else "review_request") if is_qc_review else "asset_upload"
+                push_targets = []
+                sse_targets = []
+                skipped_by_pref = []
+                for cuid in participants:
+                    if sender_cuid_int is not None and cuid == sender_cuid_int:
+                        continue  # sender 除外
+                    prefs = get_user_prefs(int(cuid))
+                    if not prefs.get("categories", {}).get(cat_key, True):
+                        skipped_by_pref.append(cuid)
+                        continue  # この種別が OFF
+                    if prefs.get("channels", {}).get("push", True):
+                        push_targets.append(cuid)
+                    if prefs.get("channels", {}).get("sse", True):
+                        sse_targets.append(cuid)
+                push_result = _push_to_cuids(push_targets, push_payload) if push_targets else {"sent": 0, "failed": 0, "details": []}
+                sse_result = push_sse_event(sse_targets, "notif", push_payload) if sse_targets else {"delivered": 0, "skipped_no_listener": 0}
+                result = {**result, "review_thread_id": thread_id, "shot_thread_participants": participants, "push_result": push_result, "sse_result": sse_result, "skipped_by_pref": skipped_by_pref}
+        except Exception as e:
+            result = {**result, "review_thread_error": str(e)}
     return JSONResponse(content=result, headers={"X-Actor-User-Id": actor_id})
 
 
@@ -837,12 +917,18 @@ def patch_task(
     actor_id: str = Depends(get_actor_id),
 ):
     """殿御命 2026-06-03: task status / progress 更新
-    Calendar PATCH /api/tasks/{id} pass-through (status: todo/in-progress/review/completed/delayed, progress: 0-100)"""
+    Calendar PATCH /api/tasks/{id} pass-through
+    (status: 新19値 mk/wip/modeling/lookdev/caching/rig/facial/v1qc/qc/qc_fb/ap/ap_fb/
+    dir_wt/dir_ap/dir_fb/fix/deliver/omit/wt — cmd_075 2026-07-08 刷新。progress: 0-100)"""
     client = get_calendar_client()
     payload = body or {}
-    # validation
-    if "status" in payload and payload["status"] not in ("todo", "in-progress", "review", "completed", "delayed"):
-        raise HTTPException(status_code=400, detail=f"Invalid status: {payload['status']}")
+    # validation — 新19値のみ受理。旧7値は互換のため新値へ正規化して受理 (旧クライアント救済)
+    if "status" in payload:
+        incoming_status = payload["status"]
+        if incoming_status in OLD_TO_NEW_STATUS:
+            payload = {**payload, "status": OLD_TO_NEW_STATUS[incoming_status]}
+        elif incoming_status not in NEW_TASK_STATUSES:
+            raise HTTPException(status_code=400, detail=f"Invalid status: {incoming_status}")
     if "progress" in payload:
         try:
             p = int(payload["progress"])
@@ -991,10 +1077,10 @@ async def post_qc_notify_existing(request: Request, actor_id: str = Depends(get_
     if not shot_id:
         raise HTTPException(status_code=400, detail="asset から shot_id 解決不可")
 
-    # 殿御命 2026-06-05 (#46 動線修正): task status を 'review' に patch (in-progress → review)
+    # cmd_075 (2026-07-08): task status を 'qc' に patch (wip 等 → qc)
     if task_id and hasattr(client, "patch_task"):
         try:
-            client.patch_task(int(task_id), {"status": "review"}, actor_user_id=actor_id)
+            client.patch_task(int(task_id), {"status": "qc"}, actor_user_id=actor_id)
         except Exception:
             pass
 
@@ -1192,21 +1278,21 @@ async def post_qc_approve_bff(request: Request, actor_id: str = Depends(get_acto
         raise HTTPException(status_code=400, detail="shot_id 必須")
 
     client = get_calendar_client()
-    # 殿御命 2026-06-05: task_id 不在時 shot 内 status='review'/'reviewing' な task を auto-resolve
+    # cmd_075 (2026-07-08): task_id 不在時 shot 内 判定待ち (qc/v1qc/dir_wt) な task を auto-resolve
     if not task_id and shot_id:
         try:
             tasks = client.get_tasks(int(shot_id), actor_user_id=actor_id) or []
             for t in tasks:
                 st = getattr(t, 'status', None) or (t.get('status') if isinstance(t, dict) else None)
-                if st in ('review', 'reviewing'):
+                if st in ('qc', 'v1qc', 'dir_wt'):
                     task_id = getattr(t, 'task_id', None) or (t.get('id') if isinstance(t, dict) else None)
                     if task_id: break
         except Exception:
             pass
-    # task status を completed に切替 (PATCH /api/tasks/{id})
+    # task status を deliver に切替 (PATCH /api/tasks/{id}) — 唯一の完了扱い
     if task_id and hasattr(client, "patch_task"):
         try:
-            client.patch_task(int(task_id), {"status": "completed"}, actor_user_id=actor_id)
+            client.patch_task(int(task_id), {"status": "deliver"}, actor_user_id=actor_id)
         except Exception:
             pass
 
@@ -1403,6 +1489,23 @@ def delete_asset_endpoint(
     client = get_calendar_client()
     result = client.delete_asset(asset_id, actor_user_id=actor_id) if hasattr(client, "delete_asset") else {"ok": False, "reason": "client method not implemented"}
     return JSONResponse(content=result, headers={"X-Actor-User-Id": actor_id})
+
+
+@router.get("/api/bff/assets/{asset_id}/original")
+def get_asset_original(
+    asset_id: int = Path(...),
+    actor_id: str = Depends(get_actor_id),
+):
+    """殿御命 2026-07-06 (cmd_068②③): .exr/.mov 等サーバ側変換済 asset の原本ファイルを返す。
+    変換で原本を保存していない asset (通常の画像等) は 404 — 呼び出し側は Calendar 直配信 URL を使うこと。"""
+    from fastapi.responses import FileResponse
+    from app.helpers.asset_originals import find_original
+    path = find_original(asset_id)
+    if path is None or not path.is_file():
+        raise HTTPException(status_code=404, detail="original file not found")
+    # 保存名は "{asset_id}_{original_filename}" — 先頭の "{asset_id}_" を除いた名で DL させる
+    display_name = path.name.split("_", 1)[1] if "_" in path.name else path.name
+    return FileResponse(str(path), filename=display_name)
 
 
 @router.post("/api/bff/me/avatar")

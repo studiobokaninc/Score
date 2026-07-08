@@ -15,6 +15,7 @@ from app.adapters.calendar_factory import get_calendar_client
 from app.adapters.dto import CalendarUser
 from app.deps import get_actor_id, get_actor_role
 from app.i18n import get_translator, get_time_greeting_key, t
+from app.helpers.task_status import COMPLETED_STATUSES, JUDGE_TARGET_STATUSES, STATUS_PRIORITY, attach_status_meta
 
 router = APIRouter()
 _templates = Jinja2Templates(
@@ -111,8 +112,8 @@ def read_dashboard(
         if not isinstance(tk, dict):
             continue
         status = (tk.get("status") or "").lower()
-        if status in ("done", "approved", "完了", "completed", "complete"):
-            continue  # 完了済は除外
+        if status in ("done", "approved", "完了", "completed", "complete") or status in COMPLETED_STATUSES:
+            continue  # 完了済は除外 (新体系: deliver のみが完了)
         pid = tk.get("project_id")
         my_tasks.append({
             "task_id": tk.get("id") or tk.get("task_id"),
@@ -126,11 +127,10 @@ def read_dashboard(
             "project_name": project_name_map.get(pid, ""),
             "due_date": (tk.get("due_date") or "")[:10],
         })
-    _priority_order = {"retake": 0, "reviewing": 1, "review": 1, "open": 2, "todo": 2, "in_progress": 3, "in-progress": 3, "delayed": 4}
-    my_tasks.sort(key=lambda x: _priority_order.get((x.get("status") or "").lower(), 5))
+    my_tasks.sort(key=lambda x: STATUS_PRIORITY.get((x.get("status") or "").lower(), 5))
 
-    # ===== QC 依頼: 自分担当 task で retake / reviewing / review (Calendar 新 enum 含) =====
-    qc_requests = [t for t in my_tasks if (t.get("status") or "").lower() in ("retake", "reviewing", "review")]
+    # ===== QC 依頼: 自分担当 task で判定待ち (社内 qc/v1qc・社外 dir_wt 等) =====
+    qc_requests = [t for t in my_tasks if (t.get("status") or "").lower() in JUDGE_TARGET_STATUSES]
     # 殿御命 2026-06-05: 各 QC 依頼 task に対応する 最新 asset_id を解決 (qc_viewer 遷移用)
     for _q in qc_requests:
         if _q.get("shot_id") and _q.get("task_id") and hasattr(client, "get_shot_detail"):
@@ -194,6 +194,8 @@ def read_dashboard(
             "is_qc_inbox": True,
             "kind": _r.get("kind"),
         })
+
+    my_tasks = attach_status_meta(my_tasks, client)  # cmd_075: status_color/status_label 動的付与
 
     # ===== troubles: 自分関連 =====
     troubles_raw = []
