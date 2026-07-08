@@ -755,15 +755,17 @@ async def post_asset_upload(
     sender_cuid = _to_calendar_uid(actor_id)
     sender_cuid_int = int(sender_cuid) if sender_cuid is not None else None
 
-    # project_id 解決して roles 取得
+    # project_id は上記の project/seq/shot/task 階層解決 (pid, get_shot_detail→get_shot fallback
+    # 込み) で解決済みのため再解決しない (cmd_076: ここで get_shot_detail を再呼びし
+    # project_id を直接参照するだけの実装だと、Calendar の get_shot_detail レスポンスに
+    # project_id が乗らないケースで常に None になり director_uid が引けず QC 提出が
+    # 全滅していた — 実機再現で確認)。
     project_roles = {}
-    try:
-        shot_info_for_proj = client.get_shot_detail(shot_id, actor_user_id=actor_id) if shot_id else {}
-        project_id = shot_info_for_proj.get("project_id")
-        if project_id is not None and hasattr(client, "get_project_roles"):
-            project_roles = client.get_project_roles(int(project_id), actor_user_id=actor_id) or {}
-    except Exception:
-        project_roles = {}
+    if pid is not None and hasattr(client, "get_project_roles"):
+        try:
+            project_roles = client.get_project_roles(int(pid), actor_user_id=actor_id) or {}
+        except Exception:
+            project_roles = {}
 
     director_uid = project_roles.get("director")
     # 殿御命 2026-06-05 (C 案): Director 不在 + mention 無 → 拒否 (qc/review 提出時限定。
