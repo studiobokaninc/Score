@@ -551,6 +551,12 @@ class MockCalendarClient(CalendarClient):
             {"value": "omit", "label": "Omit", "color": "#E0E0E0", "category": "held"},
         ]
 
+    def get_projects(self, actor_user_id: str | None = None) -> list:
+        """殿御命 2026-07-09 (cmd_076⑤): GET /api/projects mock — 全 project 一覧
+        (role/membership 問わず全件・real CalendarClient.get_projects() の mock 対)。"""
+        state = _read_state()
+        return state.get("projects", [])
+
     def get_my_projects(self, actor_user_id: str) -> list:
         """actor の担当 project 一覧を返す (各 user で見える project が違う)。"""
         state = _read_state()

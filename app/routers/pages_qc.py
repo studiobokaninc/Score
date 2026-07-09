@@ -95,8 +95,27 @@ def get_qc_viewer(
         if task_id and hasattr(client, "get_assets_by_task"):
             asset_list = list(client.get_assets_by_task(task_id, actor_user_id=actor_id) or [])
         elif hasattr(client, "get_shot_detail"):
-            shot_dict = client.get_shot_detail(id, actor_user_id=actor_id) or {}
+            try:
+                shot_dict = client.get_shot_detail(id, actor_user_id=actor_id) or {}
+            except Exception:
+                # 殿御命 2026-07-09 (cmd_076⑤): get_shot_detail (/api/me/shots/{id}) は
+                # Calendar 側で明示的 project member 限定 (非member は 403・実機確認済み。
+                # task assignee であっても member 登録が無ければ同様に 403)。task_id 未指定で
+                # /qc/{shot_id} に来た非member director/PM/assignee はここで asset_list が
+                # 常に空になり「QC 確認する対象が何も無い」ページになっていた。
+                shot_dict = {}
             asset_list = list(shot_dict.get("asset_list", []) or [])
+            if not asset_list and hasattr(client, "get_assets_by_task"):
+                # membership 非依存 fallback: get_assets_by_task は member 限定
+                # ("/me/" prefix) ではなく実機で non-member でも 200 を確認済み。
+                # tasks は上(L76) で既に取得済みのため再取得しない (冗長呼出防止)。
+                try:
+                    for _t in (tasks or []):
+                        _tid = getattr(_t, "task_id", None)
+                        if _tid is not None:
+                            asset_list.extend(client.get_assets_by_task(_tid, actor_user_id=actor_id) or [])
+                except Exception:
+                    pass
             if task_id:
                 asset_list = [a for a in asset_list if (a.get("task_id") if isinstance(a, dict) else getattr(a, "task_id", None)) == task_id]
         asset_list.sort(key=lambda a: (a.get("created_at") if isinstance(a, dict) else "") or "", reverse=True)

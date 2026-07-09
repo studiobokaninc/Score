@@ -28,7 +28,69 @@ def resolve_project_name(
     for p in projects:
         if p.get("id") == project_id:
             return p.get("name") or "-"
+    # 殿御命 2026-07-09 (cmd_076⑤): 明示 member 外 (director/pm/lead の auto-membership のみ)
+    # の project は上記 get_my_projects 結果に含まれず常に "-" だった
+    # (076d 実機確認で発見・known_side_observation_out_of_scope として記録済みの根治)。
+    # fallback: get_projects() (admin JWT 経由・全件) から解決 (actor 別 cache とは独立)
+    c2 = client or get_calendar_client()
+    if hasattr(c2, "get_projects"):
+        try:
+            for p in (c2.get_projects(actor_user_id=actor_user_id) or []):
+                if isinstance(p, dict) and p.get("id") == project_id:
+                    return p.get("name") or "-"
+        except Exception:
+            pass
     return "-"
+
+
+def resolve_visible_projects(
+    actor_user_id: str,
+    client: Optional[CalendarClient] = None,
+) -> list[dict]:
+    """actor が閲覧可能な project 一覧を返す (id 重複無し)。
+
+    殿御命 2026-07-09 (cmd_076⑤・新事象): 明示的 team member 登録 (get_my_projects) に
+    加え、Calendar 側で project の director/pm/lead に割当られている project も
+    resolve_project_members と同じ auto-membership 方針で union する
+    (「/projects 一覧」版)。旧実装 (pages_misc.py の _fetch_all_projects ローカル関数) は
+    client.m2m_token を Authorization header に直接使う独自実装だったため、本番
+    (CALENDAR_MOCK=0) では /api/projects が 401 を返し、例外が握り潰されて
+    auto-membership 判定が常に no-op になっていた (全 project 母集合 _all_projects が
+    常に空)。client.get_projects() (admin JWT 経由・_headers() 正規 auth) に差替えて
+    根治する。"""
+    c = client or get_calendar_client()
+    try:
+        mine = c.get_my_projects(actor_user_id=actor_user_id)
+        mine = mine if isinstance(mine, list) else (mine or {}).get("projects", [])
+    except Exception:
+        mine = []
+    projects: list[dict] = [p for p in mine if isinstance(p, dict)]
+    ids: set = {p.get("id") for p in projects if p.get("id") is not None}
+
+    from app.adapters.calendar_client import _to_calendar_uid
+    try:
+        actor_cuid = _to_calendar_uid(actor_user_id)
+    except Exception:
+        actor_cuid = None
+    if actor_cuid is not None and hasattr(c, "get_project_roles") and hasattr(c, "get_projects"):
+        try:
+            all_projects = c.get_projects(actor_user_id=actor_user_id) or []
+        except Exception:
+            all_projects = []
+        for p in all_projects:
+            if not isinstance(p, dict):
+                continue
+            pid = p.get("id")
+            if pid is None or pid in ids:
+                continue
+            try:
+                roles = c.get_project_roles(pid, actor_user_id=actor_user_id) or {}
+            except Exception:
+                roles = {}
+            if actor_cuid in (roles.get("director"), roles.get("pm"), roles.get("lead")):
+                ids.add(pid)
+                projects.append(p)
+    return projects
 
 
 def resolve_project_members(

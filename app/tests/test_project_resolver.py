@@ -1,6 +1,8 @@
-from unittest.mock import MagicMock
+from unittest.mock import MagicMock, patch
 from app.adapters.calendar_client import CalendarClient
-from app.helpers.project_resolver import resolve_project_name, resolve_project_members, _CACHE, _TTL_SECONDS
+from app.helpers.project_resolver import (
+    resolve_project_name, resolve_project_members, resolve_visible_projects, _CACHE, _TTL_SECONDS,
+)
 import time
 
 
@@ -52,6 +54,87 @@ def test_resolve_project_not_found():
     client = make_client([{"id": 1, "name": "Alpha"}])
     result = resolve_project_name(999, "ryoji@test.com", client=client)
     assert result == "-"
+
+
+def test_resolve_project_name_falls_back_to_get_projects_for_non_member():
+    """殿御命 2026-07-09 (cmd_076⑤): actor が明示メンバーでない project (auto-membership
+    のみ・director/pm/lead 割当) は get_my_projects に含まれず旧実装は常に "-" だった
+    (076d 実機確認 known_side_observation_out_of_scope の根治)。get_projects() (全件)
+    fallback で正しく project 名が解決されることを確認する。"""
+    _CACHE.clear()
+    client = MagicMock(spec=CalendarClient)
+    client.get_my_projects.return_value = [{"id": 1, "name": "Alpha"}]
+    client.get_projects.return_value = [
+        {"id": 1, "name": "Alpha"},
+        {"id": 72, "name": "Marukome"},
+    ]
+    result = resolve_project_name(72, "ryoji-nonmember@test.com", client=client)
+    assert result == "Marukome"
+
+
+def test_resolve_project_name_get_projects_unavailable_still_dash():
+    """get_projects() 自体が例外を投げても resolve_project_name は "-" にフォールバックし
+    500 にはならない。"""
+    _CACHE.clear()
+    client = MagicMock(spec=CalendarClient)
+    client.get_my_projects.return_value = []
+    client.get_projects.side_effect = Exception("401")
+    result = resolve_project_name(72, "ryoji-nonmember2@test.com", client=client)
+    assert result == "-"
+
+
+# ===== resolve_visible_projects (cmd_076⑤ my projects一覧の auto-membership) =====
+
+def test_resolve_visible_projects_includes_non_member_director_project():
+    """非member director/PM の project が明示メンバー一覧に無くても、Calendar の
+    project_roles 経由で auto-membership union されること (/projects 一覧の真因修正)。"""
+    client = MagicMock(spec=CalendarClient)
+    client.get_my_projects.return_value = [{"id": 33, "name": "Ramps", "status": "active"}]
+    client.get_projects.return_value = [
+        {"id": 33, "name": "Ramps", "status": "active"},
+        {"id": 73, "name": "Marukome", "status": "active"},
+    ]
+    client.get_project_roles.side_effect = (
+        lambda pid, **kw: {"director": 53, "pm": 52} if pid == 73 else {}
+    )
+    with patch("app.adapters.calendar_client._to_calendar_uid", return_value=53):
+        projects = resolve_visible_projects("yamada@studiobokan.com", client=client)
+    ids = {p["id"] for p in projects}
+    assert ids == {33, 73}
+
+
+def test_resolve_visible_projects_no_duplicate_when_already_explicit_member():
+    """明示メンバーかつ director でもある project は重複追加されない。"""
+    client = MagicMock(spec=CalendarClient)
+    client.get_my_projects.return_value = [{"id": 73, "name": "Marukome", "status": "active"}]
+    client.get_projects.return_value = [{"id": 73, "name": "Marukome", "status": "active"}]
+    client.get_project_roles.return_value = {"director": 53}
+    with patch("app.adapters.calendar_client._to_calendar_uid", return_value=53):
+        projects = resolve_visible_projects("yamada@studiobokan.com", client=client)
+    assert len(projects) == 1
+    assert projects[0]["id"] == 73
+
+
+def test_resolve_visible_projects_get_projects_missing_no_crash():
+    """client に get_projects が無い (旧 mock 等) 場合でも例外にならず、
+    明示メンバー一覧のみで安全に返る。"""
+    client = MagicMock(spec=["get_my_projects", "get_project_roles"])
+    client.get_my_projects.return_value = [{"id": 33, "name": "Ramps", "status": "active"}]
+    projects = resolve_visible_projects("someone@test.com", client=client)
+    assert [p["id"] for p in projects] == [33]
+
+
+def test_resolve_visible_projects_actor_uid_unresolvable_no_crash():
+    """actor_user_id が数値変換不能 (テスト用文字列 actor 等) でも auto-membership
+    union を静かに skip し、明示メンバー一覧のみ返す (500 にならない)。"""
+    client = MagicMock(spec=CalendarClient)
+    client.get_my_projects.return_value = [{"id": 33, "name": "Ramps", "status": "active"}]
+    client.get_projects.return_value = [
+        {"id": 33, "name": "Ramps", "status": "active"},
+        {"id": 73, "name": "Marukome", "status": "active"},
+    ]
+    projects = resolve_visible_projects("not-a-numeric-id", client=client)
+    assert [p["id"] for p in projects] == [33]
 
 
 # ===== resolve_project_members (cmd_076③ auto-membership) =====

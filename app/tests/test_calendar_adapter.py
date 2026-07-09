@@ -167,3 +167,30 @@ def test_get_project_roles_accepts_flat_shape():
     with unittest.mock.patch("httpx.get", return_value=_mock_get(payload)):
         roles = CalendarClient().get_project_roles(73)
     assert roles == {"director": 28, "pm": 31}
+
+
+def test_get_projects_uses_admin_headers_not_m2m_token():
+    """殿御命 2026-07-09 (cmd_076⑤): 旧 pages_misc._fetch_all_projects() は
+    Authorization に client.m2m_token を直接使う独自実装だったため、本番
+    (CALENDAR_MOCK=0) で /api/projects が 401 を返し auto-membership が無言で
+    壊れていた (実機確認: m2m_token→401 / admin JWT→200)。get_projects() は
+    _headers() (admin JWT 経由) を使うことを回帰確認する。"""
+    payload = [{"id": 1, "name": "Alpha"}, {"id": 2, "name": "Beta"}]
+    captured_headers = {}
+
+    def _capture_get(url, headers=None, **kw):
+        captured_headers.update(headers or {})
+        return _mock_get(payload)
+
+    with unittest.mock.patch("httpx.get", side_effect=_capture_get):
+        projects = CalendarClient().get_projects()
+    assert projects == payload
+    assert captured_headers.get("Authorization") == "Bearer test-admin-token"
+
+
+def test_get_projects_accepts_wrapped_shape():
+    """{"projects": [...]} 形式でも動くこと (get_my_projects と同様の防御的実装)。"""
+    payload = {"projects": [{"id": 1, "name": "Alpha"}]}
+    with unittest.mock.patch("httpx.get", return_value=_mock_get(payload)):
+        projects = CalendarClient().get_projects()
+    assert projects == [{"id": 1, "name": "Alpha"}]

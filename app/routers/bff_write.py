@@ -883,10 +883,25 @@ async def post_asset_upload(
                 # 殿御命 2026-06-04 cmd_478: D 案 — user 設定で Push / SSE 振り分け配信
                 from app.routers.pages_notif_settings import get_user_prefs
                 from app.routers.sse_notifications import push_sse_event
+                # 殿御命 2026-07-09 (cmd_076⑤): push 通知の url が task_id/asset_id 無しの
+                # /qc/{shot_id} のみだったため、非member director/PM が (task_id 無指定では
+                # 403 になる) get_shot_detail 依存の asset_list 解決に落ちて QC ビューアに
+                # 何も表示されなかった(post_qc_notify_existing は既に task_id/asset_id 付き
+                # だった非対称を是正・qc_link と同じ組立に統一)。
+                _push_url = f"/qc/{shot_id}" if shot_id else "/messages"
+                if shot_id:
+                    _push_qp = []
+                    if task_id:
+                        _push_qp.append(f"task_id={task_id}")
+                    _push_aid = result.get("id") if isinstance(result, dict) else None
+                    if _push_aid:
+                        _push_qp.append(f"asset_id={_push_aid}")
+                    if _push_qp:
+                        _push_url += "?" + "&".join(_push_qp)
                 push_payload = {
                     "title": f"{head}: {title_line}",
                     "body": (f"{ver} 提出 by {sender_name}" if is_qc_review else f"{fname} アップロード by {sender_name}"),
-                    "url": f"/qc/{shot_id}" if shot_id else "/messages",
+                    "url": _push_url,
                     "tag": f"score-review-{thread_id}",
                 }
                 cat_key = ("qc_request" if submission_type == "qc" else "review_request") if is_qc_review else "asset_upload"

@@ -801,6 +801,24 @@ class CalendarClient:
         except Exception:
             return {}
 
+    def get_projects(self, actor_user_id: str | None = None) -> list:
+        """殿御命 2026-07-09 (cmd_076⑤): GET /api/projects — 全 project 一覧 (admin scope)。
+        pages_misc.py の旧 _fetch_all_projects() は self.m2m_token を直接 Authorization
+        header に使う独自実装だったが、本番 (CALENDAR_MOCK=0) では m2m_token は
+        /api/projects に対し 401 を返す (resolve_email_to_user_id の /api/users と同様の
+        制約。実機確認済み)。そのため pm/admin の「全 project 閲覧可」バイパスと、
+        非member director/pm/lead の auto-membership 判定 (resolve_visible_projects) の
+        両方が本番で無言のまま機能しておらず、/projects 一覧から該当 project が丸ごと
+        消えていた真因はここ。_headers() (admin JWT 経由・本番で動作確認済み) を使う。"""
+        resp = httpx.get(
+            f"{self.base_url}/api/projects",
+            headers=self._headers(actor_user_id),
+            timeout=10.0,
+        )
+        resp.raise_for_status()
+        data = resp.json()
+        return data if isinstance(data, list) else (data or {}).get("projects", [])
+
     def get_my_project_detail(self, project_id: int, actor_user_id: str | None = None) -> dict:
         """GET /api/me/projects/{project_id} — 単一 project 詳細取得 (Phase A relink A-3)"""
         resp = httpx.get(

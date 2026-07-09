@@ -431,71 +431,38 @@ def get_goodbye(request: Request, actor_id: str = Depends(get_actor_id)):
 @router.get("/projects")
 def get_projects(request: Request, actor_id: str = Depends(get_actor_id)):
     from app.deps import get_actor_role
-    from app.adapters.calendar_client import _to_calendar_uid
+    from app.helpers.project_resolver import resolve_visible_projects
     client = get_calendar_client()
     role = get_actor_role(actor_id)
 
-    def _fetch_all_projects():
-        """/api/projects (m2m token・全件) — pm/admin 閲覧用 + auto-membership 判定用の全件母集合"""
-        resp = httpx.get(
-            f"{client.base_url}/api/projects",
-            headers={"Authorization": f"Bearer {client.m2m_token}", "X-Actor-User-Id": str(actor_id)},
-            timeout=5,
-        )
-        resp.raise_for_status()
-        data = resp.json()
-        return data if isinstance(data, list) else data.get("projects", [])
-
-    # PM (admin) は全 project 閲覧可・他 user は /api/me/projects (自分関連)
+    # PM (admin) は全 project 閲覧可・他 user は 明示メンバー + auto-membership
+    # 殿御命 2026-07-09 (cmd_076⑤): 旧実装は全件母集合取得 (_fetch_all_projects) が
+    # client.m2m_token を Authorization header に直接使う独自実装だったため、本番
+    # (CALENDAR_MOCK=0) では /api/projects が 401 を返し例外が握り潰され、pm/admin の
+    # 「全 project 閲覧可」バイパスも非member director/pm/lead の auto-membership union も
+    # 事実上 no-op になっていた(実機: Director 割当済だが score 側の明示的メンバー登録が
+    # 無いアカウントで project が /projects 一覧から消え、shot/QC ビューアへ到達不能になる
+    # 事象を確認)。client.get_projects() (admin JWT 経由の正規 auth) + project_resolver.py
+    # の共通ヘルパーに統一して根治する。
     try:
         if role in ("pm", "admin"):
             try:
-                projects = _fetch_all_projects()
+                projects = client.get_projects(actor_user_id=actor_id) or []
             except Exception:
-                projects = client.get_my_projects(actor_user_id=actor_id) or []
+                projects = resolve_visible_projects(actor_id, client)
         else:
-            projects = client.get_my_projects(actor_user_id=actor_id)
+            projects = resolve_visible_projects(actor_id, client)
     except httpx.ConnectError:
         projects = []
     # 殿御命 2026-06-09: /projects 表示は ① completed/cancelled 除外 ② 自分アサイン分のみ
-    # 殿御命 2026-07-09 (cmd_076③・auto-membership): 下記 _assigned_ids 絞り込みが
-    # role を問わず適用されており、pm/admin であっても「全 project 閲覧可」の方針
-    # (直上のコメント)が事実上無効化されていた不具合があった(実機: Director 割当済だが
-    # score 側の明示的メンバー登録が無い殿御自身のアカウントで、admin 権限にも関わらず
-    # project が /projects 一覧から消え、shot/QC ビューアへ到達不能になる事象を確認)。
-    # pm/admin はこの絞り込みを skip する。一般 user は明示メンバーに加え、Calendar 側で
-    # director/pm/lead に割当られている project も auto-membership で union する。
+    # pm/admin はこの絞り込みを skip (全 project 閲覧可の方針)。一般 user は
+    # resolve_visible_projects が明示メンバー + auto-membership 込みで解決済みのため、
+    # ここでは status filter のみ適用する。
     _EXCLUDED_STATUS = {"completed", "complete", "cancelled", "canceled", "archived"}
     if role in ("pm", "admin"):
         _assigned_ids = None  # 絞り込みなし (全 project 閲覧可の方針を尊重)
     else:
-        try:
-            _mine = client.get_my_projects(actor_user_id=actor_id)
-            _mine = _mine if isinstance(_mine, list) else (_mine or {}).get("projects", [])
-            _assigned_ids = {p.get("id") for p in _mine if isinstance(p, dict)}
-        except Exception:
-            _assigned_ids = None  # 取得失敗時は assignment 絞り込みを skip (status filter のみ適用)
-        if _assigned_ids is not None and hasattr(client, "get_project_roles"):
-            try:
-                actor_cuid = _to_calendar_uid(actor_id)
-            except Exception:
-                actor_cuid = None
-            if actor_cuid is not None:
-                try:
-                    _all_projects = _fetch_all_projects()
-                except Exception:
-                    _all_projects = []
-                for p in (_all_projects or []):
-                    pid = p.get("id") if isinstance(p, dict) else None
-                    if pid is None or pid in _assigned_ids:
-                        continue
-                    try:
-                        _roles = client.get_project_roles(pid, actor_user_id=actor_id) or {}
-                    except Exception:
-                        _roles = {}
-                    if actor_cuid in (_roles.get("director"), _roles.get("pm"), _roles.get("lead")):
-                        _assigned_ids.add(pid)
-                        projects.append(p)
+        _assigned_ids = {p.get("id") for p in projects if isinstance(p, dict)}
 
     def _project_visible(p):
         if (p.get("status") or "").lower() in _EXCLUDED_STATUS:

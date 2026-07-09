@@ -32,11 +32,19 @@ def client_fixture():
 
 
 def test_projects_page_ok(client_fixture, monkeypatch):
-    """GET /projects → 200 + projects 一覧描画"""
+    """GET /projects → 200 + projects 一覧描画
+    殿御命 2026-07-09 (cmd_076⑤): get_actor_role 未 mock だと本テスト環境から到達可能な
+    実 Calendar backend (192.168.44.253:8001) に実通信してしまい、role 解決結果が
+    実サーバの応答次第という隠れた非決定性があった (client.get_projects() 追加前は
+    m2m_token 401 で必ず fallback するという「旧バグ頼みの疑似分離」が偶然成立して
+    いただけ。真因修正でこの隠れた依存が露呈したため、get_actor_role を明示 mock して
+    テストを実ネットワークから独立させる)。"""
+    from unittest.mock import patch
     from app.adapters import calendar_client as cc
     monkeypatch.setattr(cc.CalendarClient, "get_my_projects",
                         lambda self, **kw: [{"id": 33, "name": "Ramps", "status": "active"}])
-    resp = client_fixture.get("/projects", headers={"Authorization": "Bearer test-token"})
+    with patch("app.deps.get_actor_role", return_value="user"):
+        resp = client_fixture.get("/projects", headers={"Authorization": "Bearer test-token"})
     assert resp.status_code == 200
     assert "Ramps" in resp.text
 
@@ -62,21 +70,21 @@ def test_projects_page_director_not_explicit_member_still_visible(client_fixture
     実機で発生した「Director だが score member 未登録のため project が
     一覧から消え QC ビューアへ到達不能になる」不具合の回帰防止。
     (get_actor_role は pages_misc.get_projects 内で `from app.deps import
-    get_actor_role` により毎回呼び出し時に解決されるため、app.deps 側を patch する)"""
+    get_actor_role` により毎回呼び出し時に解決されるため、app.deps 側を patch する)
+    殿御命 2026-07-09 (cmd_076⑤): 全 project 母集合の取得手段を旧
+    _fetch_all_projects (m2m_token 直叩き・raw httpx) から client.get_projects()
+    (admin JWT 経由・正規 auth) に差替えたため、mock も httpx.get patch から
+    client.get_projects の mock に変更 (m2m_token 直叩きは本番 401 の真因だった)。"""
     from unittest.mock import patch
 
     mock_client = MagicMock()
     # score 側の明示的メンバー一覧には project 73 が含まれない
     mock_client.get_my_projects.return_value = [{"id": 33, "name": "Ramps", "status": "active"}]
-    mock_client.base_url = "http://calendar.test"
-    mock_client.m2m_token = "test-m2m-token"
-    # 全 project 母集合 (m2m /api/projects 相当) には project 73 も含まれる
-    _all_resp = MagicMock()
-    _all_resp.json.return_value = [
+    # 全 project 母集合 (/api/projects 相当) には project 73 も含まれる
+    mock_client.get_projects.return_value = [
         {"id": 33, "name": "Ramps", "status": "active"},
         {"id": 73, "name": "Marukome", "status": "active"},
     ]
-    _all_resp.raise_for_status.return_value = None
 
     def _roles_for(pid, **kw):
         if pid == 73:
@@ -86,7 +94,6 @@ def test_projects_page_director_not_explicit_member_still_visible(client_fixture
 
     with patch("app.deps.get_actor_role", return_value="user"), \
          patch("app.routers.pages_misc.get_calendar_client", return_value=mock_client), \
-         patch("app.routers.pages_misc.httpx.get", return_value=_all_resp), \
          patch("app.adapters.calendar_client._to_calendar_uid", return_value=53):
         resp = client_fixture.get("/projects", headers={"Authorization": "Bearer test-token"})
 
@@ -105,20 +112,33 @@ def test_projects_page_admin_sees_all_regardless_of_membership_filter(client_fix
     mock_client = MagicMock()
     # 明示的メンバー一覧には project 73 が含まれない (admin 本人はメンバー登録なし)
     mock_client.get_my_projects.return_value = [{"id": 33, "name": "Ramps", "status": "active"}]
-    mock_client.base_url = "http://calendar.test"
-    mock_client.m2m_token = "test-m2m-token"
-    _all_resp = MagicMock()
-    _all_resp.json.return_value = [
+    mock_client.get_projects.return_value = [
         {"id": 33, "name": "Ramps", "status": "active"},
         {"id": 73, "name": "Marukome", "status": "active"},
     ]
-    _all_resp.raise_for_status.return_value = None
 
     with patch("app.deps.get_actor_role", return_value="admin"), \
-         patch("app.routers.pages_misc.get_calendar_client", return_value=mock_client), \
-         patch("app.routers.pages_misc.httpx.get", return_value=_all_resp):
+         patch("app.routers.pages_misc.get_calendar_client", return_value=mock_client):
         resp = client_fixture.get("/projects", headers={"Authorization": "Bearer test-token"})
 
     assert resp.status_code == 200
     assert "Marukome" in resp.text
+    assert "Ramps" in resp.text
+
+
+def test_projects_page_admin_get_projects_fails_falls_back_to_resolve_visible(client_fixture, monkeypatch):
+    """殿御命 2026-07-09 (cmd_076⑤): client.get_projects() が例外 (401 等) を
+    投げても、admin/pm は resolve_visible_projects 経由の fallback で
+    自身の明示メンバー + auto-membership 分だけは表示できること (完全な空白よりまし)。"""
+    from unittest.mock import patch
+
+    mock_client = MagicMock()
+    mock_client.get_my_projects.return_value = [{"id": 33, "name": "Ramps", "status": "active"}]
+    mock_client.get_projects.side_effect = Exception("401 Unauthorized")
+
+    with patch("app.deps.get_actor_role", return_value="admin"), \
+         patch("app.routers.pages_misc.get_calendar_client", return_value=mock_client):
+        resp = client_fixture.get("/projects", headers={"Authorization": "Bearer test-token"})
+
+    assert resp.status_code == 200
     assert "Ramps" in resp.text

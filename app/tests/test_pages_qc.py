@@ -143,3 +143,52 @@ def test_qc_viewer_shot_none_fallback(client, monkeypatch):
     resp = client.get("/qc/1", headers={"Authorization": "Bearer test-token"})
     assert resp.status_code == 200
     assert "Project Alpha" not in resp.text
+
+
+def test_qc_viewer_asset_list_falls_back_when_shot_detail_forbidden(client, monkeypatch):
+    """殿御命 2026-07-09 (cmd_076⑤): get_shot_detail (Calendar /api/me/shots/{id}) は
+    明示的 project member 限定で非member は 403 になる (実機確認済み・task assignee でも
+    member 登録が無ければ同様)。task_id 未指定で /qc/{shot_id} に来た非member
+    director/PM は旧実装だと asset_list が常に空になり「QC 確認対象が何も無い」ページに
+    なっていた。get_shot_detail が例外を投げても get_tasks + get_assets_by_task
+    (どちらも membership 非依存・実機確認済み) で asset を復元できることを回帰確認する。"""
+    monkeypatch.setattr("app.routers.pages_qc.resolve_project_name", lambda pid, uid, **kw: "Ramps")
+    monkeypatch.setattr("app.routers.pages_qc.resolve_project_members", lambda *a, **kw: [])
+
+    task1 = CalendarTask(task_id=10, shot_id=1, type="Comp", assignee_id=5, status="qc")
+    with patch("app.routers.pages_qc.get_calendar_client") as MockClient:
+        mock_inst = MagicMock()
+        mock_inst.get_shot.return_value = make_shot()
+        mock_inst.get_tasks.return_value = [task1]
+        mock_inst.get_shot_detail.side_effect = Exception("403 Forbidden")
+        mock_inst.get_assets_by_task.return_value = [{"id": 900, "task_id": 10, "file_path": "v001.mov"}]
+        MockClient.return_value = mock_inst
+
+        # task_id 未指定 (push 通知クリック等・cmd_076⑤ 実機シナリオ)
+        resp = client.get("/qc/1", headers={"Authorization": f"Bearer {_make_token()}"})
+
+    assert resp.status_code == 200
+    mock_inst.get_assets_by_task.assert_called_once_with(10, actor_user_id=_RESOLVED_ACTOR_ID)
+    # fallback は L76 で既に取得済みの tasks を再利用し、get_tasks を再呼出ししないこと
+    mock_inst.get_tasks.assert_called_once_with(1, actor_user_id=_RESOLVED_ACTOR_ID)
+
+
+def test_qc_viewer_asset_list_shot_detail_success_no_fallback_call(client, monkeypatch):
+    """get_shot_detail が正常に asset_list を返す (=explicit member) 場合は
+    get_tasks 経由の fallback を呼ばない (既存の正常系を壊さない回帰防止)。"""
+    monkeypatch.setattr("app.routers.pages_qc.resolve_project_name", lambda pid, uid, **kw: "Ramps")
+    monkeypatch.setattr("app.routers.pages_qc.resolve_project_members", lambda *a, **kw: [])
+
+    with patch("app.routers.pages_qc.get_calendar_client") as MockClient:
+        mock_inst = MagicMock()
+        mock_inst.get_shot.return_value = make_shot()
+        mock_inst.get_tasks.return_value = []
+        mock_inst.get_shot_detail.return_value = {
+            "asset_list": [{"id": 901, "task_id": 10, "file_path": "v002.mov"}]
+        }
+        MockClient.return_value = mock_inst
+
+        resp = client.get("/qc/1", headers={"Authorization": f"Bearer {_make_token()}"})
+
+    assert resp.status_code == 200
+    mock_inst.get_assets_by_task.assert_not_called()
