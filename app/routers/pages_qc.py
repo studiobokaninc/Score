@@ -9,7 +9,7 @@ from jinja2 import Environment, FileSystemLoader
 from app.adapters.calendar_factory import get_calendar_client
 from app.deps import get_actor_id, get_actor_role
 from app.qc_delegation import is_qc_delegated
-from app.helpers.project_resolver import resolve_project_name
+from app.helpers.project_resolver import resolve_project_name, resolve_project_members
 from app.helpers.task_status import attach_status_meta, JUDGE_TARGET_STATUSES
 
 router = APIRouter()
@@ -40,6 +40,10 @@ def _resolve_task(client, shot_id: int, task_id: int | None, actor_id: str):
                     "status": raw.get("status", "mk"),
                     "assignee_id": raw.get("assigned_to") or raw.get("assignee_id") or 0,
                     "thread_id": raw.get("thread_id"),
+                    # cmd_075: Calendar が inline 同梱する動的色/ラベル
+                    "status_color": raw.get("status_color"),
+                    "status_label": raw.get("status_label"),
+                    "status_category": raw.get("status_category"),
                 })()
         except Exception:
             pass
@@ -106,13 +110,12 @@ def get_qc_viewer(
         if isinstance(_a, dict):
             _a["download_url"] = resolve_download_url(_a, _demo_mode)
 
-    # 殿御命 2026-06-05: project_members 取得 (mention 選択用・pages_shot.py から移植)
+    # 殿御命 2026-06-05: project_members 取得 (mention 選択用)
+    # 殿御命 2026-07-09 (cmd_076③): auto-membership 共通ヘルパーに統一
+    # (director/pm/lead は明示的 team member 登録の有無に関わらず常にメンバー扱い)
     project_members = []
     try:
-        if project_id and hasattr(client, "get_team_members"):
-            project_members = client.get_team_members(int(project_id), actor_user_id=actor_id) or []
-        # fallback: project task の assignee + project_roles から user 集約
-        if not project_members and project_id:
+        if project_id:
             user_name_map = {}
             try:
                 for u in (client.get_users(actor_user_id=actor_id) or []):
@@ -122,40 +125,9 @@ def get_qc_viewer(
                             user_name_map[int(uid)] = u.get("name") or u.get("full_name") or (u.get("email") or "").split("@")[0] or f"uid {uid}"
             except Exception:
                 pass
-            seen_uids = set()
-            # task assignees
-            try:
-                tasks_in_proj = client.get_tasks_by_project(int(project_id), actor_user_id=actor_id) if hasattr(client, "get_tasks_by_project") else []
-            except Exception:
-                tasks_in_proj = []
-            for tk in (tasks_in_proj or []):
-                a = (tk.get("assigned_to") if isinstance(tk, dict) else getattr(tk, "assignee_id", None)) if tk else None
-                if a is not None and a not in seen_uids:
-                    seen_uids.add(int(a))
-                    project_members.append({"user_id": int(a), "name": user_name_map.get(int(a), f"user_{a}"), "role": ""})
-            # project_roles の director/pm/lead も追加
-            if hasattr(client, "get_project_roles"):
-                try:
-                    roles = client.get_project_roles(int(project_id), actor_user_id=actor_id) or {}
-                    for rname, ruid in roles.items():
-                        if ruid is None: continue
-                        try:
-                            ruid_int = int(ruid)
-                        except (ValueError, TypeError):
-                            continue
-                        if ruid_int not in seen_uids:
-                            seen_uids.add(ruid_int)
-                            project_members.append({"user_id": ruid_int, "name": user_name_map.get(ruid_int, f"user_{ruid_int}"), "role": rname})
-                        else:
-                            # 既存 entry に role 上書き (role なしから role 付与)
-                            for pm in project_members:
-                                if pm.get("user_id") == ruid_int and not pm.get("role"):
-                                    pm["role"] = rname
-                except Exception:
-                    pass
+            project_members = resolve_project_members(int(project_id), actor_id, client=client, user_name_map=user_name_map)
             # 加えて殿御本人 (admin) も含む (役 user.role admin)
-            if hasattr(user, 'user_id') and user.user_id and int(user.user_id) not in seen_uids:
-                seen_uids.add(int(user.user_id))
+            if hasattr(user, 'user_id') and user.user_id and int(user.user_id) not in {m["user_id"] for m in project_members}:
                 project_members.append({"user_id": int(user.user_id), "name": getattr(user, 'name', '') or f"uid {user.user_id}", "role": getattr(user, 'role', '') or "admin"})
     except Exception:
         project_members = []

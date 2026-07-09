@@ -53,8 +53,8 @@ def client_no_auth():
 class TestPagesShotDetail:
     def test_shot_valid_jwt(self, client):
         mock_tasks = [
-            CalendarTask(task_id=10, shot_id=1, type="Animation", assignee_id=5, status="approved"),
-            CalendarTask(task_id=11, shot_id=1, type="Lighting", assignee_id=6, status="reviewing"),
+            CalendarTask(task_id=10, shot_id=1, type="Animation", assignee_id=5, status="ap"),
+            CalendarTask(task_id=11, shot_id=1, type="Lighting", assignee_id=6, status="qc"),
         ]
         with patch("app.routers.pages_shot.get_calendar_client") as MockClient:
             mock_inst = MagicMock()
@@ -106,6 +106,26 @@ def test_shot_detail_project_name(client, monkeypatch):
     assert resp.status_code == 200
     assert "Ramps" in resp.text
     assert "Project Alpha" not in resp.text
+
+
+def test_shot_detail_project_members_includes_auto_membership_director(client, monkeypatch):
+    """殿御命 2026-07-09 (cmd_076③): GET /shot/{id} (project_detail.html からの通常導線・
+    isolated_task=False) は project_members を一切 context に渡していなかった不具合の
+    回帰防止。director が明示的 team member/task assignee でなくても
+    resolve_project_members 経由で mention 一覧に現れることを確認する。"""
+    from app.adapters import calendar_client as cc
+    monkeypatch.setattr(cc.CalendarClient, "get_tasks", lambda self, *a, **kw: [])
+    monkeypatch.setattr(cc.CalendarClient, "get_shot", lambda self, *a, **kw: make_shot(project_id=73))
+    monkeypatch.setattr(cc.CalendarClient, "get_tasks_by_project", lambda self, *a, **kw: [])
+    monkeypatch.setattr(cc.CalendarClient, "get_project_roles", lambda self, *a, **kw: {"director": 29, "pm": 31})
+    monkeypatch.setattr(cc.CalendarClient, "get_users", lambda self, *a, **kw: [
+        {"id": 29, "name": "Yamada"}, {"id": 31, "name": "Tanaka"},
+    ])
+    resp = client.get("/shot/1", headers={"Authorization": f"Bearer {_make_token()}"})
+    assert resp.status_code == 200
+    assert "project 担当者 0 件" not in resp.text
+    assert "Yamada" in resp.text
+    assert "Tanaka" in resp.text
 
 
 def test_shot_detail_project_name_none_shot(client, monkeypatch):

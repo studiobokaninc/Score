@@ -8,7 +8,8 @@ from jinja2 import Environment, FileSystemLoader
 
 from app.adapters.calendar_factory import get_calendar_client
 from app.deps import get_actor_id, get_actor_role
-from app.helpers.project_resolver import resolve_project_name
+from app.helpers.project_resolver import resolve_project_name, resolve_project_members
+from app.helpers.task_status import attach_status_meta
 
 router = APIRouter()
 
@@ -52,7 +53,35 @@ def get_shot_detail(
 
     from app.helpers.colors import attach_task_palettes, get_project_palette
     tasks = attach_task_palettes(tasks)
+    tasks = attach_status_meta(tasks, client)  # cmd_075: status_color/status_label 動的付与
     project_palette = get_project_palette(project_id) if project_id else None
+
+    # 殿御命 2026-07-09 (cmd_076③): project members 取得 (mention 選択用)
+    # 旧実装は本 route (/shot/{id}・isolated_task=False の通常 SHOT 全体表示) に
+    # project_members を一切渡していなかった (get_task_detail 側の /task/{task_id}
+    # のみ実装済)。project_detail.html からの通常導線はこの route を経由するため、
+    # mention/メンバー系 UI が常に「project 担当者 0 件」表示になっていた不具合を修正。
+    user_name_map = {}
+    try:
+        if hasattr(client, "get_users"):
+            for u in (client.get_users(actor_user_id=actor_id) or []):
+                if not isinstance(u, dict):
+                    continue
+                uid = u.get("id") or u.get("user_id")
+                if uid is None:
+                    continue
+                disp = u.get("name") or u.get("full_name") or u.get("username") or ""
+                if disp:
+                    user_name_map[uid] = disp
+    except Exception:
+        user_name_map = {}
+    project_members = []
+    try:
+        if project_id:
+            project_members = resolve_project_members(int(project_id), actor_id, client=client, user_name_map=user_name_map)
+    except Exception:
+        project_members = []
+
     # 殿御命 2026-06-08: asset_list を context に追加 + tasks 各 task に latest_asset attach
     asset_list = list((shot_detail_raw.get("asset_list", []) or [])) if isinstance(shot_detail_raw, dict) else []
     latest_by_task = {}
@@ -88,6 +117,7 @@ def get_shot_detail(
             "shot_detail_raw": shot_detail_raw,
             "asset_list": asset_list,
             "latest_by_task": latest_by_task,
+            "project_members": project_members,
         },
     )
 
@@ -122,7 +152,7 @@ def get_task_detail(
                     "task_id": raw.get("id") or task_id,
                     "shot_id": raw.get("shot_id") or 0,
                     "type": raw.get("type", "Unknown"),
-                    "status": raw.get("status", "open"),
+                    "status": raw.get("status", "mk"),
                     "assignee_id": raw.get("assigned_to") or raw.get("assignee_id") or 0,
                     # 殿御命 2026-06-01: 詳細 field (cost/priority/期日/dependsOn 等)
                     "cost": raw.get("cost"),
@@ -138,6 +168,10 @@ def get_task_detail(
                     "seqID": raw.get("seqID"),
                     "name": raw.get("name"),
                     "thread_id": raw.get("thread_id"),
+                    # cmd_075: Calendar が inline 同梱する動的色/ラベル
+                    "status_color": raw.get("status_color"),
+                    "status_label": raw.get("status_label"),
+                    "status_category": raw.get("status_category"),
                 })()
                 found_shot_id = raw.get("shot_id") or 0
                 found_shotID = raw.get("shotID")
@@ -154,9 +188,12 @@ def get_task_detail(
                         "task_id": raw.get("id") or raw.get("task_id"),
                         "shot_id": raw.get("shot_id") or 0,
                         "type": raw.get("type", "Unknown"),
-                        "status": raw.get("status", "open"),
+                        "status": raw.get("status", "mk"),
                         "assignee_id": raw.get("assigned_to") or raw.get("assignee_id") or 0,
                         "thread_id": raw.get("thread_id"),
+                        "status_color": raw.get("status_color"),
+                        "status_label": raw.get("status_label"),
+                        "status_category": raw.get("status_category"),
                     })()
                     found_shot_id = raw.get("shot_id") or 0
                     found_shotID = raw.get("shotID")
@@ -172,7 +209,7 @@ def get_task_detail(
             "task_id": task_id,
             "shot_id": 1,
             "type": "Unknown",
-            "status": "open",
+            "status": "mk",
             "assignee_id": 0,
         })()
         found_task = _stub
@@ -252,6 +289,9 @@ def get_task_detail(
                 "status": t.get("status", ""),
                 "assignee_id": t.get("assigned_to") or 0,
                 "name": t.get("name", ""),
+                "status_color": t.get("status_color"),
+                "status_label": t.get("status_label"),
+                "status_category": t.get("status_category"),
             })())
         # 何も取れなければ fallback (旧)
         if not upstream_tasks and found_shot_id:
@@ -288,22 +328,12 @@ def get_task_detail(
         next_version = "v001"
 
     # 殿御命 2026-06-03: project members 取得 (mention 選択用 multi-select)
+    # 殿御命 2026-07-09 (cmd_076③): auto-membership 共通ヘルパーに統一
+    # (director/pm/lead は明示的 team member 登録・task 担当実績の有無に関わらず常にメンバー扱い)
     project_members = []
     try:
-        if project_id and hasattr(client, "get_team_members"):
-            project_members = client.get_team_members(int(project_id), actor_user_id=actor_id) or []
-        # real 経路 fallback: project の task assignees から uniq 抽出
-        if not project_members and project_id:
-            seen_uids = set()
-            try:
-                tasks_in_proj = client.get_tasks_by_project(int(project_id), actor_user_id=actor_id) if hasattr(client, "get_tasks_by_project") else []
-            except Exception:
-                tasks_in_proj = []
-            for t in (tasks_in_proj or []):
-                a = (t.get("assigned_to") if isinstance(t, dict) else getattr(t, "assigned_to", None)) or (t.get("assignee_id") if isinstance(t, dict) else getattr(t, "assignee_id", None))
-                if a and a not in seen_uids:
-                    seen_uids.add(a)
-                    project_members.append({"user_id": a, "name": user_name_map.get(a, f"user_{a}"), "role": ""})
+        if project_id:
+            project_members = resolve_project_members(int(project_id), actor_id, client=client, user_name_map=user_name_map)
     except Exception:
         project_members = []
 
@@ -325,11 +355,13 @@ def get_task_detail(
     except Exception:
         asset_list = []
 
+    _isolated_tasks = attach_status_meta([found_task], client)  # cmd_075
+    upstream_tasks = attach_status_meta(upstream_tasks, client)  # cmd_075
     return _templates.TemplateResponse(
         request=request,
         name="shot_detail.html",
         context={
-            "tasks": [found_task],          # asset history: アイソレーション 単独タスクのみ
+            "tasks": _isolated_tasks,          # asset history: アイソレーション 単独タスクのみ
             "upstream_tasks": upstream_tasks,  # upstream 可視化: 全工程 (context 保持)
             "shot_id": found_shot_id,
             "shot": shot,
