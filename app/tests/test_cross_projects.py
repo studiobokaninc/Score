@@ -32,7 +32,7 @@ def client_with_auth():
 class TestCrossProjects:
     def test_cross_projects_valid_jwt(self, client):
         mock_projects = [{"id": 1, "name": "Project A", "status": "active"}]
-        mock_shots = [{"id": 1, "name": "SHOT_001", "status": "retake"}]
+        mock_shots = [{"id": 1, "name": "SHOT_001", "status": "in_progress"}]
         _test_app.dependency_overrides[get_actor_id] = lambda: "5"
         try:
             with patch("app.routers.cross_projects.get_calendar_client") as MockClient:

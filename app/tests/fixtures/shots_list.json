@@ -1,5 +1,5 @@
 [
   {"id": 1, "project_id": 1, "seq_code": "A001", "shot_code": "SHOT_001", "display_order": 1, "status": "in_progress", "thumbnail_url": null, "description": null, "created_at": "2024-01-01T00:00:00", "updated_at": "2024-01-01T00:00:00"},
-  {"id": 2, "project_id": 1, "seq_code": "A002", "shot_code": "SHOT_002", "display_order": 2, "status": "reviewing", "thumbnail_url": null, "description": null, "created_at": "2024-01-01T00:00:00", "updated_at": "2024-01-01T00:00:00"},
-  {"id": 3, "project_id": 1, "seq_code": "A003", "shot_code": "SHOT_003", "display_order": 3, "status": "pending", "thumbnail_url": null, "description": null, "created_at": "2024-01-01T00:00:00", "updated_at": "2024-01-01T00:00:00"}
+  {"id": 2, "project_id": 1, "seq_code": "A002", "shot_code": "SHOT_002", "display_order": 2, "status": "in_progress", "thumbnail_url": null, "description": null, "created_at": "2024-01-01T00:00:00", "updated_at": "2024-01-01T00:00:00"},
+  {"id": 3, "project_id": 1, "seq_code": "A003", "shot_code": "SHOT_003", "display_order": 3, "status": "planning", "thumbnail_url": null, "description": null, "created_at": "2024-01-01T00:00:00", "updated_at": "2024-01-01T00:00:00"}
 ]

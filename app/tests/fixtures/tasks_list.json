@@ -1,4 +1,4 @@
 [
-  {"id": 10, "shot_id": 1, "type": "Composite", "assigned_to": 5, "status": "reviewing"},
-  {"id": 11, "shot_id": 1, "type": "Lighting", "assigned_to": 6, "status": "approved"}
+  {"id": 10, "shot_id": 1, "type": "Composite", "assigned_to": 5, "status": "qc"},
+  {"id": 11, "shot_id": 1, "type": "Lighting", "assigned_to": 6, "status": "ap"}
 ]

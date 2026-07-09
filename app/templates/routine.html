@@ -143,14 +143,11 @@ body {
                             else ('bg-slate-300 text-slate-700' if _rank == 2
                             else ('bg-orange-300 text-orange-900' if _rank == 3
                             else 'bg-slate-100 text-slate-500')) %}
-                        {% set _status_badge = 'bg-rose-100 text-rose-700' if _st == 'retake'
-                            else ('bg-amber-100 text-amber-700' if _st in ('reviewing','review')
-                            else ('bg-indigo-100 text-indigo-700' if _st in ('in_progress','in-progress')
-                            else ('bg-purple-100 text-purple-700' if tk.is_qc_inbox
-                            else 'bg-slate-100 text-slate-600'))) %}
+                        {# cmd_075: 色/ラベルは Calendar API 動的取得 (ハードコード禁止・qc_inbox のみ Score 独自の紫バッジ) #}
+                        {% set _status_badge = 'bg-purple-100 text-purple-700' if tk.is_qc_inbox else '' %}
                         {% set _status_label = (
                             ('📥 ' + (tk.kind or 'QC')|upper) if tk.is_qc_inbox
-                            else tk.status) %}
+                            else (tk.status_label or tk.status)) %}
                         {% set _icon = '🔍' if tk.is_qc_inbox else ('🎨' if tk.task_type == 'Composite' else ('💡' if tk.task_type in ('Lighting','Look','lighting') else ('🖼️' if tk.task_type == 'MattePaint' else ('✨' if tk.task_type in ('FX','fx') else ('📐' if tk.task_type == 'layout' else ('🎬' if tk.task_type == 'Animation' else '🎯')))))) %}
                         <li class="flex items-start gap-3 px-2 py-2 rounded-xl hover:bg-white/80 transition-colors">
                             <span class="shrink-0 w-7 h-7 rounded-full flex items-center justify-center text-xs font-black {{ _rank_class }}">{{ _rank }}</span>
@@ -165,7 +162,9 @@ body {
                                     <span class="text-sm font-black text-slate-900" translate="no">{{ tk.task_type or tk.shot_code or 'task' }}</span>
                                 </div>
                             </a>
-                            <span class="text-[10px] font-bold rounded-full px-2 py-0.5 shrink-0 mt-1 {{ _status_badge }}"><span translate="no">{{ _status_label }}</span></span>
+                            <span class="text-[10px] font-bold rounded-full px-2 py-0.5 shrink-0 mt-1 {{ _status_badge }}"
+                              style="{% if not tk.is_qc_inbox %}background-color: {{ tk.status_color or '#BDBDBD' }}22; color: {{ tk.status_color or '#BDBDBD' }};{% endif %}"
+                              ><span translate="no">{{ _status_label }}</span></span>
                         </li>
                         {% endfor %}
                     </ul>

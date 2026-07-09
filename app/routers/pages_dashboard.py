@@ -126,6 +126,10 @@ def read_dashboard(
             "project_id": pid,
             "project_name": project_name_map.get(pid, ""),
             "due_date": (tk.get("due_date") or "")[:10],
+            # cmd_075: Calendar が inline 同梱する動的色/ラベル
+            "status_color": tk.get("status_color"),
+            "status_label": tk.get("status_label"),
+            "status_category": tk.get("status_category"),
         })
     my_tasks.sort(key=lambda x: STATUS_PRIORITY.get((x.get("status") or "").lower(), 5))
 

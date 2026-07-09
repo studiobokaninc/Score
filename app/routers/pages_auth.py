@@ -54,6 +54,9 @@ def read_exit_report(request: Request, mode: Optional[str] = None, actor_id: str
                         "status": t.get("status", ""),
                         "display_status": t.get("display_status", ""),
                         "updated_at": t.get("updated_at", ""),
+                        "status_color": t.get("status_color"),
+                        "status_label": t.get("status_label"),
+                        "status_category": t.get("status_category"),
                     })
                 else:
                     my_tasks.append({
@@ -63,6 +66,9 @@ def read_exit_report(request: Request, mode: Optional[str] = None, actor_id: str
                         "task_type": getattr(t, "type", ""),
                         "status": getattr(t, "status", ""),
                         "updated_at": getattr(t, "updated_at", ""),
+                        "status_color": getattr(t, "status_color", None),
+                        "status_label": getattr(t, "status_label", None),
+                        "status_category": getattr(t, "status_category", None),
                     })
         # Enrich each task with project_name / seq_code / shot_code via shot lookup
         try:

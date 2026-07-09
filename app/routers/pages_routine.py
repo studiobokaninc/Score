@@ -3,7 +3,7 @@ from fastapi import APIRouter, Depends, Request
 from fastapi.templating import Jinja2Templates
 from app.deps import get_actor_id, get_actor_role
 from app.adapters.calendar_factory import get_calendar_client
-from app.helpers.task_status import STATUS_PRIORITY, COMPLETED_STATUSES
+from app.helpers.task_status import STATUS_PRIORITY, COMPLETED_STATUSES, attach_status_meta
 
 router = APIRouter()
 _templates = Jinja2Templates(directory="app/templates")
@@ -31,6 +31,9 @@ def _enrich_my_tasks(client, actor_id: str) -> list[dict]:
                 "task_type": t.get("task_type") or t.get("type", ""),
                 "name": t.get("name", ""),
                 "status": t.get("status", ""),
+                "status_color": t.get("status_color"),
+                "status_label": t.get("status_label"),
+                "status_category": t.get("status_category"),
             })
         else:
             my_tasks.append({
@@ -39,6 +42,9 @@ def _enrich_my_tasks(client, actor_id: str) -> list[dict]:
                 "shot_code": getattr(t, "name", "") or "",
                 "task_type": getattr(t, "type", ""),
                 "status": getattr(t, "status", ""),
+                "status_color": getattr(t, "status_color", None),
+                "status_label": getattr(t, "status_label", None),
+                "status_category": getattr(t, "status_category", None),
             })
     # build shot_id → {project_name, seq_code, shot_code} map
     try:
@@ -174,6 +180,7 @@ def get_routine(request: Request, actor_id: str = Depends(get_actor_id)):
         pass
 
     today_tasks.sort(key=lambda x: (0 if x.get("is_qc_inbox") else 1, _TASK_PRIORITY.get((x.get("status") or "").lower(), 5)))
+    today_tasks = attach_status_meta(today_tasks, client)  # cmd_075: status_color/status_label 動的付与
 
     prev_exit_submitted = _has_prev_day_exit_submitted(client, actor_id)
 

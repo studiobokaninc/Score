@@ -216,7 +216,7 @@
             alert(`✅ ${keys.length} 件の通知を復元しました`);
           }
           </script>
-          <p class="text-xs text-slate-500">※ 本表示は state.tasks の status='retake' 集計に基づく注意喚起・未来予測ではありません</p>
+          <p class="text-xs text-slate-500">※ 本表示は state.tasks の status='qc_fb' 集計に基づく注意喚起・未来予測ではありません</p>
         </div>
       </section>
       {% endif %}
@@ -256,19 +256,15 @@
                   </p>
                   <p class="text-sm font-bold text-slate-800 truncate"><span translate="no">{{ _task_label }}</span>{% if _type and _type != _task_label %} <span class="text-[10px] font-normal text-slate-400 bg-slate-100 rounded-full px-1.5 py-0.5" translate="no">{{ _type }}</span>{% endif %}</p>
                 </div>
-                {% if tk.status == 'retake' %}<span class="text-[10px] font-bold bg-rose-100 text-rose-700 rounded-full px-2 py-0.5 shrink-0">🔴 Retake</span>
-                {% elif tk.status == 'reviewing' %}<span class="text-[10px] font-bold bg-amber-100 text-amber-700 rounded-full px-2 py-0.5 shrink-0">⚠️ Reviewing</span>
-                {% elif tk.status in ('open','todo') %}<span class="text-[10px] font-bold bg-slate-100 text-slate-600 rounded-full px-2 py-0.5 shrink-0">⏳ Open</span>
-                {% elif tk.status == 'in_progress' %}<span class="text-[10px] font-bold bg-blue-100 text-blue-700 rounded-full px-2 py-0.5 shrink-0">🔧 進行中</span>
-                {% elif tk.status in ('completed','approved','done') %}<span class="text-[10px] font-bold bg-emerald-100 text-emerald-700 rounded-full px-2 py-0.5 shrink-0">✅ 完了</span>
-                {% else %}<span class="text-[10px] font-bold bg-slate-100 text-slate-600 rounded-full px-2 py-0.5 shrink-0" translate="no">{{ tk.status or '?' }}</span>
-                {% endif %}
+                {# cmd_075: 色/ラベルは Calendar API 動的取得 (ハードコード禁止) #}
+                <span class="text-[10px] font-bold rounded-full px-2 py-0.5 shrink-0" translate="no"
+                  style="background-color: {{ tk.status_color or '#BDBDBD' }}22; color: {{ tk.status_color or '#BDBDBD' }};">{{ tk.status_label or tk.status or '?' }}</span>
                 <span class="text-slate-400 shrink-0">›</span>
               </a>
             </li>
             {% endfor %}
           </ol>
-          <p class="text-[10px] text-slate-400 mt-2">※ Retake > Reviewing > Open > 進行中 の優先度 sort・階層: project › seq › shot › task</p>
+          <p class="text-[10px] text-slate-400 mt-2">※ QC_FB > 社内QC/社外FB > MK未着手 > 進行中 の優先度 sort・階層: project › seq › shot › task</p>
           </div>
         </details>
       </section>

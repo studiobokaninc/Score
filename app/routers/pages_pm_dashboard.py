@@ -4,7 +4,7 @@ from fastapi.responses import RedirectResponse
 from fastapi.templating import Jinja2Templates
 from app.deps import get_actor_id, get_actor_role
 from app.adapters.calendar_factory import get_calendar_client
-from app.helpers.task_status import RECEPTION_PENDING_STATUSES
+from app.helpers.task_status import RECEPTION_PENDING_STATUSES, attach_status_meta
 
 router = APIRouter()
 _templates = Jinja2Templates(directory="app/templates")
@@ -45,9 +45,13 @@ def get_pm_dashboard(request: Request, actor_id: str = Depends(get_actor_id)):
                             "status": t.status,
                             "assignee_id": t.assignee_id,
                             "project_name": proj.get("name") or "-",
+                            "status_color": t.status_color,
+                            "status_label": t.status_label,
+                            "status_category": t.status_category,
                         })
     except Exception:
         pending = []
+    pending = attach_status_meta(pending, client)  # cmd_075: status_color/status_label 動的付与
 
     # 未読メッセージ count (state.messages 全件・unread の概念は schema 未実装ゆえ全件で代用)
     try:

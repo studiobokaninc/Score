@@ -84,7 +84,7 @@
         </div>
         <div class="border-t pt-3">
           <span class="inline-block text-amber-700 text-xs font-bold mr-2">💡 ポイント</span>
-          <span class="text-gray-600 text-sm">qc_requests filter は status='review'・thread_qc_requests は SHOT thread 経由も統合</span>
+          <span class="text-gray-600 text-sm">qc_requests filter は status='qc'・thread_qc_requests は SHOT thread 経由も統合</span>
         </div>
         <div class="bg-amber-50 border-l-4 border-amber-400 rounded-r-xl p-3 mt-3">
           <p class="text-xs font-bold text-amber-800 mb-1">💬 例えば</p>
@@ -109,7 +109,7 @@
         </div>
         <div>
           <span class="inline-block bg-emerald-50 text-emerald-700 text-xs font-bold rounded-full px-2 py-0.5 mr-2">✅ 結果</span>
-          <span class="text-gray-700">Approve → task.status = completed・Retake → /director_retake_input 遷移</span>
+          <span class="text-gray-700">Approve → task.status = deliver・Retake → /director_retake_input 遷移</span>
         </div>
         <div class="border-t pt-3">
           <span class="inline-block text-amber-700 text-xs font-bold mr-2">💡 ポイント</span>
@@ -138,7 +138,7 @@
         </div>
         <div>
           <span class="inline-block bg-emerald-50 text-emerald-700 text-xs font-bold rounded-full px-2 py-0.5 mr-2">✅ 結果</span>
-          <span class="text-gray-700">POST /api/bff/retakes → SHOT thread 通知 + Push/SSE 配信 + task=in-progress</span>
+          <span class="text-gray-700">POST /api/bff/retakes → SHOT thread 通知 + Push/SSE 配信 + task=qc_fb</span>
         </div>
         <div class="border-t pt-3">
           <span class="inline-block text-amber-700 text-xs font-bold mr-2">💡 ポイント</span>

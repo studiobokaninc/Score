@@ -14,13 +14,13 @@ endpoints:
       - id: 1
         project_id: 33
         name: "SHOT_001"
-        status: "in_review"
+        status: "in_progress"
         shot_code: "SHOT_001"
         seq_code: "SEQ01"
       - id: 2
         project_id: 33
         name: "SHOT_002"
-        status: "retake"
+        status: "in_progress"
         shot_code: "SHOT_002"
         seq_code: "SEQ01"
 
@@ -96,7 +96,7 @@ endpoints:
     id: 1
     project_id: 33
     name: "SHOT_001"
-    status: "in_review"
+    status: "in_progress"
     shot_code: "SHOT_001"
     seq_code: "SEQ01"
     asset_list:
@@ -109,11 +109,11 @@ endpoints:
         created_at: "2026-05-21T19:00:00Z"
     upstream:
       - shot_code: "SHOT_000"
-        status: "done"
+        status: "completed"
     my_tasks:
       - task_id: 12
         content: "コンポジット修正"
-        status: "in_progress"
+        status: "wip"
 
   # R-02: イベント一覧 (event_id, start/end 構造)
   GET /api/me/events:
@@ -139,10 +139,10 @@ endpoints:
     my_shots:
       - id: 1
         shot_code: "SHOT_001"
-        status: "in_review"
+        status: "in_progress"
       - id: 2
         shot_code: "SHOT_002"
-        status: "retake"
+        status: "in_progress"
     my_team_members:
       - user_id: "tanaka@studiobokan.com"
         name: "田中 太郎"
@@ -193,9 +193,9 @@ endpoints:
       - "QC コメント対応"
     prev_tasks:
       - title: "SHOT_001 コンポジット修正"
-        status: "done"
+        status: "deliver"
       - title: "QC コメント対応"
-        status: "done"
+        status: "deliver"
       - title: "SHOT_003 初回提出"
         status: "pending"
 

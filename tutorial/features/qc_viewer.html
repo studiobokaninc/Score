@@ -53,7 +53,7 @@
           <div class="screenshot-wrap cursor-pointer bg-white rounded-lg overflow-hidden border border-gray-200" onclick="openLightbox(this)">
             <img src="../images/admin/qc_approve.png" alt="④ Approve button + コメント入力" loading="lazy" class="w-full h-auto block" onerror="this.onerror=null; this.src=&quot;data:image/svg+xml;utf8,&lt;svg xmlns='http://www.w3.org/2000/svg' width='640' height='360' viewBox='0 0 640 360'&gt;&lt;rect width='640' height='360' fill='%23f3f4f6'/&gt;&lt;text x='50%' y='45%' text-anchor='middle' font-size='40' font-family='sans-serif'&gt;📷&lt;/text&gt;&lt;text x='50%' y='60%' text-anchor='middle' font-size='20' fill='%239ca3af' font-family='sans-serif' font-weight='bold'&gt;撮影待ち&lt;/text&gt;&lt;/svg&gt;&quot;;">
           </div>
-          <p class="text-xs text-gray-600 italic mt-2">Director が ✅ Approve + コメント入力 直前の状態 (task=completed patch 直前)</p>
+          <p class="text-xs text-gray-600 italic mt-2">Director が ✅ Approve + コメント入力 直前の状態 (task=deliver patch 直前)</p>
         </div>
         <div class="bg-gray-50 rounded-xl p-4">
           <p class="text-xs font-bold text-gray-700 mb-2">⑤ 🔁 Retake link</p>
@@ -92,7 +92,7 @@
       <ol class="list-decimal list-inside space-y-2">
         <li class="text-gray-700 leading-relaxed">msg の ▶ QC ビューア緑 button click → /qc/{shot_id}?task_id&asset_id</li>
         <li class="text-gray-700 leading-relaxed">メイン player で asset 確認 + version 履歴 click 切替</li>
-        <li class="text-gray-700 leading-relaxed">Director: コメント入力 → ✅ Approve → SHOT thread に「✅ Approved」 通知 + task=completed</li>
+        <li class="text-gray-700 leading-relaxed">Director: コメント入力 → ✅ Approve → SHOT thread に「✅ Approved」 通知 + task=deliver</li>
         <li class="text-gray-700 leading-relaxed">Director: 🔁 Retake → /director_retake_input?shot_id&task_id 遷移 → リファレンス添付可</li>
         <li class="text-gray-700 leading-relaxed">Lead: 📤 Director QC へ上申 → mention 必須 → SHOT thread 通知</li>
       </ol>

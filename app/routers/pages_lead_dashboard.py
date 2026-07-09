@@ -5,7 +5,7 @@ from fastapi.responses import RedirectResponse
 from fastapi.templating import Jinja2Templates
 from app.deps import get_actor_id, get_actor_role
 from app.adapters.calendar_factory import get_calendar_client
-from app.helpers.task_status import STATUS_PRIORITY
+from app.helpers.task_status import STATUS_PRIORITY, attach_status_meta
 
 router = APIRouter()
 _templates = Jinja2Templates(directory="app/templates")
@@ -91,6 +91,10 @@ def get_lead_dashboard(request: Request, actor_id: str = Depends(get_actor_id)):
                 "status": tk.get("status", ""),
                 "updated_at": tk.get("updated_at", ""),
                 "assignee_id": tk.get("assigned_to") or tk.get("assignee_id"),
+                # cmd_075: Calendar が inline 同梱する動的色/ラベル
+                "status_color": tk.get("status_color"),
+                "status_label": tk.get("status_label"),
+                "status_category": tk.get("status_category"),
             })
         else:
             my_tasks.append({
@@ -99,6 +103,9 @@ def get_lead_dashboard(request: Request, actor_id: str = Depends(get_actor_id)):
                 "task_type": getattr(tk, "type", ""),
                 "status": getattr(tk, "status", ""),
                 "assignee_id": getattr(tk, "assignee_id", None),
+                "status_color": getattr(tk, "status_color", None),
+                "status_label": getattr(tk, "status_label", None),
+                "status_category": getattr(tk, "status_category", None),
             })
     # sort: active 上位・updated_at 新しい順
     active_tasks = [t for t in my_tasks if STATUS_PRIORITY.get(t.get("status", ""), 5) < 9]
@@ -133,6 +140,7 @@ def get_lead_dashboard(request: Request, actor_id: str = Depends(get_actor_id)):
         if ttype == "Look" and t.get("status") in ("qc", "ap"):
             distribution_candidates.append(entry)
 
+    my_tasks = attach_status_meta(my_tasks, client)  # cmd_075: status_color/status_label 動的付与
     return _templates.TemplateResponse(
         request=request, name="lead_dashboard.html",
         context={

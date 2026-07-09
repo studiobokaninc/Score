@@ -52,7 +52,7 @@ def client_no_auth():
 class TestPagesQc:
     def test_qc_valid_jwt(self, client):
         mock_tasks = [
-            CalendarTask(task_id=10, shot_id=1, type="Comp", assignee_id=5, status="approved"),
+            CalendarTask(task_id=10, shot_id=1, type="Comp", assignee_id=5, status="ap"),
         ]
         with patch("app.routers.pages_qc.get_calendar_client") as MockClient:
             mock_inst = MagicMock()
@@ -73,7 +73,7 @@ class TestPagesQc:
 
     def test_reference_valid_jwt(self, client):
         mock_tasks = [
-            CalendarTask(task_id=20, shot_id=2, type="Comp", assignee_id=5, status="reviewing"),
+            CalendarTask(task_id=20, shot_id=2, type="Comp", assignee_id=5, status="qc"),
         ]
         with patch("app.routers.pages_qc.get_calendar_client") as MockClient:
             mock_inst = MagicMock()

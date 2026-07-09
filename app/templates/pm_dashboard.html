@@ -71,7 +71,7 @@
         <ul class="space-y-2">
           {% for d in pending_deliverables %}
           {% set _icon = '🎨' if d.task_type == 'Composite' else ('💡' if d.task_type in ('Lighting','Look') else ('🖼️' if d.task_type == 'MattePaint' else ('✨' if d.task_type == 'FX' else '🎬'))) %}
-          {% set _is_retake = (d.status == 'retake') %}
+          {% set _is_qc_fb = (d.status == 'qc_fb') %}
           <li>
             <a href="/task/{{ d.task_id }}" class="flex items-center gap-3 p-3 rounded-2xl hover:bg-white/60 transition-all">
               <span class="text-xl">{{ _icon }}</span>
@@ -79,8 +79,9 @@
                 <p class="text-sm font-bold text-slate-800" translate="no">{{ d.shot_code }} {{ d.task_type }}_v04</p>
                 <p class="text-xs text-slate-500">project: <span translate="no">{{ d.project_name }}</span> / 担当 user_id: {{ d.assignee_id }}</p>
               </div>
-              {% if _is_retake %}
-              <span class="text-xs font-bold bg-rose-100 text-rose-700 rounded-full px-2 py-0.5"><span translate="no">Retake</span></span>
+              {% if _is_qc_fb %}
+              {# cmd_075: 色/ラベルは Calendar API 動的取得 (ハードコード禁止) #}
+              <span class="text-xs font-bold rounded-full px-2 py-0.5" style="background-color: {{ d.status_color or '#BDBDBD' }}22; color: {{ d.status_color or '#BDBDBD' }};" translate="no">{{ d.status_label or d.status }}</span>
               {% else %}
               <span class="text-xs font-bold bg-amber-100 text-amber-700 rounded-full px-2 py-0.5">レビュー待ち</span>
               {% endif %}

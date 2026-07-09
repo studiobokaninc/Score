@@ -78,10 +78,10 @@
           <div class="flex justify-between items-center">
             <dt class="text-slate-500">ステータス</dt>
             <dd class="font-bold flex items-center gap-2" translate="no">
-              <span id="task-status-label">{{ _t.status or '—' }}</span>
-              {# 殿御命 2026-06-03: todo 時 in-progress 化ボタン (表示も in-progress) #}
-              {% if (_t.status or '')|lower == 'todo' %}
-              <button type="button" onclick="changeTaskStatus({{ _t.task_id }}, 'in-progress')" class="text-[10px] bg-indigo-600 hover:bg-indigo-700 text-white font-bold rounded px-2 py-0.5">→ in-progress</button>
+              <span id="task-status-label">{{ _t.status_label or _t.status or '—' }}</span>
+              {# cmd_075: mk 時 wip 化ボタン (表示も WIP) #}
+              {% if (_t.status or '')|lower == 'mk' %}
+              <button type="button" onclick="changeTaskStatus({{ _t.task_id }}, 'wip')" class="text-[10px] bg-indigo-600 hover:bg-indigo-700 text-white font-bold rounded px-2 py-0.5">→ WIP</button>
               {% endif %}
             </dd>
           </div>
@@ -215,14 +215,13 @@
         <div class="aspect-video rounded-2xl mb-6 bg-gradient-to-br from-amber-200 via-rose-300 to-orange-400 relative overflow-hidden flex items-end p-4">
           <div class="flex items-center gap-3">
             <span class="text-white text-lg font-black bg-black/30 rounded-xl px-4 py-2" translate="no">{{ shot.shot_code if shot and shot.shot_code else 'SHOT_' + ('%03d' % shot_id) }}</span>
-            {% set _ss = (shot.status | lower) if shot else 'in_review' %}
+            {# cmd_075: shot.status は Calendar 不変4値 (retake は shot に付かないため削除) #}
+            {% set _ss = (shot.status | lower) if shot else 'in_progress' %}
             <span class="text-white text-xs font-black rounded-full px-3 py-1
-              {% if _ss == 'retake' %}bg-rose-500/80
-              {% elif _ss == 'approved' %}bg-emerald-500/80
+              {% if _ss == 'approved' %}bg-emerald-500/80
               {% elif _ss == 'in_progress' %}bg-blue-500/80
               {% else %}bg-amber-400/80{% endif %}" translate="no">
-              {% if _ss == 'retake' %}🔴 Retake
-              {% elif _ss == 'approved' %}✅ Approved
+              {% if _ss == 'approved' %}✅ Approved
               {% elif _ss == 'in_progress' %}🔧 In Progress
               {% else %}⚠️ Reviewing{% endif %}
             </span>
@@ -249,10 +248,9 @@
           <div class="flex justify-between items-center pt-2 border-t border-white/60">
             <dt class="text-slate-500">ステータス</dt>
             <dd>
-              {% set _ss2 = (shot.status | lower) if shot else 'in_review' %}
-              {% if _ss2 == 'retake' %}
-              <span class="inline-flex items-center gap-1.5 bg-rose-100 text-rose-600 text-xs font-bold px-3 py-1 rounded-full">🔴 <span translate="no">Retake</span></span>
-              {% elif _ss2 == 'approved' %}
+              {# cmd_075: shot.status は Calendar 不変4値 (retake は shot に付かないため削除) #}
+              {% set _ss2 = (shot.status | lower) if shot else 'in_progress' %}
+              {% if _ss2 == 'approved' %}
               <span class="inline-flex items-center gap-1.5 bg-emerald-100 text-emerald-600 text-xs font-bold px-3 py-1 rounded-full">✅ <span translate="no">Approved</span></span>
               {% elif _ss2 == 'in_progress' %}
               <span class="inline-flex items-center gap-1.5 bg-blue-100 text-blue-600 text-xs font-bold px-3 py-1 rounded-full">🔧 <span translate="no">In Progress</span></span>
@@ -272,15 +270,13 @@
         <div class="flex flex-col gap-2">
           {% for task in (upstream_tasks or tasks) %}
           {% set _tp = task.palette if task.palette is defined else None %}
-          <a href="/task/{{ task.task_id }}" class="flex items-center gap-3 p-3 rounded-2xl {{ (_tp.card_bg if _tp else 'bg-white/40') }} hover:brightness-105 transition-all border-l-4 {{ (_tp.border_accent if _tp else 'border-slate-200') }}
-            {% if task.status == 'retake' %} ring-2 ring-rose-300
-            {% elif task.status == 'reviewing' %} ring-2 ring-amber-300
-            {% endif %}">
+          {# cmd_075: 色は Calendar API 動的取得 (status_category: todo/in_progress/review/completed/held) #}
+          <a href="/task/{{ task.task_id }}" class="flex items-center gap-3 p-3 rounded-2xl {{ (_tp.card_bg if _tp else 'bg-white/40') }} hover:brightness-105 transition-all border-l-4 {{ (_tp.border_accent if _tp else 'border-slate-200') }}"
+            style="{% if task.status_category == 'review' %}box-shadow: 0 0 0 2px {{ task.status_color or '#BDBDBD' }}66;{% endif %}">
             <span class="text-lg">
-              {% if task.status == 'approved' %}✅
-              {% elif task.status == 'reviewing' %}⚠️
-              {% elif task.status == 'retake' %}🔄
-              {% elif task.status == 'open' %}⏳
+              {% if task.status_category == 'completed' %}✅
+              {% elif task.status_category == 'review' %}⚠️
+              {% elif task.status_category == 'todo' %}⏳
               {% else %}🔄
               {% endif %}
             </span>
@@ -289,17 +285,11 @@
               <div class="text-xs">
                 <span class="inline-block px-1.5 py-0.5 rounded-full text-[10px] font-bold {{ (_tp.type_badge_bg if _tp else 'bg-slate-100') }} {{ (_tp.type_badge_text if _tp else 'text-slate-500') }}" translate="no">{{ task.type }}</span>
               </div>
-              <div class="text-xs font-medium
-                {% if task.status in ('approved','completed','done') %}text-emerald-600
-                {% elif task.status == 'reviewing' %}text-amber-600
-                {% elif task.status in ('retake',) %}text-rose-600
-                {% else %}text-slate-500
-                {% endif %}" translate="no">{{ task.status | capitalize }}</div>
+              <div class="text-xs font-medium" style="color: {{ task.status_color or '#BDBDBD' }};" translate="no">{{ task.status_label or task.status }}</div>
             </div>
           </a>
           {% if not loop.last %}
-          <div class="flex justify-center text-slate-300 text-lg leading-none
-            {% if task.status == 'reviewing' or task.status == 'retake' %}text-amber-600{% endif %}">↓</div>
+          <div class="flex justify-center text-slate-300 text-lg leading-none" style="{% if task.status_category == 'review' %}color: {{ task.status_color or '#BDBDBD' }};{% endif %}">↓</div>
           {% endif %}
           {% endfor %}
         </div>
@@ -396,11 +386,12 @@
 
         {% for task in tasks %}
         {% set _t = task.type %}
+        {# cmd_075: 新19値対応 (本 grid は現状 hidden・将来 integrate 予定の旧構造) #}
         {% set _s = task.status | lower %}
-        {% set _is_retake = (_s == 'retake') %}
-        {% set _is_reviewing = (_s == 'reviewing') %}
-        {% set _is_approved = (_s == 'approved') %}
-        {% set _is_open = (_s == 'open') %}
+        {% set _is_retake = (_s == 'qc_fb') %}
+        {% set _is_reviewing = (_s in ('qc','v1qc','ap_fb','dir_wt','dir_fb')) %}
+        {% set _is_approved = (_s in ('ap','fix','dir_ap','deliver')) %}
+        {% set _is_open = (_s == 'mk') %}
         {% set _tp = task.palette if task.palette is defined else None %}
         <a href="/qc/{{ shot_id }}?task_id={{ task.task_id }}" class="block {{ (_tp.card_bg if _tp else 'bg-white/40') }} backdrop-blur-xl border-2 {{ (_tp.card_border if _tp else 'border-white/60') }} rounded-3xl shadow-xl overflow-hidden hover:shadow-2xl hover:scale-[1.01] transition-all
           {% if _is_reviewing %}ring-2 ring-amber-400/40{% endif %}">

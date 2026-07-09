@@ -85,7 +85,7 @@
             <p class="text-xs font-bold text-indigo-800 mb-1">🔧 システム動作</p>
             <ul class="text-xs text-gray-700 space-y-1 list-disc list-inside">
               <li>SHOT 関係者 thread 自動作成 (PM 田中 + 加藤 Lead + 佐藤 User)</li>
-              <li>task.status → <code>review</code> 自動 patch</li>
+              <li>task.status → <code>qc</code> 自動 patch</li>
               <li>QC ビューア緑 button 付き本文投稿</li>
               <li>Push + SSE で加藤 Lead へ配信</li>
             </ul>
@@ -139,7 +139,7 @@
             <ul class="text-xs text-gray-700 space-y-1 list-disc list-inside">
               <li>project.director_id 設定済 → 山田 Director を自動 participants に追加</li>
               <li>Director 不在 project だった場合は mention 必須 enforce + HTTP 400 防壁</li>
-              <li>task.status は既に <code>review</code> (Step 1 で patch 済)</li>
+              <li>task.status は既に <code>qc</code> (Step 1 で patch 済)</li>
               <li>SHOT thread に「🔍 QC 依頼」 投稿 → 山田 へ Push + SSE 配信</li>
             </ul>
           </div>
@@ -167,7 +167,7 @@
               <li>同期プレイヤーで video 実時間連動 (旧 placeholder 廃止)</li>
               <li>パンくず 4 階層: プロジェクト › 桜咲く街 › sq01 › c05 › Compositing</li>
               <li>version 履歴サイドバーで過去 version 比較</li>
-              <li>判定 block 活性化 (task.status=review が条件)</li>
+              <li>判定 block 活性化 (task.status=qc が条件)</li>
             </ul>
           </div>
           <a href="features/qc_viewer.html" class="text-xs bg-purple-600 hover:bg-purple-700 text-white rounded-full px-3 py-1">→ QC ビューア 機能詳細</a>
@@ -193,7 +193,7 @@
         <div class="bg-emerald-100 rounded-lg p-3 mb-3 text-xs text-gray-700">
           <p class="font-bold mb-1">🔧 システム動作:</p>
           <ul class="space-y-1 list-disc list-inside">
-            <li>task.status → <code>completed</code> patch</li>
+            <li>task.status → <code>deliver</code> patch</li>
             <li>SHOT thread に「✅ Approved」 通知</li>
             <li>Push + SSE で全 participants 配信</li>
             <li>佐藤 User Dashboard でも完了表示</li>
@@ -220,7 +220,7 @@
           </ul>
           <p class="font-bold mb-1 mt-2">🔧 サーバ側:</p>
           <ul class="space-y-1 list-disc list-inside">
-            <li>task.status → <code>in-progress</code> (Calendar enum 制約・retake 暫定)</li>
+            <li>task.status → <code>qc_fb</code> (社内 Retake feedback 専用ステータス)</li>
             <li>SHOT thread に「🔁 Retake 発令」 投稿</li>
             <li>佐藤 User へ Push + SSE 配信</li>
             <li>/tmp/score_retake_refs/{retake_id}/meta.json + 添付保存</li>
@@ -268,8 +268,8 @@
         </p>
         <p class="text-sm text-gray-700 leading-relaxed">
           Score は各 step で <strong>SHOT thread・Push・SSE・画面 badge</strong> の三重通知で
-          連絡漏れを防ぎ、 <strong>task.status</strong> (todo → in-progress → review → completed) で
-          公式 ステータスを track します。 PM 田中は全 SHOT thread に自動参加し、
+          連絡漏れを防ぎ、 <strong>task.status</strong> (mk → wip → qc → deliver) で
+          公式 ステータスを track します (Retake 発生時は qc_fb を経由)。 PM 田中は全 SHOT thread に自動参加し、
           進捗を ダッシュボードで横断把握します。
         </p>
       </div>

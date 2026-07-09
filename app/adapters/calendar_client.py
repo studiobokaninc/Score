@@ -233,6 +233,9 @@ class CalendarClient:
                 type=item["type"],
                 assignee_id=item.get("assigned_to"),
                 status=item["status"],
+                status_color=item.get("status_color"),
+                status_label=item.get("status_label"),
+                status_category=item.get("status_category"),
             )
             for item in resp.json()
         ]

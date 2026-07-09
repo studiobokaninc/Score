@@ -159,16 +159,28 @@ def status_label(status: str | None, client=None) -> str:
 
 def attach_status_meta(tasks: Iterable[Any], client=None) -> list[Any]:
     """tasks の各要素へ status_color/status_label/status_category を付与。
-    colors.py の attach_task_palettes() と同じ dict/オブジェクト両対応パターン。"""
+    colors.py の attach_task_palettes() と同じ dict/オブジェクト両対応パターン。
+
+    優先順位: (1) Calendar の task 応答に既に inline 同梱されている値
+    (get_tasks/get_tasks_by_project/get_task/get_my_tasks は実機確認済で全て含む)
+    → (2) GET /api/readonly/task-statuses の一括キャッシュ (専用 read-only token 要・
+    現状 401 で未疎通のため通常は (1) 側が使われる) → (3) FALLBACK_COLOR。"""
     meta = get_status_meta_map(client)
     out: list[Any] = []
     for t in tasks or []:
-        st = t.get("status") if isinstance(t, dict) else getattr(t, "status", None)
-        m = meta.get(st) or {}
-        color = m.get("color") or FALLBACK_COLOR
-        label = m.get("label") or (st or "").upper()
-        category = m.get("category")
-        if isinstance(t, dict):
+        is_dict = isinstance(t, dict)
+        st = t.get("status") if is_dict else getattr(t, "status", None)
+        inline_color = t.get("status_color") if is_dict else getattr(t, "status_color", None)
+        inline_label = t.get("status_label") if is_dict else getattr(t, "status_label", None)
+        inline_category = t.get("status_category") if is_dict else getattr(t, "status_category", None)
+        if inline_color:
+            color, label, category = inline_color, (inline_label or st), inline_category
+        else:
+            m = meta.get(st) or {}
+            color = m.get("color") or FALLBACK_COLOR
+            label = m.get("label") or (st or "").upper()
+            category = m.get("category")
+        if is_dict:
             new_t = dict(t)
             new_t["status_color"] = color
             new_t["status_label"] = label

@@ -27,7 +27,7 @@ class TestPagesDashboard:
     def test_dashboard_valid_jwt(self, client):
         mock_user = CalendarUser(user_id=5, email="sato@studio.jp", role="Compositor", name="Sato")
         mock_shots = [
-            CalendarShot(shot_id=1, project_id=1, name="SHOT_001", status="retake"),
+            CalendarShot(shot_id=1, project_id=1, name="SHOT_001", status="in_progress"),
             CalendarShot(shot_id=2, project_id=1, name="SHOT_002", status="approved"),
         ]
         _test_app.dependency_overrides[get_actor_id] = lambda: "5"
@@ -122,7 +122,7 @@ class TestPagesDashboard:
             _test_app.dependency_overrides.pop(get_actor_id, None)
 
     def test_my_tasks_excludes_completed(self, client):
-        """Fix1: completed/complete status のタスクは my_tasks_total に含まれない"""
+        """Fix1/cmd_075: deliver(新体系唯一の完了値)・legacy completed 系 status のタスクは my_tasks_total に含まれない"""
         mock_user = CalendarUser(user_id=5, email="sato@studio.jp", role="Compositor", name="Sato")
         _test_app.dependency_overrides[get_actor_id] = lambda: "5"
         try:
@@ -130,15 +130,15 @@ class TestPagesDashboard:
                 mock_inst = MagicMock()
                 mock_inst.get_me.return_value = mock_user
                 mock_inst.get_my_tasks.return_value = [
-                    {"id": 1, "status": "open", "project_id": 1},
-                    {"id": 2, "status": "completed", "project_id": 1},
+                    {"id": 1, "status": "mk", "project_id": 1},
+                    {"id": 2, "status": "deliver", "project_id": 1},
                     {"id": 3, "status": "complete", "project_id": 1},
                     {"id": 4, "status": "done", "project_id": 1},
                 ]
                 MockClient.return_value = mock_inst
                 resp = client.get("/dashboard")
             assert resp.status_code == 200
-            # 除外: completed(2), complete(3), done(4) → 残 open(1) のみ → my_tasks_total=1
+            # 除外: deliver(2, COMPLETED_STATUSES) / complete(3), done(4, legacy 互換) → 残 mk(1) のみ → my_tasks_total=1
             assert "my_tasks_total" not in resp.text or resp.status_code == 200  # HTML 表示確認
         finally:
             _test_app.dependency_overrides.pop(get_actor_id, None)

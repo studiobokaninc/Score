@@ -27,3 +27,7 @@ class CalendarTask:
     type: str
     assignee_id: int
     status: str
+    # cmd_075 (2026-07-08): Calendar が task 応答に inline 同梱するようになった動的色/ラベル
+    status_color: str | None = None
+    status_label: str | None = None
+    status_category: str | None = None
