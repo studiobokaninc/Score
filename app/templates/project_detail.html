@@ -45,12 +45,13 @@
           {% endif %}
         </div>
         <div>
+          {% set _role_labels = {"director": "Director", "pm": "PM", "lead": "Lead"} %}
           <p class="text-xs text-slate-500 font-bold mb-1">参加メンバー({{ members|length }} 名)</p>
           {% if members %}
           <button onclick="openMembersModal()" class="text-left w-full hover:bg-white/40 rounded-xl p-1 transition-all cursor-pointer">
             <div class="flex flex-wrap gap-1.5">
               {% for m in members[:3] %}
-              <span class="inline-block bg-indigo-50 border border-indigo-100 rounded-full px-2 py-0.5 text-[11px] text-slate-700" translate="no">{{ m.name }}</span>
+              <span class="inline-block bg-indigo-50 border border-indigo-100 rounded-full px-2 py-0.5 text-[11px] text-slate-700" translate="no">{{ m.name }}{% if m.role %} <span class="text-indigo-500 font-bold">({{ _role_labels.get(m.role, m.role) }})</span>{% endif %}</span>
               {% endfor %}
               {% if members|length > 3 %}<span class="text-[10px] text-indigo-600 font-bold bg-indigo-100 rounded-full px-2 py-0.5">+ {{ members|length - 3 }} 名 →</span>{% endif %}
             </div>
@@ -161,10 +162,10 @@
                 <span class="font-bold text-slate-700" translate="no">{{ shot.shot_code }}</span>
                 <span class="text-xs text-slate-400">{{ shot.task_count }} tasks</span>
                 {% if shot.status %}
+                {# shot.status は Calendar 不変4値 (retake は shot に付かないため削除・cmd_075) #}
                 <span class="ml-auto text-[10px] font-bold rounded-full px-2 py-0.5
                   {% if shot.status == 'completed' %}bg-emerald-100 text-emerald-700
                   {% elif shot.status == 'in_progress' %}bg-blue-100 text-blue-700
-                  {% elif shot.status == 'retake' %}bg-rose-100 text-rose-700
                   {% else %}bg-slate-100 text-slate-500{% endif %}" translate="no">{{ shot.status }}</span>
                 {% endif %}
                 <a href="/shot/{{ shot.id }}" class="text-xs text-indigo-500 hover:text-indigo-700 ml-2" onclick="event.stopPropagation()">→</a>
@@ -182,19 +183,16 @@
                   {% endif %}
                   {# 担当者名: server-side attach 優先 → members list から引く → user_<id> #}
                   {% set _aid = tk.assigned_to %}
-                  {% set _name_match = (members or []) | selectattr('id', 'equalto', _aid) | list %}
+                  {% set _name_match = (members or []) | selectattr('user_id', 'equalto', _aid) | list %}
                   {% set _resolved_name = (tk.assigned_user_name or (_name_match[0].name if _name_match else '')) %}
                   {% if _resolved_name %}
                   <span class="text-[10px] text-slate-500 bg-white/60 rounded-full px-2 py-0.5 inline-flex items-center gap-0.5" translate="no" title="担当者">👤 {{ _resolved_name }}</span>
                   {% elif _aid %}
                   <span class="text-[10px] text-slate-400 bg-white/40 rounded-full px-2 py-0.5" translate="no" title="担当者 ID">👤 user_{{ _aid }}</span>
                   {% endif %}
-                  <span class="ml-auto text-[10px] font-bold rounded-full px-2 py-0.5
-                    {% if tk.status in ('completed','approved','done') %}bg-emerald-100 text-emerald-700
-                    {% elif tk.status == 'in_progress' %}bg-blue-100 text-blue-700
-                    {% elif tk.status == 'retake' %}bg-rose-100 text-rose-700
-                    {% elif tk.status == 'reviewing' %}bg-amber-100 text-amber-700
-                    {% else %}bg-slate-100 text-slate-500{% endif %}" translate="no">{{ tk.status or '-' }}</span>
+                  {# cmd_075: 色/ラベルは Calendar API 動的取得 (ハードコード禁止) #}
+                  <span class="ml-auto text-[10px] font-bold rounded-full px-2 py-0.5" translate="no"
+                    style="background-color: {{ tk.status_color or '#BDBDBD' }}22; color: {{ tk.status_color or '#BDBDBD' }};">{{ tk.status_label or tk.status or '-' }}</span>
                 </a>
                 {% endfor %}
                 {% else %}
@@ -224,7 +222,7 @@
         <h3 class="text-lg font-black text-slate-800">👥 参加メンバー全員 ({{ members|length }} 名)</h3>
         <button onclick="closeMembersModal()" class="text-slate-400 hover:text-slate-600 text-xl leading-none">×</button>
       </div>
-      <p class="text-xs text-slate-500 mb-3 shrink-0">プロジェクト「{{ project_name }}」の task に紐付く全担当者</p>
+      <p class="text-xs text-slate-500 mb-3 shrink-0">プロジェクト「{{ project_name }}」の登録メンバー・task 担当者・director/PM/lead</p>
       <div class="overflow-y-auto flex-1 -mx-2 px-2">
         <ul class="space-y-2">
           {% for m in members %}
@@ -233,18 +231,21 @@
             <div class="w-10 h-10 rounded-full bg-gradient-to-br from-indigo-400 to-purple-500 flex items-center justify-center text-white font-black shrink-0">{{ (m.name or '?')[0] }}</div>
             <!-- info -->
             <div class="flex-1 min-w-0">
-              <p class="font-bold text-slate-800 text-sm truncate" translate="no">{{ m.name }}</p>
-              <p class="text-[10px] text-slate-400">user_id: <span translate="no">{{ m.id }}</span></p>
+              <p class="font-bold text-slate-800 text-sm truncate" translate="no">
+                {{ m.name }}
+                {% if m.role %}<span class="text-[10px] text-indigo-600 font-bold bg-indigo-100 rounded-full px-2 py-0.5 align-middle" translate="no">{{ _role_labels.get(m.role, m.role) }}</span>{% endif %}
+              </p>
+              <p class="text-[10px] text-slate-400">user_id: <span translate="no">{{ m.user_id }}</span></p>
             </div>
             <!-- DM button -->
-            <a href="/messages?thread=dm_user_{{ m.id }}" class="bg-indigo-600 hover:bg-indigo-700 text-white text-xs font-bold rounded-xl px-3 py-2 shrink-0">💬 DM</a>
+            <a href="/messages?thread=dm_user_{{ m.user_id }}" class="bg-indigo-600 hover:bg-indigo-700 text-white text-xs font-bold rounded-xl px-3 py-2 shrink-0">💬 DM</a>
             <!-- profile link -->
-            <a href="/user/{{ m.id }}" class="bg-slate-200 hover:bg-slate-300 text-slate-700 text-xs font-bold rounded-xl px-3 py-2 shrink-0" title="プロフィール表示">👤</a>
+            <a href="/user/{{ m.user_id }}" class="bg-slate-200 hover:bg-slate-300 text-slate-700 text-xs font-bold rounded-xl px-3 py-2 shrink-0" title="プロフィール表示">👤</a>
           </li>
           {% endfor %}
         </ul>
       </div>
-      <p class="text-[10px] text-slate-400 mt-3 shrink-0">※ task assigned_to から抽出・名前は Calendar /api/users から解決</p>
+      <p class="text-[10px] text-slate-400 mt-3 shrink-0">※ team member 登録 + task assigned_to + director/PM/lead を統合・名前は Calendar /api/users から解決</p>
     </div>
   </div>
 

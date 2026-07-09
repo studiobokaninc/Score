@@ -2,8 +2,9 @@ import os
 from fastapi import APIRouter, Depends, Request
 from fastapi.templating import Jinja2Templates
 from app.deps import get_actor_id, get_actor_role
-from app.helpers.project_resolver import resolve_project_name
+from app.helpers.project_resolver import resolve_project_name, resolve_project_members
 from app.adapters.calendar_factory import get_calendar_client
+from app.helpers.task_status import attach_status_meta
 
 router = APIRouter()
 _templates = Jinja2Templates(directory="app/templates")
@@ -29,9 +30,7 @@ def get_project_detail(project_id: int, request: Request, actor_id: str = Depend
     except Exception:
         project_info = {}
 
-    # メンバー = この project の全 task の assigned_to user_id 一覧
     # 進捗 = completed task 数 / 全 task 数
-    members_ids = set()
     total_tasks = 0
     completed_tasks = 0
     try:
@@ -39,22 +38,11 @@ def get_project_detail(project_id: int, request: Request, actor_id: str = Depend
         my_tasks = client.get_my_tasks(actor_user_id=actor_id) if hasattr(client, "get_my_tasks") else []
         for t in (my_tasks or []):
             if isinstance(t, dict) and t.get("project_id") == project_id:
-                if t.get("assigned_to"):
-                    members_ids.add(t["assigned_to"])
                 total_tasks += 1
                 if t.get("status") in ("deliver",):
                     completed_tasks += 1
     except Exception:
         pass
-
-    # member 名解決(Calendar /api/users 経由)・cache
-    members = []
-    try:
-        resp_users = httpx_get_users(client)
-        uid_to_name = {u.get("id"): (u.get("name") or u.get("full_name") or u.get("username") or f"user_{u.get('id')}") for u in resp_users}
-        members = [{"id": uid, "name": uid_to_name.get(uid, f"user_{uid}")} for uid in sorted(members_ids)]
-    except Exception:
-        members = [{"id": uid, "name": f"user_{uid}"} for uid in sorted(members_ids)]
 
     # 進捗 % — 全 project task 一括取得して再計算 (上の my_tasks ベースより正確)
     try:
@@ -62,21 +50,11 @@ def get_project_detail(project_id: int, request: Request, actor_id: str = Depend
         if all_proj_tasks:
             total_tasks = len(all_proj_tasks)
             completed_tasks = sum(1 for t in all_proj_tasks if t.get("status") in ("deliver",))
-            # メンバー(全 task の assigned_to で再集計)
-            members_ids_all = {t.get("assigned_to") for t in all_proj_tasks if t.get("assigned_to")}
-            if members_ids_all:
-                try:
-                    resp_users = httpx_get_users(client)
-                    uid_to_name = {u.get("id"): (u.get("name") or u.get("full_name") or u.get("username") or f"user_{u.get('id')}") for u in resp_users}
-                    members = [{"id": uid, "name": uid_to_name.get(uid, f"user_{uid}")} for uid in sorted(members_ids_all)]
-                except Exception:
-                    members = [{"id": uid, "name": f"user_{uid}"} for uid in sorted(members_ids_all)]
     except Exception:
         all_proj_tasks = []
     progress_pct = int(completed_tasks / total_tasks * 100) if total_tasks > 0 else 0
 
-    # user_id → name 解決 map を構築 (task 担当者名表示用)
-    # 既に members_ids_all 計算時に uid_to_name を取っているが scope 外につき再取得
+    # user_id → name 解決 map を構築 (task 担当者名表示用 + member 一覧の名前解決)
     uid_to_name: dict = {}
     try:
         resp_users = httpx_get_users(client)
@@ -88,6 +66,15 @@ def get_project_detail(project_id: int, request: Request, actor_id: str = Depend
                                 or u.get("username") or f"user_{uid}")
     except Exception:
         uid_to_name = {}
+
+    # 参加メンバー一覧 = team member 登録 + task 担当者 + director/pm/lead (auto-membership)
+    # cmd_076④(殿要件確定): 旧実装は task の assigned_to のみを member としており、
+    # task を持たない director/PM/lead が一覧から漏れていた。resolve_project_members
+    # (cmd_076③ で auto-membership 実装済) に一本化し、重複なく統合する。
+    try:
+        members = resolve_project_members(int(project_id), actor_id, client=client, user_name_map=uid_to_name)
+    except Exception:
+        members = []
 
     # SEQ > SHOT > TASK 階層構築 (動的) — task 主軸構築
     # 判明:
@@ -143,6 +130,10 @@ def get_project_detail(project_id: int, request: Request, actor_id: str = Depend
                 "status": t.get("status"),
                 "assigned_to": _assignee,
                 "assigned_user_name": uid_to_name.get(_assignee, "") if _assignee else "",
+                # cmd_075: Calendar が inline 同梱する動的色/ラベル
+                "status_color": t.get("status_color"),
+                "status_label": t.get("status_label"),
+                "status_category": t.get("status_category"),
             })
 
         # dict → list 変換 + 順序 sort + task_count 付与
@@ -183,6 +174,7 @@ def get_project_detail(project_id: int, request: Request, actor_id: str = Depend
             )
             for tk in shot.get("tasks", []):
                 tk["palette"] = get_task_type_palette(tk.get("type"))
+            shot["tasks"] = attach_status_meta(shot.get("tasks", []), client)  # cmd_075
 
     return _templates.TemplateResponse(
         request=request, name="project_detail.html",
