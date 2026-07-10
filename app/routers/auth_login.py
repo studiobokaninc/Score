@@ -1,7 +1,7 @@
 import os
 from datetime import datetime, timezone
 import httpx
-from fastapi import APIRouter, Form, Request
+from fastapi import APIRouter, Form
 from fastapi.responses import RedirectResponse
 
 from app.adapters.calendar_factory import get_calendar_client
@@ -19,7 +19,6 @@ def _safe_next_path(next: str | None) -> str | None:
 
 @router.post("/api/auth/login")
 def post_login(
-    request: Request,
     username: str = Form(...),
     password: str = Form(default=""),
     next: str | None = Form(default=None),
@@ -53,12 +52,11 @@ def post_login(
     max_age = max(0, int((exp - datetime.now(timezone.utc)).total_seconds()))
 
     # 殿御下命動線: login → (前日退勤未提出なら /exit_report) → /routine → /dashboard
-    # 殿御命 2026-06-05: 当日 routine 既提出 (cookie) なら routine skip → dashboard 直行
-    from app.routers.pages_routine import _has_prev_day_exit_submitted
-    from datetime import timedelta as _td
-    _jst_today = (datetime.utcnow() + _td(hours=9)).date().isoformat()
-    _routine_done = request.cookies.get("score_routine_done", "")
-    routine_done_today = bool(_routine_done) and _routine_done[:10] == _jst_today
+    # cmd_087 (2026-07-10): 当日 routine 既提出をサーバ側DB(routine_logs)で判定。
+    # 旧cookie方式はPC/ブラウザ単位で分断され、別PC/別ブラウザで再ログインすると
+    # 当日提出済でも再表示される不具合があったため、サーバ側記録に統一した。
+    from app.routers.pages_routine import _has_prev_day_exit_submitted, _has_submitted_routine_today
+    routine_done_today = _has_submitted_routine_today(user_id)
     safe_next = _safe_next_path(next)
     if routine_done_today:
         # subtask_070e: 通知の QC ビューアリンク等、当日routine提出済なら元の遷移先へ復帰

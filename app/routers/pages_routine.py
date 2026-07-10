@@ -128,6 +128,38 @@ def _has_prev_day_exit_submitted(client, actor_id: str) -> bool:
     return False
 
 
+def _has_submitted_routine_today(user_id) -> bool:
+    """cmd_087 (2026-07-10): 朝ルーティン当日提出済みを、サーバ側 DB (routine_logs) で
+    ユーザー単位・業務日単位(5am JST 境界)に判定する。
+
+    旧仕様は cookie 'score_routine_done' のみで判定していたため PC/ブラウザ単位に分断され、
+    同日中でも別 PC/別ブラウザからログインすると routine が再表示される不具合があった。
+    routine_logs.created_at はサーバが提出時に自動付与する値のため、cookie と異なり
+    どの PC/ブラウザからログインしても一貫した判定になる。
+    """
+    from app.database import SessionLocal
+    from app.models import RoutineLog
+    from app.adapters.calendar_client import _to_calendar_uid
+    from app.auth import get_business_day_window_utc
+
+    try:
+        cuid = _to_calendar_uid(user_id)
+        uid_str = str(cuid) if cuid is not None else str(user_id)
+        start_utc, end_utc = get_business_day_window_utc()
+        db = SessionLocal()
+        try:
+            return db.query(RoutineLog).filter(
+                RoutineLog.user_id == uid_str,
+                RoutineLog.created_at >= start_utc,
+                RoutineLog.created_at < end_utc,
+            ).first() is not None
+        finally:
+            db.close()
+    except Exception:
+        # DB 不調時は fail-closed (routine 再表示) — ログイン自体をブロックしない
+        return False
+
+
 @router.get("/routine")
 def get_routine(request: Request, actor_id: str = Depends(get_actor_id)):
     role = get_actor_role(actor_id)

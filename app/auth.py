@@ -32,6 +32,18 @@ def get_next_5am_jst() -> datetime:
     return today_5am_jst + timedelta(days=1)
 
 
+def get_business_day_window_utc() -> tuple[datetime, datetime]:
+    """cmd_087: 現在の「業務日」ウィンドウ (5am JST 境界, score_token 失効/get_next_5am_jst と
+    同一基準) を naive UTC datetime の (start, end) で返す。SQLite の DateTime 列 (naive UTC
+    保存) との比較に使う。"""
+    end_jst = get_next_5am_jst()
+    start_jst = end_jst - timedelta(days=1)
+    return (
+        start_jst.astimezone(timezone.utc).replace(tzinfo=None),
+        end_jst.astimezone(timezone.utc).replace(tzinfo=None),
+    )
+
+
 def create_score_token(email: str) -> str:
     """Create a JWT for email with exp = next 05:00 JST."""
     exp = get_next_5am_jst()
