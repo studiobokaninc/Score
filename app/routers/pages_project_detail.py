@@ -115,8 +115,14 @@ def get_project_detail(project_id: int, request: Request, actor_id: str = Depend
                 seq_groups[seqid] = {"seq_code": seqid, "shots": {}}
             if scode not in seq_groups[seqid]["shots"]:
                 shot_info = shot_info_by_code.get(scode, {})
+                # cmd_088 修正: shotID 未設定の集約バケットは実 shot が無いため id=None のまま
+                # だと /shot/None リンクとなり遷移不能。get_shot_detail 側の id=0 (SHOT_000)
+                # フォールバックに合わせ、id=0 を割り当てる。
+                _shot_id = shot_info.get("id")
+                if _shot_id is None and scode == "📋 (SHOT 紐付けなし)":
+                    _shot_id = 0
                 seq_groups[seqid]["shots"][scode] = {
-                    "id": shot_info.get("id"),
+                    "id": _shot_id,
                     "shot_code": scode,
                     "status": shot_info.get("status", ""),
                     "tasks": [],

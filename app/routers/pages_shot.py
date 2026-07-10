@@ -25,27 +25,52 @@ def get_shot_detail(
     id: int,
     request: Request,
     actor_id: str = Depends(get_actor_id),
+    project_id: int | None = None,
 ):
     client = get_calendar_client()
     try:
         user = client.get_me(actor_user_id=actor_id)
     except Exception:
         user = None
-    try:
-        tasks = client.get_tasks(id, actor_user_id=actor_id)
-    except httpx.ConnectError:
-        tasks = []
 
     shot = client.get_shot(id, actor_user_id=actor_id)
+
+    # cmd_088 修正: shot が実在しない場合(代表例 id=0・パンくずの "SHOT_000")は
+    # client.get_tasks(id) が /api/shots/{id}/tasks 404→[] となり、project 側の
+    # shotID 未設定task(project_detail の「📋 (SHOT 紐付けなし)」集約分)が一切
+    # 辿れなかった。project_id が判れば project 全task から shotID 未設定分を
+    # 抽出し、project_detail.py と同じ集約対象を表示する。
+    if shot is None and project_id:
+        try:
+            all_proj_tasks = client.get_tasks_by_project(project_id, actor_user_id=actor_id) or []
+        except Exception:
+            all_proj_tasks = []
+        tasks = [
+            type("_TT", (), {
+                "task_id": t.get("id"),
+                "shot_id": t.get("shot_id") or 0,
+                "type": t.get("type", ""),
+                "status": t.get("status", ""),
+                "assignee_id": t.get("assigned_to") or 0,
+                "name": t.get("name", ""),
+                "status_color": t.get("status_color"),
+                "status_label": t.get("status_label"),
+                "status_category": t.get("status_category"),
+            })()
+            for t in all_proj_tasks if not t.get("shotID")
+        ]
+    else:
+        try:
+            tasks = client.get_tasks(id, actor_user_id=actor_id)
+        except httpx.ConnectError:
+            tasks = []
+
     try:
         shot_detail_raw = client.get_shot_detail(id, actor_user_id=actor_id) if hasattr(client, "get_shot_detail") else {}
     except Exception:
         shot_detail_raw = {}
-    project_name = (
-        resolve_project_name(shot.project_id, actor_id)
-        if shot else "-"
-    )
-    project_id = shot.project_id if shot else None
+    project_id = shot.project_id if shot else project_id
+    project_name = resolve_project_name(project_id, actor_id) if project_id else "-"
     seq_code = getattr(shot, "seq_code", None) if shot else None
     task_name = (
         getattr(shot, "shot_code", None) or getattr(shot, "name", None) or f"SHOT_{id:03d}"

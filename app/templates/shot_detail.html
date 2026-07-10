@@ -31,7 +31,7 @@
       <a href="/project_detail/{{ project_id or 33 }}" class="hover:text-indigo-600 transition-colors"><span translate="no">{{ seq_code or 'SEQ01' }}</span></a>
       <span class="text-slate-300">›</span>
       {% if isolated_task %}
-      <a href="/shot/{{ shot_id }}" class="hover:text-indigo-600 transition-colors" translate="no">{{ shot.shot_code if shot and shot.shot_code else 'SHOT_' + ('%03d' % shot_id) }}</a>
+      <a href="/shot/{{ shot_id }}{{ '?project_id=' ~ project_id if project_id else '' }}" class="hover:text-indigo-600 transition-colors" translate="no">{{ shot.shot_code if shot and shot.shot_code else 'SHOT_' + ('%03d' % shot_id) }}</a>
       <span class="text-slate-300">›</span>
       <span class="font-semibold text-indigo-600 bg-indigo-50 px-2 py-0.5 rounded-lg" translate="no">{{ task_name }}</span>
       {% else %}

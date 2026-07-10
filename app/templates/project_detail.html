@@ -168,7 +168,7 @@
                   {% elif shot.status == 'in_progress' %}bg-blue-100 text-blue-700
                   {% else %}bg-slate-100 text-slate-500{% endif %}" translate="no">{{ shot.status }}</span>
                 {% endif %}
-                <a href="/shot/{{ shot.id }}" class="text-xs text-indigo-500 hover:text-indigo-700 ml-2" onclick="event.stopPropagation()">→</a>
+                <a href="/shot/{{ shot.id }}?project_id={{ project_id }}" class="text-xs text-indigo-500 hover:text-indigo-700 ml-2" onclick="event.stopPropagation()">→</a>
               </button>
               <div id="shot-tasks-{{ loop.index0 }}-{{ shot.shot_code | replace(' ', '_') }}" class="hidden ml-6 mr-2 mb-2 space-y-1">
                 {% if shot.tasks %}

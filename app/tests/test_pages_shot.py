@@ -138,6 +138,42 @@ def test_shot_detail_project_name_none_shot(client, monkeypatch):
     assert "Project Alpha" not in resp.text
 
 
+def test_shot_detail_unlinked_bucket_lists_shotless_tasks(client, monkeypatch):
+    """cmd_088 回帰防止: shot が実在しない(SHOT_000・id=0)場合でも project_id クエリが
+    あれば、project 側の shotID 未設定task (project_detail の集約対象と同じ) を一覧表示
+    できること。従来は client.get_tasks(0) が 404→[] となり一切表示されなかった。"""
+    from app.adapters import calendar_client as cc
+    monkeypatch.setattr(cc.CalendarClient, "get_shot", lambda self, *a, **kw: None)
+    monkeypatch.setattr(
+        cc.CalendarClient, "get_tasks_by_project",
+        lambda self, *a, **kw: [
+            {"id": 3282, "name": "Score修正3日分", "shotID": None, "seqID": "SEQ_PM",
+             "status": "wip", "assigned_to": None},
+            {"id": 9999, "name": "Linked task", "shotID": "SC001", "seqID": "SEQ01",
+             "status": "wip", "assigned_to": None},
+        ],
+    )
+    monkeypatch.setattr("app.routers.pages_shot.resolve_project_name", lambda pid, uid, **kw: "Score検証")
+    resp = client.get("/shot/0?project_id=80", headers={"Authorization": f"Bearer {_make_token()}"})
+    assert resp.status_code == 200
+    assert "Score修正3日分" in resp.text
+    assert "Linked task" not in resp.text
+
+
+def test_shot_detail_no_project_id_falls_back_to_get_tasks(client, monkeypatch):
+    """project_id クエリが無い既存導線は従来どおり client.get_tasks(id) を使うこと(後方互換)。"""
+    from app.adapters import calendar_client as cc
+    monkeypatch.setattr(cc.CalendarClient, "get_shot", lambda self, *a, **kw: None)
+    calls = []
+    monkeypatch.setattr(
+        cc.CalendarClient, "get_tasks",
+        lambda self, shot_id, *a, **kw: calls.append(shot_id) or [],
+    )
+    resp = client.get("/shot/0", headers={"Authorization": f"Bearer {_make_token()}"})
+    assert resp.status_code == 200
+    assert calls == [0]
+
+
 def test_shot_detail_project_name_connect_error(client, monkeypatch):
     """resolve_project_name が '-' を返す場合 fallback が出ること"""
     from app.adapters import calendar_client as cc
