@@ -698,6 +698,34 @@ async def post_asset_upload(
                 proj_name = p.get("name") or ""
             except Exception:
                 pass
+    elif task_id:
+        # cmd_084: shot 未設定のプロジェクト管理タスク (PM 系 task。shotID/shot_id 無し・
+        # 例 task 3282) は上の `if shot_id:` 一式が丸ごとスキップされ pid が None のまま
+        # 残る。この後の director_uid 判定が project 実際の設定に関わらず「Director 未設定」
+        # 誤判定となり、is_qc_review (デフォルト qc) 提出時に asset 本体の Calendar 登録
+        # (client.post_asset、この時点で既に成功済) 後に誤って 400 を返していた
+        # (task/3282 アップロードで実機再現)。task_id から project_id を直接解決する。
+        try:
+            task_info = client.get_task(int(task_id), actor_user_id=actor_id) or {}
+            pid = task_info.get("project_id")
+            seq_code = task_info.get("seqID") or ""
+            task_type = task_info.get("type") or ""
+        except Exception:
+            pass
+        if pid is not None and not proj_name:
+            try:
+                for p in (client.get_my_projects(actor_user_id=actor_id) or []):
+                    if isinstance(p, dict) and p.get("id") == pid:
+                        proj_name = p.get("name") or ""
+                        break
+            except Exception:
+                pass
+        if pid is not None and not proj_name and hasattr(client, "get_project"):
+            try:
+                p = client.get_project(int(pid), actor_user_id=actor_id) or {}
+                proj_name = p.get("name") or ""
+            except Exception:
+                pass
 
     # mention 列 → uid 解決
     def _resolve_uids(raw_csv: str | None) -> set[int]:

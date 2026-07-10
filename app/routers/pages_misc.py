@@ -355,6 +355,36 @@ def get_profile(request: Request, actor_id: str = Depends(get_actor_id)):
     )
 
 
+@router.get("/user/{user_id}")
+def get_user_profile_page(user_id: int, request: Request, actor_id: str = Depends(get_actor_id)):
+    """殿御命 cmd_084: project_detail の参加メンバー一覧 👤 アイコンから遷移する他ユーザー
+    基本プロフィール表示 (名前・ロール・連絡先等・read-only)。ルート不在で 404 だった不具合の修正。
+    /profile (自分専用・編集可) とは別物。"""
+    user = _safe_user(actor_id)
+    client = get_calendar_client()
+    try:
+        target_profile = client.get_user_profile(user_id, actor_user_id=actor_id) or {}
+    except Exception:
+        target_profile = {}
+    display_name = ""
+    if target_profile:
+        _email_local = (target_profile.get("email") or "").split("@")[0]
+        display_name = (
+            target_profile.get("name") or target_profile.get("full_name")
+            or target_profile.get("username") or _email_local or f"user_{user_id}"
+        )
+    return _templates.TemplateResponse(
+        request=request, name="user_profile.html",
+        context={
+            "user": user, "active": "profile",
+            "target_user_id": user_id,
+            "profile": target_profile,
+            "display_name": display_name,
+            "demo_mode": os.getenv("CALENDAR_MOCK", "0") == "1",
+        },
+    )
+
+
 @router.patch("/api/bff/profile")
 async def patch_profile_bff(request: Request, actor_id: str = Depends(get_actor_id)):
     """BFF: /api/me/profile への passthrough — Score Front から JSON で submit"""
