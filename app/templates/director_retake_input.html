@@ -621,7 +621,7 @@
         const d = _collectRetakeData();
         // body 構築
         const fd = new FormData();
-        fd.append('shot_id', {{ shot_id or 1 }});
+        fd.append('shot_id', {{ shot_id or 0 }});
         {% if task_id %}fd.append('task_id', {{ task_id }});{% endif %}
         {% if latest_asset %}fd.append('asset_id', {{ latest_asset.id|default(0) }});{% endif %}
         fd.append('markers', JSON.stringify(d.markers));
@@ -666,7 +666,7 @@
       <p class="text-sm text-slate-500 mb-1">通知先: <span class="font-bold text-slate-700"><span translate="no">{{ assignee_name or '担当者' }}</span> / 自動: <span translate="no">PM ・ Director</span></span></p>
       <p class="text-sm text-slate-500 mb-1">優先度: <span id="modal-priority" class="font-bold text-rose-600">🔴 高</span></p>
       <p class="text-sm text-slate-500 mb-6">期日: <span id="modal-due" class="font-bold text-slate-700">-</span></p>
-      <a href="/qc/{{ shot_id or 1 }}{% if task_id %}?task_id={{ task_id }}{% endif %}"
+      <a href="/qc/{{ shot_id or 0 }}{% if task_id %}?task_id={{ task_id }}{% endif %}"
          class="inline-block bg-purple-600 text-white font-black rounded-2xl px-6 py-3 text-sm transition-all hover:bg-purple-700">
         ✅ QC ビューアに戻る
       </a>

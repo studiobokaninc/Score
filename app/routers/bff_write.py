@@ -157,7 +157,7 @@ async def post_retakes(request: Request, actor_id: str = Depends(get_actor_id)):
     sender_cuid_int = int(sender_cuid) if sender_cuid is not None else None
     proj_name = seq_code = shot_code = task_type = ""
     pid = None
-    if shot_id:
+    if shot_id is not None:
         try:
             si = client.get_shot_detail(int(shot_id), actor_user_id=actor_id) or {}
             shot_code = si.get("shotID") or si.get("name") or ""
@@ -1128,9 +1128,9 @@ async def post_qc_notify_existing(request: Request, actor_id: str = Depends(get_
                     break
         except Exception:
             pass
-    shot_id = shot_id_from_asset or shot_id
+    shot_id = shot_id_from_asset if shot_id_from_asset is not None else shot_id
     task_id = task_id_from_asset or task_id
-    if not shot_id:
+    if shot_id is None:
         raise HTTPException(status_code=400, detail="asset から shot_id 解決不可")
 
     # cmd_075 (2026-07-08): task status を 'qc' に patch (wip 等 → qc)
@@ -1172,6 +1172,22 @@ async def post_qc_notify_existing(request: Request, actor_id: str = Depends(get_
             pass
     if not shot_code:
         shot_code = f"SHOT_{shot_id:03d}"
+    # cmd_091c: shot_id=0 (SHOT_000・shot 紐付なし task) は上記 shot 系 lookup が常に
+    # 空を返す (実在しない shot のため)。task_id から project_id を直接解決する
+    # (post_asset_upload の cmd_084 elif task_id: 分岐と同一パターン。これが無いと
+    # director_uid が永久に引けず、mention 未指定時に誤った「Director 未設定」400 と
+    # なる — shot_id=0 の 400 是正だけでは不十分だったため対で修正)。
+    if pid is None and task_id and hasattr(client, "get_task"):
+        try:
+            task_info = client.get_task(int(task_id), actor_user_id=actor_id) or {}
+            if pid is None:
+                pid = task_info.get("project_id")
+            if not seq_code:
+                seq_code = task_info.get("seqID") or ""
+            if not task_type:
+                task_type = task_info.get("type") or ""
+        except Exception:
+            pass
     # task_type fallback: get_tasks(shot_id)
     if not task_type and task_id:
         try:
@@ -1330,12 +1346,13 @@ async def post_qc_approve_bff(request: Request, actor_id: str = Depends(get_acto
     shot_id = body.get("shot_id")
     task_id = body.get("task_id")
     comment = (body.get("comment") or "").strip()
-    if not shot_id:
+    if shot_id is None:
         raise HTTPException(status_code=400, detail="shot_id 必須")
 
     client = get_calendar_client()
     # cmd_075 (2026-07-08): task_id 不在時 shot 内 判定待ち (qc/v1qc/dir_wt) な task を auto-resolve
-    if not task_id and shot_id:
+    # cmd_091c: shot_id=0 (SHOT_000 sentinel) は「値あり」— not shot_id だと falsy-zero で誤判定
+    if not task_id and shot_id is not None:
         try:
             tasks = client.get_tasks(int(shot_id), actor_user_id=actor_id) or []
             for t in tasks:

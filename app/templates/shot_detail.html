@@ -507,7 +507,7 @@
         ev.preventDefault();
         const fd = new FormData(ev.target);
         const body = {
-          shot_id: {{ shot_id or 1 }},
+          shot_id: {{ shot_id or 0 }},
           {% if task_id %}task_id: {{ task_id }},{% endif %}
           dist_type: fd.get('dist_type'),
           version: fd.get('version'),
@@ -586,7 +586,7 @@
         // /api/bff/messages 経由でレビュー依頼を送信 (type:review_request の metadata 付与)
         const body = {
           type: 'review_request',
-          shot_id: {{ shot_id or 1 }},
+          shot_id: {{ shot_id or 0 }},
           {% if task_id %}task_id: {{ task_id }},{% endif %}
           recipient: reviewer,
           focus: focus,

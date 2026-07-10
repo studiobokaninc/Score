@@ -30,7 +30,7 @@ def get_director_retake_input(
     if role not in ("director", "pm", "admin") and not _delegated:
         # 殿御命 2026-06-09: 権限なき者 (push/link 経由含む) は生 JSON 403 でなく QC ビューアへ誘導
         from fastapi.responses import RedirectResponse as _RR
-        if shot_id:
+        if shot_id is not None:
             _q = f"?task_id={task_id}" if task_id else ""
             return _RR(url=f"/qc/{shot_id}{_q}", status_code=303)
         return _RR(url="/dashboard", status_code=303)
@@ -55,7 +55,7 @@ def get_director_retake_input(
     asset_list = []
     assignee_name = ""   # 殿御命 2026-06-09: 通知先 = 実 assignee
     assignee_uid = None
-    if shot_id:
+    if shot_id is not None:
         # shot DTO
         try:
             s_dto = client.get_shot(int(shot_id), actor_user_id=actor_id)
@@ -122,7 +122,7 @@ def get_director_retake_input(
             "demo_mode": os.getenv("CALENDAR_MOCK", "0") == "1",
             "user": user,
             "shots": shots,
-            "shot_id": shot_id or 1,
+            "shot_id": shot_id or 0,
             "task_id": task_id,
             "shot_code": shot_code,
             "seq_code": seq_code,
