@@ -1334,10 +1334,13 @@ async def post_qc_approve_bff(request: Request, actor_id: str = Depends(get_acto
                     if task_id: break
         except Exception:
             pass
-    # task status を deliver に切替 (PATCH /api/tasks/{id}) — 唯一の完了扱い
+    # cmd_089 (2026-07-10・殿御命): Ap(承認)と Deliver(納品)は別ステータス。
+    # cmd_075 の 19値体系導入時に本ハンドラが取り残され deliver 直行のままだった
+    # (ap は internal_check・deliver は completed の唯一値 — task_status.py 参照)。
+    # Deliver への遷移は本ハンドラの責務外 (別トリガーで行う設計)。
     if task_id and hasattr(client, "patch_task"):
         try:
-            client.patch_task(int(task_id), {"status": "deliver"}, actor_user_id=actor_id)
+            client.patch_task(int(task_id), {"status": "ap"}, actor_user_id=actor_id)
         except Exception:
             pass
 

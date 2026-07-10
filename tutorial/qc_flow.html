@@ -193,13 +193,13 @@
         <div class="bg-emerald-100 rounded-lg p-3 mb-3 text-xs text-gray-700">
           <p class="font-bold mb-1">🔧 システム動作:</p>
           <ul class="space-y-1 list-disc list-inside">
-            <li>task.status → <code>deliver</code> patch</li>
+            <li>task.status → <code>ap</code> patch (承認済・納品 <code>deliver</code> はこの時点では別扱い)</li>
             <li>SHOT thread に「✅ Approved」 通知</li>
             <li>Push + SSE で全 participants 配信</li>
-            <li>佐藤 User Dashboard でも完了表示</li>
+            <li>佐藤 User Dashboard でも承認済表示</li>
           </ul>
         </div>
-        <p class="text-xs text-emerald-700 font-bold">🎉 sq01 c05 Compositing 完了 → 次 SHOT へ</p>
+        <p class="text-xs text-emerald-700 font-bold">🎉 sq01 c05 Compositing 承認 → 納品(Deliver)は別トリガーで実施</p>
       </section>
 
       <!-- Step 5B: Retake 発令 -->
@@ -268,8 +268,8 @@
         </p>
         <p class="text-sm text-gray-700 leading-relaxed">
           Score は各 step で <strong>SHOT thread・Push・SSE・画面 badge</strong> の三重通知で
-          連絡漏れを防ぎ、 <strong>task.status</strong> (mk → wip → qc → deliver) で
-          公式 ステータスを track します (Retake 発生時は qc_fb を経由)。 PM 田中は全 SHOT thread に自動参加し、
+          連絡漏れを防ぎ、 <strong>task.status</strong> (mk → wip → qc → ap → deliver) で
+          公式 ステータスを track します (Retake 発生時は qc_fb を経由。deliver = 納品は Approve とは別トリガー)。 PM 田中は全 SHOT thread に自動参加し、
           進捗を ダッシュボードで横断把握します。
         </p>
       </div>
