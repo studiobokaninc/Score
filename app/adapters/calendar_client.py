@@ -7,29 +7,21 @@ import httpx
 from .dto import CalendarShot, CalendarTask, CalendarUser
 
 
-# Score mock user_id → Calendar 実 user_id mapping
-# nibu 殿御回答 2026-05-26 §2.3 経由判明
-# Score 内では引き続き mock uid (10/99/1/20/30/40) を使用
-# Calendar API 側に渡す時は Calendar 実 uid (53/28/52/54/55/56) に変換
-_SCORE_TO_CALENDAR_UID = {
-    99: 28,  # ryoji@studiobokan.com (既存)
-    1: 52,   # tanaka@studiobokan.com (PM)
-    10: 53,  # yamada@studiobokan.com (Director)
-    20: 54,  # kato@studiobokan.com (Lighting Lead)
-    30: 55,  # sato@studiobokan.com (Compositor)
-    40: 56,  # suzuki@studiobokan.com (Compositor)
-}
-
-
 def _to_calendar_uid(score_uid: str | int | None) -> int | None:
-    """Score 内 uid → Calendar 実 uid 変換 (Phase 1+ 実機接続用)"""
+    """actor uid を int 化する。
+    cmd_085 (2026-07-10) 根治: 旧 Phase 1 時代は Score 独自 mock uid (1/10/20/30/40/99)
+    → Calendar 実 uid の静的変換表が必要だったが、get_actor_id() (app/deps.py) が
+    resolve_email_to_user_id() 経由で Calendar 実 uid を直接返すようになった現在、
+    この関数の全呼び出し元は常に「既に本物の Calendar uid」を渡す。旧変換表を残すと
+    現行の実 uid が偶然その表のキー (例: tanaka=1, tetsuo=30, terajima=40) と衝突した際、
+    本人が実在しない uid (52/55/56 等) に誤変換され DM/通知/auto-membership が
+    本人に届かなくなる (実機確証: tanaka/tetsuo/terajima で再現)。"""
     if score_uid is None:
         return None
     try:
-        sid = int(score_uid)
+        return int(score_uid)
     except (ValueError, TypeError):
         return None
-    return _SCORE_TO_CALENDAR_UID.get(sid, sid)  # 未 mapping は元 uid
 
 
 class CalendarClient:
