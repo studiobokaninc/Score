@@ -163,6 +163,11 @@ def read_dashboard(
                     continue
                 lines = lm.split("\n")
                 title = lines[1] if len(lines) > 1 else ""
+                # cmd_090: QC/Review 依頼投稿時、本文に qc_viewer リンク(/qc/{shot_id}?task_id=..&asset_id=..)
+                # が埋め込み済 (bff_write.py post_qc_notify_existing 等)。そこから直接抽出し、
+                # QC ビューアへ遷移させる (従来は抽出せず SHOT thread へ誤遷移していた)。
+                import re as _re_qc
+                _qc_url_match = _re_qc.search(r'/qc/\d+\S*', lm)
                 thread_qc_requests.append({
                     "thread_id": _thr.get("thread_id"),
                     "kind": "qc" if first_line.startswith("🔍") else "review",
@@ -170,6 +175,7 @@ def read_dashboard(
                     "snippet": (lines[3] if len(lines) > 3 else "")[:80],
                     "updated_at": _thr.get("updated_at"),
                     "participants_count": len(_thr.get("participants") or []),
+                    "qc_url": _qc_url_match.group(0) if _qc_url_match else None,
                 })
         thread_qc_requests.sort(key=lambda x: x.get("updated_at",""), reverse=True)
     except Exception:
@@ -197,6 +203,7 @@ def read_dashboard(
             "due_date": "",
             "is_qc_inbox": True,
             "kind": _r.get("kind"),
+            "qc_url": _r.get("qc_url"),
         })
 
     my_tasks = attach_status_meta(my_tasks, client)  # cmd_075: status_color/status_label 動的付与

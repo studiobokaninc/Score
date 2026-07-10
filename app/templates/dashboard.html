@@ -149,7 +149,8 @@
         </h2>
         <div class="space-y-2">
           {% for r in thread_qc_requests %}
-          <a href="/messages?thread={{ r.thread_id }}" class="block bg-purple-50 hover:bg-purple-100 border border-purple-200 rounded-2xl p-3 transition-all">
+          {# cmd_090: QC ビューアへ直接遷移 (SHOT thread への誤遷移を是正・qc_flow.html 正本準拠) #}
+          <a href="{{ r.qc_url if r.qc_url else '/messages?thread=' + r.thread_id|string }}" class="block bg-purple-50 hover:bg-purple-100 border border-purple-200 rounded-2xl p-3 transition-all">
             <div class="flex items-center justify-between gap-3">
               <div class="flex-1 min-w-0">
                 <p class="text-sm font-bold text-purple-900 truncate">
@@ -197,8 +198,8 @@
             {% for t in my_tasks[:5] %}
             {% set _icon = '🎨' if t.task_type == 'Composite' else ('💡' if t.task_type in ('Lighting','Look') else ('🖼️' if t.task_type == 'MattePaint' else ('✨' if t.task_type == 'FX' else ('🔍' if t.is_qc_inbox else '🎬')))) %}
             <li>
-              {# 殿御命 2026-06-05: is_qc_inbox なら messages 遷移 / 通常 task は task page #}
-              <a href="{% if t.is_qc_inbox %}/messages?thread={{ t.thread_id }}{% else %}/task/{{ t.task_id }}{% endif %}" class="flex items-center gap-3 p-3 rounded-2xl hover:bg-white/60 transition-all">
+              {# cmd_090: is_qc_inbox なら QC ビューアへ直接遷移 (qc_url 埋込済) / 通常 task は task page #}
+              <a href="{% if t.is_qc_inbox %}{{ t.qc_url if t.qc_url else '/messages?thread=' + t.thread_id|string }}{% else %}/task/{{ t.task_id }}{% endif %}" class="flex items-center gap-3 p-3 rounded-2xl hover:bg-white/60 transition-all">
                 <span class="text-xl font-black text-indigo-500 w-6 text-center">{{ loop.index }}</span>
                 <span class="text-xl">{{ _icon }}</span>
                 <div class="flex-1 min-w-0">

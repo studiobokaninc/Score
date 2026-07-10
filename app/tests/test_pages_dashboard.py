@@ -162,3 +162,37 @@ class TestPagesDashboard:
             assert "次の予定" in resp.text
         finally:
             _test_app.dependency_overrides.pop(get_actor_id, None)
+
+    def test_thread_qc_request_links_to_qc_viewer_not_thread(self, client):
+        """cmd_090: 受信 QC/Review 依頼は本文埋込済の qc_link (/qc/{shot_id}?task_id=..&asset_id=..)
+        へ遷移すべきで、SHOT thread (/messages?thread=..) へ誤遷移してはならない。"""
+        mock_user = CalendarUser(user_id=5, email="sato@studio.jp", role="Compositor", name="Sato")
+        _test_app.dependency_overrides[get_actor_id] = lambda: "5"
+        try:
+            with patch("app.routers.pages_dashboard.get_calendar_client") as MockClient:
+                mock_inst = MagicMock()
+                mock_inst.get_me.return_value = mock_user
+                mock_inst.get_my_dm_threads.return_value = [
+                    {
+                        "thread_id": 77,
+                        "updated_at": "2026-07-10T10:00:00",
+                        "participants": [5, 6, 7],
+                        "last_message": (
+                            "🔍 QC 依頼\n"
+                            "桜咲く街 / sq01 / SHOT_005 / Compositing\n"
+                            "\n"
+                            "既存 v04 (comp_v04.mov) の御確認を御願い致します。\n"
+                            "\n"
+                            "/qc/5?task_id=42&asset_id=99\n"
+                            "\n"
+                            "— Sato"
+                        ),
+                    },
+                ]
+                MockClient.return_value = mock_inst
+                resp = client.get("/dashboard")
+            assert resp.status_code == 200
+            assert '/qc/5?task_id=42&asset_id=99' in resp.text
+            assert '/messages?thread=77' not in resp.text
+        finally:
+            _test_app.dependency_overrides.pop(get_actor_id, None)
