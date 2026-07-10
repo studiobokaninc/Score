@@ -1103,6 +1103,7 @@
     try {
       const payload = {
         shot_id: {{ shot_id|default(none)|tojson }},
+        task_id: {{ task_id|default(none)|tojson }},
         title: type,
         body: body,
         mentions: mentions,

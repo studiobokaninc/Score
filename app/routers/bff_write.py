@@ -181,11 +181,28 @@ async def post_retakes(request: Request, actor_id: str = Depends(get_actor_id)):
                         task_type = (tk.get("type") if isinstance(tk, dict) else getattr(tk, "type", "")) or ""
                         break
             except Exception: pass
-        if pid is not None and not proj_name and hasattr(client, "get_project"):
-            try:
-                p = client.get_project(int(pid), actor_user_id=actor_id) or {}
-                proj_name = p.get("name") or ""
-            except Exception: pass
+    # cmd_092b: shot_id=0 (SHOT_000・shot 紐付なし task) は上記 shot 系 lookup が常に
+    # 空を返す (実在しない shot のため)。post_qc_notify_existing (cmd_091c) と同一設計で
+    # task_id から project_id を直接解決する fallback を挟む。これが無いと pid=None の
+    # まま→通知先(parts)がハードコード FALLBACK_PM(uid52) に誤フォールバックし、実
+    # PM/Director/Lead に Retake 発令通知が届かない静かな誤送信となる (400 にも
+    # クラッシュにもならず検出困難・subtask_092a 発見)。
+    if pid is None and task_id and hasattr(client, "get_task"):
+        try:
+            task_info = client.get_task(int(task_id), actor_user_id=actor_id) or {}
+            if pid is None:
+                pid = task_info.get("project_id")
+            if not seq_code:
+                seq_code = task_info.get("seqID") or ""
+            if not task_type:
+                task_type = task_info.get("type") or ""
+        except Exception:
+            pass
+    if pid is not None and not proj_name and hasattr(client, "get_project"):
+        try:
+            p = client.get_project(int(pid), actor_user_id=actor_id) or {}
+            proj_name = p.get("name") or ""
+        except Exception: pass
 
     # cmd_075 (2026-07-08): TaskStatus 新19値対応 — retake 発令 → 'qc_fb' (社内フィードバック) に PATCH
     if task_id and hasattr(client, "patch_task"):
@@ -411,16 +428,33 @@ def post_troubles(
     """殿御命 2026-06-05 (C 案準拠): Lead 不在 + mention 無 → 拒否"""
     client = get_calendar_client()
     shot_id = body.get("shot_id")
+    task_id = body.get("task_id")
     mentions = body.get("mentions") or []
     # Lead 解決 (shot → project → roles)
     lead_uid = None
-    if shot_id and hasattr(client, "get_shot_detail"):
+    project_id = None
+    if shot_id is not None and hasattr(client, "get_shot_detail"):
         try:
             shot_info = client.get_shot_detail(int(shot_id), actor_user_id=actor_id) or {}
             project_id = shot_info.get("project_id")
-            if project_id is not None and hasattr(client, "get_project_roles"):
-                roles = client.get_project_roles(int(project_id), actor_user_id=actor_id) or {}
-                lead_uid = roles.get("lead") or roles.get("lighting_lead")
+        except Exception:
+            pass
+    # cmd_092b: shot_id=0 (SHOT_000・shot 紐付なし task) は旧 `if shot_id` が 0 を
+    # falsy 誤判定して lookup 自体をスキップしていた (SHOT-ZERO 系と同型バグ)。
+    # `is not None` 化しても実在しない shot のため project_id は解決できないので、
+    # post_qc_notify_existing/post_retakes (cmd_091c/092b) と同一設計で task_id
+    # から project_id を直接解決する fallback を追加する。無いと shotless task の
+    # トラブル報告が (mention 未指定時は) 常に「Lead 未設定」400 に落ちる。
+    if project_id is None and task_id and hasattr(client, "get_task"):
+        try:
+            task_info = client.get_task(int(task_id), actor_user_id=actor_id) or {}
+            project_id = task_info.get("project_id")
+        except Exception:
+            pass
+    if project_id is not None and hasattr(client, "get_project_roles"):
+        try:
+            roles = client.get_project_roles(int(project_id), actor_user_id=actor_id) or {}
+            lead_uid = roles.get("lead") or roles.get("lighting_lead")
         except Exception:
             pass
     if lead_uid is None and not mentions:
