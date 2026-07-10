@@ -44,6 +44,8 @@ def _resolve_task(client, shot_id: int, task_id: int | None, actor_id: str):
                     "status_color": raw.get("status_color"),
                     "status_label": raw.get("status_label"),
                     "status_category": raw.get("status_category"),
+                    # cmd_091: SHOT_000 (shot 紐付なし task) fallback で project 特定に使用
+                    "project_id": raw.get("project_id"),
                 })()
         except Exception:
             pass
@@ -66,6 +68,7 @@ def get_qc_viewer(
     task_id: int | None = None,
     asset_id: int | None = None,
     as_role: str | None = None,  # 殿御命 2026-06-05 (B 案): admin 限定 role preview
+    project_id: int | None = None,  # cmd_091: SHOT_000 (shot 紐付なし task) fallback 用 (cmd_088 の /shot/{id} と同一パターン)
 ):
     client = get_calendar_client()
     try:
@@ -76,13 +79,45 @@ def get_qc_viewer(
         tasks = client.get_tasks(id, actor_user_id=actor_id)
     except httpx.ConnectError:
         tasks = []
-    tasks = attach_status_meta(tasks, client)  # cmd_075: status_color/status_label 動的付与
     shot = client.get_shot(id, actor_user_id=actor_id)
-    project_name = resolve_project_name(shot.project_id, actor_id) if shot else "-"
-    project_id = shot.project_id if shot else None
+    selected_task = _resolve_task(client, id, task_id, actor_id)
+
+    # cmd_091 (cmd_088 と同根の不具合): shot 不在 (代表例 id=0・パンくず "SHOT_000" =
+    # project 配下だが shotID 未設定の task 集約) の場合、client.get_tasks(id) は
+    # /api/shots/{id}/tasks が 404→[] となり、実際に project 配下に存在する task が
+    # 「このSHOTにはTaskが0件」と誤表示され、QC判定ボタンも活性化しない不具合があった
+    # (実機再現: project 80 "Score 検証" task_id=3255 status=qc)。
+    # selected_task (get_task 直接解決・shot 非依存で既に解決成功している) の project_id か
+    # クエリの project_id で project を特定し、get_tasks_by_project から shot 紐付なし分を
+    # 抽出する (pages_shot.py の /shot/{id} cmd_088 修正と同一パターンで根治)。
+    if shot is None:
+        project_id = project_id or (getattr(selected_task, "project_id", None) if selected_task else None)
+        if not tasks and project_id:
+            try:
+                all_proj_tasks = client.get_tasks_by_project(int(project_id), actor_user_id=actor_id) or []
+            except Exception:
+                all_proj_tasks = []
+            tasks = [
+                type("_TT", (), {
+                    "task_id": t.get("id"),
+                    "shot_id": t.get("shot_id") or 0,
+                    "type": t.get("type") or "task",
+                    "status": t.get("status", ""),
+                    "assignee_id": t.get("assigned_to") or 0,
+                    "thread_id": t.get("thread_id"),
+                    "status_color": t.get("status_color"),
+                    "status_label": t.get("status_label"),
+                    "status_category": t.get("status_category"),
+                })()
+                for t in all_proj_tasks if not t.get("shotID") and not t.get("shot_id")
+            ]
+    else:
+        project_id = shot.project_id
+
+    tasks = attach_status_meta(tasks, client)  # cmd_075: status_color/status_label 動的付与
+    project_name = resolve_project_name(project_id, actor_id) if project_id else "-"
     seq_code = getattr(shot, "seq_code", None) if shot else None
     shot_code = getattr(shot, "shot_code", None) if shot else None
-    selected_task = _resolve_task(client, id, task_id, actor_id)
     # 殿御命 2026-06-03: breadcrumb は task.name (例 "Compositing") を優先・fallback で type
     task_name = (getattr(selected_task, "name", None) or getattr(selected_task, "type", None)) if selected_task else None
 
@@ -155,7 +190,7 @@ def get_qc_viewer(
         request=request,
         name="qc_viewer.html",
         context={
-            "tasks": tasks, "shot_id": id, "project_name": project_name,
+            "tasks": tasks, "shot_id": id, "shot": shot, "project_name": project_name,
             "project_id": project_id, "seq_code": seq_code, "shot_code": shot_code,
             "task_id": task_id, "task_name": task_name,
             "judge_target_statuses": tuple(JUDGE_TARGET_STATUSES),  # cmd_075: _can_judge 判定対象

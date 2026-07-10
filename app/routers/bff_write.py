@@ -841,8 +841,14 @@ async def post_asset_upload(
     # UnboundLocalError になる (cmd_064 .mov アップロード500の真因)。再importしないこと。
     public_base = _os.environ.get("SCORE_PUBLIC_URL", "").rstrip("/")
     qc_link = ""
-    if shot_id:
-        path = f"/qc/{shot_id}"
+    if shot_id or task_id:
+        # cmd_091 (cmd_084 pid 解決と対): shot_id 未設定 (shot 紐付なし task・SHOT_000。
+        # 例 task 3255 project 80 "Score 検証") の場合、従来はこの if 自体が丸ごと
+        # skip され本文に QC ビューアへの URL が一切埋め込まれなかった (実機再現:
+        # 2026-07-10 21:21 の実際の QC 依頼 DM に URL 無し・Director/委任先が判定画面へ
+        # 辿り着く手段が皆無だった)。0 を SHOT_000 sentinel として使い必ず埋め込む
+        # (pages_qc.py 側の /qc/0 fallback 修正 [cmd_091] と対で機能する)。
+        path = f"/qc/{shot_id if shot_id else 0}"
         qp = []
         if task_id:
             qp.append(f"task_id={task_id}")
@@ -850,6 +856,8 @@ async def post_asset_upload(
         _aid = result.get("id") if isinstance(result, dict) else None
         if _aid:
             qp.append(f"asset_id={_aid}")
+        if not shot_id and pid is not None:
+            qp.append(f"project_id={pid}")
         if qp:
             path += "?" + "&".join(qp)
         qc_link = (public_base + path) if public_base else path
@@ -916,14 +924,17 @@ async def post_asset_upload(
                 # 403 になる) get_shot_detail 依存の asset_list 解決に落ちて QC ビューアに
                 # 何も表示されなかった(post_qc_notify_existing は既に task_id/asset_id 付き
                 # だった非対称を是正・qc_link と同じ組立に統一)。
-                _push_url = f"/qc/{shot_id}" if shot_id else "/messages"
-                if shot_id:
+                # cmd_091: qc_link と同一パターンで shot_id 未設定 (SHOT_000) も 0 sentinel で救済
+                _push_url = (f"/qc/{shot_id if shot_id else 0}" if (shot_id or task_id) else "/messages")
+                if shot_id or task_id:
                     _push_qp = []
                     if task_id:
                         _push_qp.append(f"task_id={task_id}")
                     _push_aid = result.get("id") if isinstance(result, dict) else None
                     if _push_aid:
                         _push_qp.append(f"asset_id={_push_aid}")
+                    if not shot_id and pid is not None:
+                        _push_qp.append(f"project_id={pid}")
                     if _push_qp:
                         _push_url += "?" + "&".join(_push_qp)
                 push_payload = {

@@ -173,6 +173,100 @@ def test_qc_viewer_asset_list_falls_back_when_shot_detail_forbidden(client, monk
     mock_inst.get_tasks.assert_called_once_with(1, actor_user_id=_RESOLVED_ACTOR_ID)
 
 
+def test_qc_viewer_shot_unlinked_task_fallback_via_task_id(client, monkeypatch):
+    """cmd_091: shot 不在 (SHOT_000・shot 紐付なし task 集約。実機再現: project 80
+    "Score 検証" task_id=3255 status=qc) の場合、旧実装は client.get_tasks(id) が
+    /api/shots/{id}/tasks 404→[] となり、実際に project 配下に存在する task が
+    「このSHOTにはTaskが0件」と誤表示され QC判定ボタンも活性化しなかった (cmd_088 の
+    /shot/{id} 修正と同根)。get_task(task_id) で解決した project_id から
+    get_tasks_by_project fallback し、tasks が正しく埋まって Approve が活性化することを
+    回帰確認する。"""
+    monkeypatch.setattr("app.routers.pages_qc.resolve_project_name", lambda pid, uid, **kw: "Score 検証")
+    monkeypatch.setattr("app.routers.pages_qc.resolve_project_members", lambda *a, **kw: [])
+    monkeypatch.setattr("app.routers.pages_qc.get_actor_role", lambda actor_id: "director")
+
+    with patch("app.routers.pages_qc.get_calendar_client") as MockClient:
+        mock_inst = MagicMock()
+        mock_inst.get_shot.return_value = None
+        mock_inst.get_tasks.return_value = []
+        mock_inst.get_task.return_value = {
+            "id": 3255, "project_id": 80, "type": "other", "name": "Score修正29日分",
+            "status": "qc", "shotID": None, "shot_id": None,
+        }
+        mock_inst.get_tasks_by_project.return_value = [
+            {"id": 3255, "project_id": 80, "type": "other", "status": "qc", "shotID": None, "shot_id": None},
+            {"id": 9999, "project_id": 80, "type": "other", "status": "mk", "shotID": "c01", "shot_id": 5},
+        ]
+        mock_inst.get_assets_by_task.return_value = []
+        MockClient.return_value = mock_inst
+
+        resp = client.get("/qc/0?task_id=3255", headers={"Authorization": f"Bearer {_make_token()}"})
+
+    assert resp.status_code == 200
+    mock_inst.get_tasks_by_project.assert_called_once_with(80, actor_user_id=_RESOLVED_ACTOR_ID)
+    assert "0 件</strong>" not in resp.text
+    assert "approve-btn" in resp.text
+    assert "director_retake_input" in resp.text
+    # shot 紐付ありの task (9999) は project 全 task から抽出時に除外されること
+    assert "9999" not in resp.text
+
+
+def test_qc_viewer_shot_unlinked_task_fallback_via_project_id_query_param(client, monkeypatch):
+    """task_id 未指定 (SHOT_000 の task 選択一覧・project_detail からの導線を想定) でも
+    ?project_id= クエリを渡せば同じ fallback で tasks が復元されることを確認する。
+    fallback task の status は敢えて judge_target_statuses 外 (wip) にし、『task 未選択
+    だが判定待ち task が1件もない』分岐 (= task 選択一覧表示) を狙って踏む。"""
+    monkeypatch.setattr("app.routers.pages_qc.resolve_project_name", lambda pid, uid, **kw: "Score 検証")
+    monkeypatch.setattr("app.routers.pages_qc.resolve_project_members", lambda *a, **kw: [])
+    monkeypatch.setattr("app.routers.pages_qc.get_actor_role", lambda actor_id: "director")
+
+    with patch("app.routers.pages_qc.get_calendar_client") as MockClient:
+        mock_inst = MagicMock()
+        mock_inst.get_shot.return_value = None
+        mock_inst.get_tasks.return_value = []
+        mock_inst.get_tasks_by_project.return_value = [
+            {"id": 3255, "project_id": 80, "type": "other", "status": "wip", "shotID": None, "shot_id": None},
+        ]
+        mock_inst.get_assets_by_task.return_value = []
+        MockClient.return_value = mock_inst
+
+        resp = client.get("/qc/0?project_id=80", headers={"Authorization": f"Bearer {_make_token()}"})
+
+    assert resp.status_code == 200
+    mock_inst.get_tasks_by_project.assert_called_once_with(80, actor_user_id=_RESOLVED_ACTOR_ID)
+    # task_id 未指定 → 「0件」ではなく task 選択一覧が出ること (旧実装は tasks が
+    # 常に空のため「0件」誤表示のまま・一覧に辿り着けなかった)
+    assert "0 件</strong>" not in resp.text
+    assert "どの工程を" in resp.text
+
+
+def test_qc_viewer_shot_status_passed_to_context(client, monkeypatch):
+    """shot は route 内で取得済みなのに TemplateResponse の context に渡されておらず、
+    テンプレートの shot.status が常に未定義 (Jinja Undefined) 扱いになり 'SHOT.status = -'
+    と誤表示され続けるバグがあった (project名『-』表示バグと同根の『取得したのに渡し
+    忘れ』パターン)。shot が実在し tasks が真に 0 件の場合に、実際の status 文字列が
+    表示されることを回帰確認する。status は敢えて 'planning' にし (cmd_075 の
+    _shot_in_review 判定対象は in_progress/approved のみ)、shot 起因の判定活性化と
+    混同せず shot.status 表示そのものだけを検証する。"""
+    monkeypatch.setattr("app.routers.pages_qc.get_actor_role", lambda actor_id: "director")
+    with patch("app.routers.pages_qc.get_calendar_client") as MockClient:
+        mock_inst = MagicMock()
+        mock_inst.get_shot.return_value = CalendarShot(
+            shot_id=1, project_id=33, name="AS001", status="planning",
+            shot_code="AS001", seq_code="SQ001",
+        )
+        mock_inst.get_tasks.return_value = []
+        mock_inst.get_assets_by_task.return_value = []
+        MockClient.return_value = mock_inst
+
+        resp = client.get("/qc/1", headers={"Authorization": f"Bearer {_make_token()}"})
+
+    assert resp.status_code == 200
+    assert "0 件</strong>" in resp.text
+    assert "approve-btn" not in resp.text
+    assert 'SHOT.status = <span class="font-bold" translate="no">planning</span>' in resp.text
+
+
 def test_qc_viewer_asset_list_shot_detail_success_no_fallback_call(client, monkeypatch):
     """get_shot_detail が正常に asset_list を返す (=explicit member) 場合は
     get_tasks 経由の fallback を呼ばない (既存の正常系を壊さない回帰防止)。"""
