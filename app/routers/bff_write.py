@@ -1438,9 +1438,94 @@ async def post_qc_approve_bff(request: Request, actor_id: str = Depends(get_acto
                     sender_name = getattr(me, "name", "") or sender_name
                 except Exception:
                     pass
+                # cmd_095 (score Approve通知の可読化): 生 shot_id/task_id のみでは
+                # 受け手が何の承認か判別不能。post_qc_notify_existing と同一パターンで
+                # proj/seq/shot(cut)/task種別 + 対象 asset の version を解決し、
+                # tutorial/qc_flow.html の表記 (例: sq01 c05 Compositing v04) に
+                # 倣った可読形式に整形する。
+                proj_name, seq_code, shot_code, task_type, version = "", "", "", "", ""
+                pid = None
+                asset_list = []
+                try:
+                    shot_info = client.get_shot_detail(int(shot_id), actor_user_id=actor_id) or {}
+                    shot_code = shot_info.get("shotID") or shot_info.get("shot_code") or shot_info.get("name") or ""
+                    seq_code = shot_info.get("seqID") or shot_info.get("seq_code") or ""
+                    pid = shot_info.get("project_id")
+                    for tk in (shot_info.get("task_list") or shot_info.get("tasks") or []):
+                        if isinstance(tk, dict) and task_id and (tk.get("id") == task_id or tk.get("task_id") == task_id):
+                            task_type = tk.get("type") or tk.get("task_type") or ""
+                            break
+                    asset_list = [a for a in (shot_info.get("asset_list") or []) if isinstance(a, dict) and (not task_id or a.get("task_id") == task_id)]
+                except Exception:
+                    pass
+                if not shot_code or not seq_code or pid is None:
+                    try:
+                        s_dto = client.get_shot(int(shot_id), actor_user_id=actor_id)
+                        if s_dto:
+                            if not shot_code: shot_code = getattr(s_dto, "shot_code", "") or getattr(s_dto, "name", "")
+                            if not seq_code: seq_code = getattr(s_dto, "seq_code", "") or ""
+                            if pid is None: pid = getattr(s_dto, "project_id", None)
+                    except Exception:
+                        pass
+                if not shot_code:
+                    shot_code = f"SHOT_{shot_id:03d}"
+                # cmd_094a (SHOT000-PROACTIVE-AUDIT) 準拠: shot_id=0 (SHOT_000・shot 紐付
+                # なし task) は上記 shot 系 lookup が常に空。task_id から project_id を
+                # 直接解決する fallback (post_qc_notify_existing と同一パターン)。
+                if task_id and hasattr(client, "get_task"):
+                    try:
+                        task_info = client.get_task(int(task_id), actor_user_id=actor_id) or {}
+                        if pid is None:
+                            pid = task_info.get("project_id")
+                        if not seq_code:
+                            seq_code = task_info.get("seqID") or task_info.get("seq_code") or ""
+                        if not task_type:
+                            task_type = task_info.get("type") or ""
+                    except Exception:
+                        pass
+                if not task_type and task_id:
+                    try:
+                        for tk in (client.get_tasks(int(shot_id), actor_user_id=actor_id) or []):
+                            tid = tk.get("id") or tk.get("task_id") if isinstance(tk, dict) else getattr(tk, "task_id", None)
+                            if tid == task_id:
+                                task_type = (tk.get("type") or tk.get("task_type") if isinstance(tk, dict) else getattr(tk, "type", "")) or ""
+                                break
+                    except Exception:
+                        pass
+                if pid is not None:
+                    try:
+                        if hasattr(client, "get_project"):
+                            p = client.get_project(int(pid), actor_user_id=actor_id) or {}
+                            proj_name = p.get("name") or ""
+                        if not proj_name:
+                            for p in (client.get_my_projects(actor_user_id=actor_id) or []):
+                                if isinstance(p, dict) and p.get("id") == pid:
+                                    proj_name = p.get("name") or ""; break
+                    except Exception:
+                        pass
+                # shotless (asset_list が shot 経由で取れない) 時は get_assets_by_task へ
+                # fallback (get_retake_view/cmd_094a と同一パターン)
+                if not asset_list and task_id and hasattr(client, "get_assets_by_task"):
+                    try:
+                        asset_list = [a for a in (client.get_assets_by_task(int(task_id), actor_user_id=actor_id) or []) if isinstance(a, dict)]
+                    except Exception:
+                        pass
+                if asset_list:
+                    asset_list.sort(key=lambda a: (a.get("created_at") or ""), reverse=True)
+                    version = asset_list[0].get("version") or ""
+
+                hier = [p for p in (proj_name, seq_code, shot_code, task_type) if p]
+                title_line = " ".join(hier) if hier else f"shot:{shot_id} task:{task_id or '-'}"
+                if version:
+                    title_line += f" {version}"
+                # task_type 未解決時は hier だけでは task を一意特定できない (例:
+                # "SHOT_055" のみ) — 生 task_id を括弧で補い追跡可能性を維持する。
+                if task_id and not task_type:
+                    title_line += f" (task:{task_id})"
+
                 body_lines = [
                     "✅ Approved",
-                    f"shot: {shot_id} / task: {task_id or '-'}",
+                    title_line,
                 ]
                 if comment:
                     body_lines.append(f"comment: {comment[:200]}")
