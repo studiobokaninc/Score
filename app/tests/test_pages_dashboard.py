@@ -196,3 +196,46 @@ class TestPagesDashboard:
             assert '/messages?thread=77' not in resp.text
         finally:
             _test_app.dependency_overrides.pop(get_actor_id, None)
+
+    def test_thread_qc_request_fallback_link_not_click_dead(self, client):
+        """cmd_090navfix_b: 本文に /qc/ リンクが埋め込まれていない(qc_url抽出失敗・レガシー
+        メッセージ由来等)ケースでは /messages?thread=.. へのfallback linkを使うが、
+        notif-client.js のスレッドドロワー横取り(a[href*="thread="]をpreventDefault)により
+        クリックしても遷移しない(click-dead)不具合があった。data-qc-direct 属性が
+        fallback link に付与され、横取り対象から除外されていることを検証する。"""
+        mock_user = CalendarUser(user_id=5, email="sato@studio.jp", role="Compositor", name="Sato")
+        _test_app.dependency_overrides[get_actor_id] = lambda: "5"
+        try:
+            with patch("app.routers.pages_dashboard.get_calendar_client") as MockClient:
+                mock_inst = MagicMock()
+                mock_inst.get_me.return_value = mock_user
+                mock_inst.get_my_dm_threads.return_value = [
+                    {
+                        "thread_id": 10000016,
+                        "updated_at": "2026-07-10T10:00:00",
+                        "participants": [5, 6, 7],
+                        # qc_viewer リンク未埋込のレガシー形式メッセージ (/qc/ パターン無し)
+                        "last_message": (
+                            "🔍 QC 依頼\n"
+                            "Score 検証 / SEQ_PM\n"
+                            "\n"
+                            "御確認を御願い致します。\n"
+                            "\n"
+                            "— Sato"
+                        ),
+                    },
+                ]
+                MockClient.return_value = mock_inst
+                resp = client.get("/dashboard")
+            assert resp.status_code == 200
+            fallback_href = '/messages?thread=10000016'
+            assert fallback_href in resp.text
+            # fallback href を含む <a> タグに data-qc-direct="1" が付与されていることを確認
+            # (無ければ notif-client.js のドロワー横取りでクリック時に遷移しない = click-dead)
+            idx = resp.text.index(fallback_href)
+            anchor_start = resp.text.rindex('<a ', 0, idx)
+            anchor_end = resp.text.index('>', idx)
+            anchor_tag = resp.text[anchor_start:anchor_end]
+            assert 'data-qc-direct="1"' in anchor_tag
+        finally:
+            _test_app.dependency_overrides.pop(get_actor_id, None)

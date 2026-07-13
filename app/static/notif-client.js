@@ -256,6 +256,12 @@
       // selector を緩く: thread= param 含む全 link 対象
       const a = ev.target.closest('a[href*="thread="]');
       if (!a) return;
+      // cmd_090navfix_b: QC/Review 受信依頼カード(data-qc-direct)はドロワー横取り対象外
+      // (qc_url抽出失敗時のfallbackは実際に /messages?thread= へ遷移させる必要があるため)
+      if (a.hasAttribute('data-qc-direct')) {
+        console.log('[score-notif] data-qc-direct link, skipping drawer intercept:', a.href);
+        return;
+      }
       console.log('[score-notif] thread link click detected:', a.href);
       let tid = null;
       try {
