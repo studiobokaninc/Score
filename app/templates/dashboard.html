@@ -126,7 +126,9 @@
         <div class="space-y-2">
           {% for tk in qc_requests %}
           {# 殿御命 2026-06-05: QC ビューア (qc/{shot_id}?task_id=N&asset_id=N) に遷移・task page でなく #}
-          <a href="{% if tk.shot_id %}/qc/{{ tk.shot_id }}?task_id={{ tk.task_id }}{% if tk.latest_asset_id %}&asset_id={{ tk.latest_asset_id }}{% endif %}{% else %}/task/{{ tk.task_id }}{% endif %}" class="block bg-rose-50 hover:bg-rose-100 border border-rose-200 rounded-2xl p-3 transition-all">
+          {# cmd_094a (SHOT000-PROACTIVE-AUDIT): tk.shot_id が 0 (SHOT_000) の場合も is not none で
+             真値判定し QC ビューアへ (旧 truthy 判定は 0 を falsy 誤判定し /task/ へ誤誘導していた) #}
+          <a href="{% if tk.shot_id is not none %}/qc/{{ tk.shot_id }}?task_id={{ tk.task_id }}{% if tk.latest_asset_id %}&asset_id={{ tk.latest_asset_id }}{% endif %}{% else %}/task/{{ tk.task_id }}{% endif %}" class="block bg-rose-50 hover:bg-rose-100 border border-rose-200 rounded-2xl p-3 transition-all">
             <div class="flex items-center justify-between gap-3">
               <div class="flex-1 min-w-0">
                 <p class="text-sm font-bold text-rose-900 truncate"><span translate="no">{{ tk.shot_code }}</span> <span translate="no">{{ tk.task_type }}</span></p>

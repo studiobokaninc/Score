@@ -27,7 +27,7 @@
       <span class="mx-1">›</span>
       <span class="hover:text-purple-600 transition-colors" translate="no">{{ seq_code or '-' }}</span>
       <span class="mx-1">›</span>
-      <a href="/shot/{{ shot_id }}" class="hover:text-purple-600 transition-colors" translate="no">{{ shot_code or ('SHOT_' + (shot_id|string)) }}</a>
+      <a href="/shot/{{ shot_id }}{{ '?project_id=' ~ project_id if project_id else '' }}" class="hover:text-purple-600 transition-colors" translate="no">{{ shot_code or ('SHOT_' + (shot_id|string)) }}</a>
       <span class="mx-1">›</span>
       <span class="text-purple-600 font-bold"><span translate="no">Retake</span>入力</span>
     </nav>

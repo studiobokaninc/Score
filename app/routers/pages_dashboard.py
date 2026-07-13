@@ -136,14 +136,27 @@ def read_dashboard(
     # ===== QC 依頼: 自分担当 task で判定待ち (社内 qc/v1qc・社外 dir_wt 等) =====
     qc_requests = [t for t in my_tasks if (t.get("status") or "").lower() in JUDGE_TARGET_STATUSES]
     # 殿御命 2026-06-05: 各 QC 依頼 task に対応する 最新 asset_id を解決 (qc_viewer 遷移用)
+    # cmd_094a (SHOT000-PROACTIVE-AUDIT): shot_id=0 (SHOT_000・shot 紐付なし task) は
+    # 旧 `if _q.get("shot_id")` が 0 を falsy 誤判定し本ブロック自体を丸ごとスキップして
+    # いた。get_shot_detail(0) は実在しない shot のため呼んでも無駄なので is not None 化
+    # した上で、get_director_retake_input (pages_director.py) と同一パターンの
+    # get_assets_by_task フォールバックを追加する。
     for _q in qc_requests:
-        if _q.get("shot_id") and _q.get("task_id") and hasattr(client, "get_shot_detail"):
+        if _q.get("shot_id") is not None and _q.get("task_id") and hasattr(client, "get_shot_detail"):
             try:
                 shot_dict = client.get_shot_detail(int(_q["shot_id"]), actor_user_id=actor_id) or {}
                 assets_for_task = [a for a in (shot_dict.get("asset_list") or []) if isinstance(a, dict) and a.get("task_id") == _q["task_id"]]
                 assets_for_task.sort(key=lambda a: a.get("created_at", "") or "", reverse=True)
                 if assets_for_task:
                     _q["latest_asset_id"] = assets_for_task[0].get("id")
+            except Exception:
+                pass
+        if _q.get("latest_asset_id") is None and _q.get("shot_id") == 0 and _q.get("task_id") and hasattr(client, "get_assets_by_task"):
+            try:
+                assets_for_task = list(client.get_assets_by_task(int(_q["task_id"]), actor_user_id=actor_id) or [])
+                assets_for_task.sort(key=lambda a: (a.get("created_at") if isinstance(a, dict) else "") or "", reverse=True)
+                if assets_for_task:
+                    _q["latest_asset_id"] = assets_for_task[0].get("id") if isinstance(assets_for_task[0], dict) else getattr(assets_for_task[0], "id", None)
             except Exception:
                 pass
 

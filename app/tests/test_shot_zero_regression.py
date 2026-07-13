@@ -677,3 +677,261 @@ class TestBffWriteTroublesShotZero:
         mock_inst.get_project_roles.assert_called_once_with(33, actor_user_id=_RESOLVED_ACTOR_ID)
         mock_inst.get_task.assert_not_called()
         assert "/messages?thread=88" not in resp.text
+
+
+# ─── ⑩ 自担当 QC 依頼カード (own task): pages_dashboard.py qc_requests ────────
+# subtask_094a (SHOT000-PROACTIVE-AUDIT) 新規発見。既存 ⑧ (TestPagesDashboardQcUrlShotZero)
+# は「受信 QC/Review 依頼」(thread_qc_requests・他者からの依頼) のみを検証しており、
+# 「🔴 QC 依頼」(qc_requests・自分自身の担当 task が判定待ちの場合) カードは
+# 全く別のコードパスかつ無検証だった。
+
+class TestDashboardOwnQcRequestShotZero:
+    def test_own_qc_request_shot_zero_links_to_qc_viewer_not_task_page(self, client, monkeypatch):
+        """dashboard.html:129 は旧実装 `{% if tk.shot_id %}` が shot_id=0 (SHOT_000) を
+        falsy 誤判定し、明示コメント「QC ビューアに遷移・task page でなく」に反して
+        /task/{task_id} へ誤誘導していた。`is not none` 是正後は /qc/0?task_id=..
+        へ遷移し、latest_asset_id も pages_dashboard.py 側の get_assets_by_task
+        フォールバックで解決されることを確認する。"""
+        from app.adapters.dto import CalendarUser
+
+        mock_user = CalendarUser(user_id=42, email="sato@studio.jp", role="Compositor", name="Sato")
+        with patch("app.routers.pages_dashboard.get_calendar_client") as MockClient:
+            mock_inst = MagicMock()
+            mock_inst.get_me.return_value = mock_user
+            mock_inst.get_my_projects.return_value = []
+            mock_inst.get_my_dm_threads.return_value = []
+            mock_inst.get_my_tasks.return_value = [
+                {"id": 3282, "shot_id": 0, "project_id": 80, "status": "qc",
+                 "type": "other", "name": "Score検証 PM task"},
+            ]
+            mock_inst.get_shot_detail.return_value = {}
+            mock_inst.get_assets_by_task.return_value = [
+                {"id": 500, "task_id": 3282, "created_at": "2026-07-13T10:00:00"},
+            ]
+            MockClient.return_value = mock_inst
+
+            resp = client.get("/dashboard", headers=_auth_headers())
+
+        assert resp.status_code == 200
+        mock_inst.get_shot_detail.assert_called_once_with(0, actor_user_id=_RESOLVED_ACTOR_ID)
+        assert "/qc/0?task_id=3282&asset_id=500" in resp.text, "SHOT_000 own-task QC依頼が QC ビューアへ遷移していない (dashboard.html:129 falsy-zero 再発)"
+
+    def test_own_qc_request_shot_nonzero_unaffected(self, client, monkeypatch):
+        """正の対照実験: 通常 shot (shot_id=5) の own-task QC 依頼は従来通り
+        /qc/5?task_id=.. へ遷移し、is not none 化による回帰が無いことを保証する。"""
+        from app.adapters.dto import CalendarUser
+
+        mock_user = CalendarUser(user_id=42, email="sato@studio.jp", role="Compositor", name="Sato")
+        with patch("app.routers.pages_dashboard.get_calendar_client") as MockClient:
+            mock_inst = MagicMock()
+            mock_inst.get_me.return_value = mock_user
+            mock_inst.get_my_projects.return_value = []
+            mock_inst.get_my_dm_threads.return_value = []
+            mock_inst.get_my_tasks.return_value = [
+                {"id": 11, "shot_id": 5, "project_id": 33, "status": "qc", "type": "Lighting"},
+            ]
+            mock_inst.get_shot_detail.return_value = {
+                "asset_list": [{"id": 700, "task_id": 11, "created_at": "2026-07-13T10:00:00"}],
+            }
+            MockClient.return_value = mock_inst
+
+            resp = client.get("/dashboard", headers=_auth_headers())
+
+        assert resp.status_code == 200
+        assert "/qc/5?task_id=11&asset_id=700" in resp.text
+
+
+# ─── ⑪ Retake 発令通知リンク: bff_write.py post_retakes qc_path ──────────────
+# subtask_094a 新規発見。既存 ⑤ (TestBffWriteRetakesShotZero) は shot 系解決が
+# スキップされないことのみ検証しており、通知本文に埋め込む qc_link (retake_view
+# へ誘導すべきリンク) の SHOT_000 分岐は無検証だった。
+
+class TestBffWriteRetakesQcPathShotZero:
+    def test_shot_zero_retake_notification_links_to_retake_view_with_task_id(self, client, monkeypatch):
+        """bff_write.py:249 は旧実装 `(shot_id and task_id)` が shot_id=0 を falsy
+        誤判定し、task_id 付き /retake_view/0/{task_id} でなく task_id 無しの曖昧な
+        /qc/0 (どの shotless task の Retake か特定不能) に誤フォールバックしていた。
+        `(shot_id is not None and task_id)` 是正後の挙動を確認する。"""
+        monkeypatch.delenv("SCORE_PUBLIC_URL", raising=False)
+        with patch("app.routers.bff_write.get_calendar_client") as MockClient:
+            mock_inst = MagicMock()
+            mock_inst.get_shot_detail.return_value = {}
+            mock_inst.get_shot.return_value = None
+            mock_inst.get_tasks.return_value = []
+            mock_inst.get_task.return_value = {"project_id": 80, "seqID": "SEQ_PM", "type": "other"}
+            mock_inst.get_project.return_value = {"name": "Score検証"}
+            mock_inst.get_project_roles.return_value = {"pm": 3, "director": 7, "lead": 9}
+            mock_inst.get_me.return_value = None
+            mock_inst.post_dm_thread.return_value = {"thread_id": 900}
+            mock_inst.post_dm.return_value = {}
+            mock_inst.post_retakes.return_value = {"ok": True}
+            MockClient.return_value = mock_inst
+
+            resp = client.post(
+                "/api/bff/retakes",
+                json={"shot_id": 0, "task_id": 3282, "direction": "全体的に色味調整"},
+                headers=_auth_headers(),
+            )
+
+        assert resp.status_code == 200
+        qc_link = resp.json()["qc_link"]
+        assert qc_link == "/retake_view/0/3282", f"SHOT_000 Retake 通知が曖昧な /qc/0 に誤フォールバックしている (実際: {qc_link})"
+
+    def test_shot_nonzero_retake_notification_unaffected(self, client, monkeypatch):
+        """正の対照実験: 通常 shot (shot_id=5) は従来通り /retake_view/5/{task_id}
+        へ遷移し、is not None 化による回帰が無いことを保証する。"""
+        monkeypatch.delenv("SCORE_PUBLIC_URL", raising=False)
+        with patch("app.routers.bff_write.get_calendar_client") as MockClient:
+            mock_inst = MagicMock()
+            mock_inst.get_shot_detail.return_value = {"shotID": "SHOT_005", "seqID": "SEQ01", "project_id": 33}
+            mock_inst.get_shot.return_value = None
+            mock_inst.get_tasks.return_value = []
+            mock_inst.get_project.return_value = {"name": "Ramps"}
+            mock_inst.get_project_roles.return_value = {"pm": 3, "director": 7, "lead": 9}
+            mock_inst.get_me.return_value = None
+            mock_inst.post_dm_thread.return_value = {"thread_id": 901}
+            mock_inst.post_dm.return_value = {}
+            mock_inst.post_retakes.return_value = {"ok": True}
+            MockClient.return_value = mock_inst
+
+            resp = client.post(
+                "/api/bff/retakes",
+                json={"shot_id": 5, "task_id": 11, "direction": "色味調整"},
+                headers=_auth_headers(),
+            )
+
+        assert resp.status_code == 200
+        assert resp.json()["qc_link"] == "/retake_view/5/11"
+
+
+# ─── ⑫ 参考資料ビューア: pages_qc.py get_reference_viewer ────────────────────
+# subtask_094a 新規発見。get_qc_viewer (cmd_091) の姉妹関数だが project_id の
+# task_id フォールバックが未実装のまま残っていた。
+
+class TestReferenceViewerShotZero:
+    def test_shot_zero_project_id_resolves_via_task_not_hardcoded_33(self, client, monkeypatch):
+        """pages_qc.py get_reference_viewer は旧実装だと shot_id=0 で
+        client.get_shot(0) が None を返すため project_id が解決不能となり、
+        breadcrumb がハードコード fallback (/project_detail/33) に誤誘導されて
+        いた (get_qc_viewer の cmd_091 修正が本関数には未適用だった)。
+        _resolve_task 経由の selected_task.project_id フォールバック是正後は
+        実際の project_id (80) が使われることを確認する。"""
+        with patch("app.routers.pages_qc.get_calendar_client") as MockClient:
+            mock_inst = MagicMock()
+            mock_inst.get_me.return_value = None
+            mock_inst.get_tasks.return_value = []
+            mock_inst.get_shot.return_value = None
+            mock_inst.get_task.return_value = {
+                "id": 3282, "shot_id": 0, "type": "other", "name": "Score検証 PM task",
+                "status": "qc", "project_id": 80,
+            }
+            MockClient.return_value = mock_inst
+
+            resp = client.get("/reference/0?task_id=3282", headers=_auth_headers())
+
+        assert resp.status_code == 200
+        assert "/project_detail/80" in resp.text
+        assert "/project_detail/33" not in resp.text, "SHOT_000 の参考資料ビューアがハードコード fallback project 33 に誤遷移している"
+
+    def test_shot_nonzero_project_id_unaffected(self, client, monkeypatch):
+        """正の対照実験: 通常 shot (shot_id=5) は shot.project_id を直接使い、
+        selected_task 経由の fallback には依存しないことを確認する。"""
+        with patch("app.routers.pages_qc.get_calendar_client") as MockClient:
+            mock_inst = MagicMock()
+            mock_inst.get_me.return_value = None
+            mock_inst.get_tasks.return_value = []
+            mock_shot = MagicMock(project_id=33, seq_code="SEQ01")
+            mock_inst.get_shot.return_value = mock_shot
+            mock_inst.get_task.return_value = {"id": 11, "shot_id": 5, "type": "Lighting", "project_id": 999}
+            MockClient.return_value = mock_inst
+
+            resp = client.get("/reference/5?task_id=11", headers=_auth_headers())
+
+        assert resp.status_code == 200
+        assert "/project_detail/33" in resp.text
+
+
+# ─── ⑬ Retake 内容 view: pages_director.py get_retake_view target_asset ──────
+# subtask_094a 新規発見。get_director_retake_input (cmd_093) の姉妹関数だが
+# get_assets_by_task フォールバックが未実装のまま残っていた。
+
+class TestRetakeViewTargetAssetShotZero:
+    def test_shot_zero_target_asset_resolves_via_get_assets_by_task(self, client, monkeypatch):
+        """pages_director.py get_retake_view は shot_id=0 の場合
+        get_shot_detail(0) が常に空を返すため target_asset が永久に None のまま
+        (=Retake 対象の参照素材プレビューが表示されない) だった。
+        get_director_retake_input と同一パターンの get_assets_by_task フォールバック
+        是正後は target_asset/target_url が正しく解決されることを確認する。
+        (target_asset プレビューは既存 Retake meta が見つかった場合のみ表示される
+        仕様のため、/tmp/score_retake_refs/ に実 meta.json を用意して検証する)"""
+        import json
+        import time
+        from pathlib import Path
+
+        refs_dir = Path(f"/tmp/score_retake_refs/r_test094a_{int(time.time())}")
+        refs_dir.mkdir(parents=True, exist_ok=True)
+        (refs_dir / "meta.json").write_text(json.dumps({
+            "retake_id": refs_dir.name, "shot_id": 0, "task_id": 3282,
+            "submitted_at": "2026-07-13T10:00:00", "submitted_by": "1",
+        }), encoding="utf-8")
+        try:
+            monkeypatch.setattr("app.routers.pages_director.get_actor_role", lambda actor_id: "director")
+            with patch("app.routers.pages_director.get_calendar_client") as MockClient:
+                mock_inst = MagicMock()
+                mock_inst.get_me.return_value = None
+                mock_inst.get_shot.return_value = None
+                mock_inst.get_task.return_value = {"project_id": 80}
+                mock_inst.get_tasks.return_value = []
+                mock_inst.get_shot_detail.return_value = {}
+                mock_inst.get_assets_by_task.return_value = [
+                    {"id": 500, "task_id": 3282, "file_path": "/data/assets/fix_v01.mov", "created_at": "2026-07-13T10:00:00"},
+                ]
+                mock_inst.get_my_dm_threads.return_value = []
+                mock_inst.get_users.return_value = []
+                MockClient.return_value = mock_inst
+
+                resp = client.get("/retake_view/0/3282", headers=_auth_headers())
+        finally:
+            (refs_dir / "meta.json").unlink(missing_ok=True)
+            refs_dir.rmdir()
+
+        assert resp.status_code == 200
+        mock_inst.get_assets_by_task.assert_called_once_with(3282, actor_user_id=_RESOLVED_ACTOR_ID)
+        assert "fix_v01.mov" in resp.text, "SHOT_000 retake_view の target_asset フォールバックが機能していない"
+
+
+# ─── ⑭ 退勤報告: pages_auth.py read_exit_report ──────────────────────────────
+# subtask_094a 新規発見。shot_map は実 shot のみで構築されるため shot_id=0
+# (SHOT_000) task は project_name/shot_code が常に空文字になっていた。
+
+class TestExitReportShotZero:
+    def test_shot_zero_task_shows_project_name_and_shot_code(self, client, monkeypatch):
+        """pages_auth.py read_exit_report は shot_map (実 shot のみで構築) に
+        shot_id=0 のエントリが存在し得ないため、旧実装は SHOT_000 task の
+        project_name が常に空文字だった (task 自体が持つ project_id を使っていな
+        かったため)。project_id 直接キャプチャ + project_name_map フォールバック
+        是正後は正しい project 名が表示されることを確認する。"""
+        with patch("app.routers.pages_auth.get_calendar_client") as MockClient:
+            mock_inst = MagicMock()
+            mock_inst.get_me.return_value = None
+            mock_inst.get_my_tasks.return_value = [
+                {"id": 3282, "shot_id": 0, "project_id": 80, "status": "wip",
+                 "type": "other", "name": "", "updated_at": "2026-07-13T09:00:00"},
+            ]
+            mock_inst.get_my_projects.return_value = [{"id": 80, "name": "Score検証"}]
+            mock_inst.get_shots.return_value = []
+            MockClient.return_value = mock_inst
+
+            resp = client.get("/exit_report", headers=_auth_headers())
+
+        assert resp.status_code == 200
+        # my_tasks は window.__MY_TASKS__ = {{ my_tasks | tojson }}; として埋込済 (JSON は
+        # 日本語を \uXXXX エスケープするため、素の文字列検索でなく JSON parse して検証する)。
+        import json as _json
+        import re as _re
+        m = _re.search(r"window\.__MY_TASKS__ = (\[.*?\]);", resp.text)
+        assert m, "window.__MY_TASKS__ が退勤報告ページに埋め込まれていない"
+        my_tasks = _json.loads(m.group(1))
+        task = next(t for t in my_tasks if t.get("task_id") == 3282)
+        assert task["project_name"] == "Score検証", f"SHOT_000 task の project_name が解決されていない (実際: {task['project_name']!r})"
+        assert task["shot_code"] == "SHOT_000", f"SHOT_000 task の shot_code フォールバックが機能していない (実際: {task['shot_code']!r})"

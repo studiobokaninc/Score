@@ -37,7 +37,7 @@
   <div class="flex-1 flex flex-col overflow-hidden">
   <!-- ===== HEADER ===== -->
   <header class="sticky top-0 z-20 h-16 bg-white/30 backdrop-blur-xl border-b border-white/40 flex items-center justify-between px-8 shadow-sm">
-    <a href="/shot/{{ shot_id }}"
+    <a href="/shot/{{ shot_id }}{{ '?project_id=' ~ project_id if project_id else '' }}"
        class="text-indigo-600 font-bold text-sm flex items-center gap-2 hover:text-indigo-800 transition-colors">
       ← SHOT詳細に戻る
     </a>
@@ -53,7 +53,7 @@
     <span class="mx-1">›</span>
     <a href="/project_detail/{{ project_id or 33 }}" class="hover:text-indigo-600"><span translate="no">SEQ01</span></a>
     <span class="mx-1">›</span>
-    <a href="/shot/{{ shot_id }}" class="hover:text-indigo-600"><span translate="no">SHOT_{{ shot_id }}</span></a>
+    <a href="/shot/{{ shot_id }}{{ '?project_id=' ~ project_id if project_id else '' }}" class="hover:text-indigo-600"><span translate="no">SHOT_{{ shot_id }}</span></a>
     <span class="mx-1">›</span>
     {% if task_name %}
     <a href="/task/{{ task_id }}" class="hover:text-indigo-600" translate="no">{{ task_name }}</a>
@@ -277,7 +277,7 @@
       </a>
       <p class="text-xs text-slate-400 font-medium">SHOT 関係者全員の thread が開きます</p>
       {% endif %}
-      <a href="/shot/{{ shot_id }}"
+      <a href="/shot/{{ shot_id }}{{ '?project_id=' ~ project_id if project_id else '' }}"
          class="text-slate-500 text-sm hover:text-indigo-600 transition-colors font-medium">
         ← SHOT詳細に戻る
       </a>

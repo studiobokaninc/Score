@@ -48,6 +48,7 @@ def read_exit_report(request: Request, mode: Optional[str] = None, actor_id: str
                     my_tasks.append({
                         "task_id": t.get("id") or t.get("task_id"),
                         "shot_id": t.get("shot_id"),
+                        "project_id": t.get("project_id"),
                         "shot_code": t.get("shot_code") or t.get("name") or "",
                         "task_type": t.get("task_type") or t.get("type", ""),
                         "name": t.get("name", ""),
@@ -62,6 +63,7 @@ def read_exit_report(request: Request, mode: Optional[str] = None, actor_id: str
                     my_tasks.append({
                         "task_id": getattr(t, "task_id", None),
                         "shot_id": getattr(t, "shot_id", None),
+                        "project_id": getattr(t, "project_id", None),
                         "shot_code": getattr(t, "name", ""),
                         "task_type": getattr(t, "type", ""),
                         "status": getattr(t, "status", ""),
@@ -104,7 +106,13 @@ def read_exit_report(request: Request, mode: Optional[str] = None, actor_id: str
             t["project_name"] = info.get("project_name", "")
             t["seq_code"] = info.get("seq_code", "")
             if not t.get("shot_code"):
-                t["shot_code"] = info.get("shot_code") or (f"SHOT_{int(t['shot_id']):03d}" if t.get("shot_id") else "")
+                t["shot_code"] = info.get("shot_code") or (f"SHOT_{int(t['shot_id']):03d}" if t.get("shot_id") is not None else "")
+            # cmd_094a (SHOT000-PROACTIVE-AUDIT): shot_id=0 (SHOT_000・shot 紐付なし task) は
+            # shot_map (実 shot のみで構築) に該当エントリが無いため project_name/seq_code が
+            # 常に空文字のままだった。task 自体が保持する project_id (Calendar task DTO に
+            # 直接同梱) へ fallback する。
+            if not t.get("project_name") and t.get("project_id") is not None:
+                t["project_name"] = project_name_map.get(t["project_id"], "")
         # updated_at で 新しい順 sort (mode=previous 「昨日の作業記録」 = 直近更新)
         my_tasks.sort(key=lambda x: x.get("updated_at", ""), reverse=True)
     except Exception:

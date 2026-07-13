@@ -152,7 +152,8 @@ body {
                         <li class="flex items-start gap-3 px-2 py-2 rounded-xl hover:bg-white/80 transition-colors">
                             <span class="shrink-0 w-7 h-7 rounded-full flex items-center justify-center text-xs font-black {{ _rank_class }}">{{ _rank }}</span>
                             <span class="text-base mt-0.5 shrink-0">{{ _icon }}</span>
-                            <a href="{% if tk.is_qc_inbox %}/messages?thread={{ tk.thread_id }}{% elif tk.task_id %}/task/{{ tk.task_id }}{% else %}#{% endif %}" class="flex-1 min-w-0 leading-tight">
+                            {# cmd_094a (SHOT000-PROACTIVE-AUDIT): data-qc-direct で notif-client.js のスレッドドロワー横取りを除外 (navfix_bと同型click-dead是正) #}
+                            <a href="{% if tk.is_qc_inbox %}/messages?thread={{ tk.thread_id }}{% elif tk.task_id %}/task/{{ tk.task_id }}{% else %}#{% endif %}"{% if tk.is_qc_inbox %} data-qc-direct="1"{% endif %} class="flex-1 min-w-0 leading-tight">
                                 <div class="flex flex-wrap items-center gap-x-0.5">
                                     {% if tk.project_name %}<span class="text-[10px] text-slate-400" translate="no">{{ tk.project_name }}</span><span class="text-slate-300 mx-1">/</span>{% endif %}
                                     {% if tk.seq_code %}<span class="text-[10px] text-slate-500" translate="no">{{ tk.seq_code }}</span><span class="text-slate-300 mx-1">/</span>{% endif %}

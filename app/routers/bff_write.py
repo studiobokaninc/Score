@@ -244,9 +244,12 @@ async def post_retakes(request: Request, actor_id: str = Depends(get_actor_id)):
         except Exception: pass
 
         # 殿御命 2026-06-05 (②採択): Retake 通知 URL は retake_view へ
+        # cmd_094a (SHOT000-PROACTIVE-AUDIT): shot_id=0 (SHOT_000) は旧 `(shot_id and task_id)`
+        # が 0 を falsy 誤判定し、task_id 付き retake_view でなく task_id 無しの曖昧な
+        # /qc/0 (どの shotless task か特定不能) に誤フォールバックしていた。
         import os as _os
         public_base = _os.environ.get("SCORE_PUBLIC_URL", "").rstrip("/")
-        qc_path = f"/retake_view/{shot_id}/{task_id}" if (shot_id and task_id) else f"/qc/{shot_id}"
+        qc_path = f"/retake_view/{shot_id}/{task_id}" if (shot_id is not None and task_id) else f"/qc/{shot_id}"
         qc_link = (public_base + qc_path) if public_base else qc_path
 
         # body 構築
@@ -746,6 +749,12 @@ async def post_asset_upload(
             task_type = task_info.get("type") or ""
         except Exception:
             pass
+        # cmd_094a (SHOT000-PROACTIVE-AUDIT): shot_id=0 (SHOT_000) はここに falsy-zero で
+        # 到達するが (pid 解決自体は上記で完結・正常)、`if shot_id:` 内にしかない
+        # SHOT_xxx placeholder 付与がここでは実行されず、通知タイトルの階層表示から
+        # shot 区分が欠落していた (shot_id=None の PM 専用タスクは対象外・区別する)。
+        if shot_id is not None and not shot_code:
+            shot_code = f"SHOT_{shot_id:03d}"
         if pid is not None and not proj_name:
             try:
                 for p in (client.get_my_projects(actor_user_id=actor_id) or []):

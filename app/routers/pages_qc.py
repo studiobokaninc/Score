@@ -250,10 +250,14 @@ def get_reference_viewer(
     except httpx.ConnectError:
         tasks = []
     shot = client.get_shot(id, actor_user_id=actor_id)
-    project_name = resolve_project_name(shot.project_id, actor_id) if shot else "-"
-    project_id = shot.project_id if shot else None
-    seq_code = getattr(shot, "seq_code", None) if shot else None
     selected_task = _resolve_task(client, id, task_id, actor_id)
+    # cmd_094a (SHOT000-PROACTIVE-AUDIT): shot_id=0 (SHOT_000・shot 紐付なし task) は
+    # get_shot(0) が常に None を返すため project_id が解決できず、breadcrumb が
+    # ハードコード fallback (/project_detail/33) に誤誘導されていた。get_qc_viewer
+    # (cmd_091) と同一パターンで selected_task.project_id へ fallback する。
+    project_id = shot.project_id if shot else getattr(selected_task, "project_id", None)
+    project_name = resolve_project_name(project_id, actor_id) if project_id else "-"
+    seq_code = getattr(shot, "seq_code", None) if shot else None
     task_name = selected_task.type if selected_task else None
 
     return _templates.TemplateResponse(

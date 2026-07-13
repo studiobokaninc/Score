@@ -55,6 +55,7 @@ def get_director_retake_input(
     asset_list = []
     assignee_name = ""   # 殿御命 2026-06-09: 通知先 = 実 assignee
     assignee_uid = None
+    pj = None
     if shot_id is not None:
         # shot DTO
         try:
@@ -63,19 +64,30 @@ def get_director_retake_input(
                 shot_code = getattr(s_dto, "shot_code", "") or getattr(s_dto, "name", "") or f"SHOT_{shot_id:03d}"
                 seq_code = getattr(s_dto, "seq_code", "") or ""
                 pj = getattr(s_dto, "project_id", None)
-                if pj is not None:
-                    try:
-                        if hasattr(client, "get_project"):
-                            p = client.get_project(int(pj), actor_user_id=actor_id) or {}
-                            proj_name = p.get("name") or ""
-                        if not proj_name:
-                            for p in (client.get_my_projects(actor_user_id=actor_id) or []):
-                                if isinstance(p, dict) and p.get("id") == pj:
-                                    proj_name = p.get("name") or ""; break
-                    except Exception:
-                        pass
         except Exception:
             pass
+        # cmd_094a (SHOT000-PROACTIVE-AUDIT): shot_id=0 (SHOT_000) は get_shot が常に
+        # None を返し pj が解決できない。task_id から project_id を直接解決する
+        # (get_retake_view/post_troubles と同一パターン)。
+        if pj is None and task_id and hasattr(client, "get_task"):
+            try:
+                task_info = client.get_task(int(task_id), actor_user_id=actor_id) or {}
+                pj = task_info.get("project_id")
+            except Exception:
+                pass
+        if not shot_code:
+            shot_code = f"SHOT_{shot_id:03d}"
+        if pj is not None:
+            try:
+                if hasattr(client, "get_project"):
+                    p = client.get_project(int(pj), actor_user_id=actor_id) or {}
+                    proj_name = p.get("name") or ""
+                if not proj_name:
+                    for p in (client.get_my_projects(actor_user_id=actor_id) or []):
+                        if isinstance(p, dict) and p.get("id") == pj:
+                            proj_name = p.get("name") or ""; break
+            except Exception:
+                pass
         # asset_list (task_id filter)
         try:
             if hasattr(client, "get_shot_detail"):
@@ -129,6 +141,7 @@ def get_director_retake_input(
             "shots": shots,
             "shot_id": shot_id or 0,
             "task_id": task_id,
+            "project_id": pj,
             "shot_code": shot_code,
             "seq_code": seq_code,
             "proj_name": proj_name,
@@ -159,23 +172,35 @@ def get_retake_view(
 
     # 階層解決
     proj_name = seq_code = shot_code = task_type = ""
+    pid = None
     try:
         s_dto = client.get_shot(shot_id, actor_user_id=actor_id)
         if s_dto:
             shot_code = getattr(s_dto, "shot_code", "") or getattr(s_dto, "name", "") or f"SHOT_{shot_id:03d}"
             seq_code = getattr(s_dto, "seq_code", "") or ""
             pid = getattr(s_dto, "project_id", None)
-            if pid is not None:
-                try:
-                    if hasattr(client, "get_project"):
-                        p = client.get_project(int(pid), actor_user_id=actor_id) or {}
-                        proj_name = p.get("name") or ""
-                    if not proj_name:
-                        for p in (client.get_my_projects(actor_user_id=actor_id) or []):
-                            if isinstance(p, dict) and p.get("id") == pid:
-                                proj_name = p.get("name") or ""; break
-                except Exception: pass
     except Exception: pass
+    # cmd_094a (SHOT000-PROACTIVE-AUDIT): shot_id=0 (SHOT_000・shot 紐付なし task) は
+    # get_shot が常に None を返し pid が解決できない。post_troubles/post_qc_notify_existing
+    # と同一パターンで task_id から project_id を直接解決する fallback を追加する。
+    if pid is None and task_id and hasattr(client, "get_task"):
+        try:
+            task_info = client.get_task(int(task_id), actor_user_id=actor_id) or {}
+            pid = task_info.get("project_id")
+        except Exception:
+            pass
+    if not shot_code:
+        shot_code = f"SHOT_{shot_id:03d}"
+    if pid is not None:
+        try:
+            if hasattr(client, "get_project"):
+                p = client.get_project(int(pid), actor_user_id=actor_id) or {}
+                proj_name = p.get("name") or ""
+            if not proj_name:
+                for p in (client.get_my_projects(actor_user_id=actor_id) or []):
+                    if isinstance(p, dict) and p.get("id") == pid:
+                        proj_name = p.get("name") or ""; break
+        except Exception: pass
     try:
         for tk in (client.get_tasks(shot_id, actor_user_id=actor_id) or []):
             tid = getattr(tk, "task_id", None)
@@ -239,6 +264,21 @@ def get_retake_view(
                 if _bn:
                     target_url = f"http://192.168.44.253:8001/static/assets/{_bn}"
     except Exception: pass
+    # cmd_094a (SHOT000-PROACTIVE-AUDIT): shot_id=0 (SHOT_000) は get_shot_detail(0) が
+    # 常に空を返すため target_asset が永久に None のまま (=Retake 対象の参照素材が
+    # 表示されない)。get_director_retake_input (cmd_093) と同一パターンで
+    # get_assets_by_task へ直接 fallback する。
+    if target_asset is None and hasattr(client, "get_assets_by_task"):
+        try:
+            assets_for_task = list(client.get_assets_by_task(int(task_id), actor_user_id=actor_id) or [])
+            assets_for_task = [a for a in assets_for_task if isinstance(a, dict)]
+            assets_for_task.sort(key=lambda a: (a.get("created_at") or ""), reverse=True)
+            if assets_for_task:
+                target_asset = assets_for_task[0]
+                _bn = (target_asset.get("file_path") or "").split("/")[-1]
+                if _bn:
+                    target_url = f"http://192.168.44.253:8001/static/assets/{_bn}"
+        except Exception: pass
 
     # 殿御命 2026-06-05: SHOT thread 探索 — 段階 fallback
     # ① shot_code + (task_type or task_name) を含む thread (= 該当 task 関連の SHOT thread)
@@ -278,6 +318,7 @@ def get_retake_view(
             "role": role, "active": "qc",
             "user": user,
             "shot_id": shot_id, "task_id": task_id,
+            "project_id": pid,
             "shot_code": shot_code, "seq_code": seq_code, "proj_name": proj_name,
             "task_type": task_type, "task_name": task_name,
             "latest_meta": latest_meta,

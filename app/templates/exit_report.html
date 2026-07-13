@@ -341,7 +341,9 @@ function _taskIconFor(type) {
 function _taskLabel(tk) {
   let shot = tk.shot_code || tk.name || '';
   if (!shot || shot === 'task') {
-    shot = tk.shot_id ? ('SHOT_' + String(tk.shot_id).padStart(3, '0')) : ('task#' + (tk.task_id || '?'));
+    // cmd_094a (SHOT000-PROACTIVE-AUDIT): shot_id=0 (SHOT_000) は truthy チェックだと
+    // falsy 誤判定され 'task#N' 表示に落ちていた (server 側 pages_auth.py と同型バグ)。
+    shot = (tk.shot_id !== null && tk.shot_id !== undefined) ? ('SHOT_' + String(tk.shot_id).padStart(3, '0')) : ('task#' + (tk.task_id || '?'));
   }
   const type = tk.task_type || tk.type || '';
   const project = tk.project_name || '';
