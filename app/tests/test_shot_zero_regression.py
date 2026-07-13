@@ -241,6 +241,94 @@ class TestDirectorRetakeInputShotZero:
         assert resp.status_code == 303
         assert resp.headers["location"] == "/qc/0?task_id=3282"
 
+    def test_shot_zero_asset_resolves_via_task_fallback_when_shot_detail_empty(self, client, monkeypatch):
+        """cmd_093 回帰防止 (director_retake_input.png提出物誤表示): shotless task
+        (SHOT_000) では get_shot_detail(0) が常に空 ({}) を返すため、旧実装は
+        latest_asset が永久に None のまま「提出物が無し」を誤表示していた
+        (実機: project 80 task_id=3282, get_shot_detail(0)={} だが
+        get_assets_by_task(3282) には v001.png/v002.txt/v003.png が実在)。
+        get_assets_by_task (cmd_058・next_version と同一設計) への fallback が
+        機能し、created_at 最新の v003.png が latest_asset として解決され、
+        画像プレビューに反映されることを確認する。"""
+        monkeypatch.setattr("app.routers.pages_director.get_actor_role", lambda actor_id: "director")
+        with patch("app.routers.pages_director.get_calendar_client") as MockClient:
+            mock_inst = MagicMock()
+            mock_inst.get_me.return_value = None
+            mock_inst.get_my_projects.return_value = []
+            mock_inst.get_shots.return_value = []
+            mock_inst.get_shot.return_value = None
+            mock_inst.get_shot_detail.return_value = {}
+            mock_inst.get_tasks.return_value = []
+            mock_inst.get_assets_by_task.return_value = [
+                {"shot_id": None, "task_id": 3282, "version": "v001",
+                 "file_path": "E:/calender/backend/static/assets/shot_none_task_3282_v001.png",
+                 "id": 103, "created_at": "2026-07-10T15:56:37.056333"},
+                {"shot_id": None, "task_id": 3282, "version": "v002",
+                 "file_path": "E:/calender/backend/static/assets/shot_none_task_3282_v002.txt",
+                 "id": 104, "created_at": "2026-07-10T16:34:17.046134"},
+                {"shot_id": None, "task_id": 3282, "version": "v003",
+                 "file_path": "E:/calender/backend/static/assets/shot_none_task_3282_v003.png",
+                 "id": 107, "created_at": "2026-07-13T15:22:00.317116"},
+            ]
+            MockClient.return_value = mock_inst
+
+            resp = client.get("/director_retake_input?shot_id=0&task_id=3282", headers=_auth_headers())
+
+        assert resp.status_code == 200
+        mock_inst.get_assets_by_task.assert_called_once_with(3282, actor_user_id=_RESOLVED_ACTOR_ID)
+        assert "提出物が無し" not in resp.text
+        assert "preview 非対応" not in resp.text
+        assert "shot_none_task_3282_v003.png" in resp.text
+
+    def test_shot_zero_still_shows_no_submission_when_task_truly_has_no_assets(self, client, monkeypatch):
+        """上記 fallback 追加の regression ガード: get_assets_by_task も空を返す
+        (＝本当に提出物が無いtask) 場合は、誤って何かをでっち上げず正しく
+        「提出物が無し」のままであることを確認する (false-positive 防止)。"""
+        monkeypatch.setattr("app.routers.pages_director.get_actor_role", lambda actor_id: "director")
+        with patch("app.routers.pages_director.get_calendar_client") as MockClient:
+            mock_inst = MagicMock()
+            mock_inst.get_me.return_value = None
+            mock_inst.get_my_projects.return_value = []
+            mock_inst.get_shots.return_value = []
+            mock_inst.get_shot.return_value = None
+            mock_inst.get_shot_detail.return_value = {}
+            mock_inst.get_tasks.return_value = []
+            mock_inst.get_assets_by_task.return_value = []
+            MockClient.return_value = mock_inst
+
+            resp = client.get("/director_retake_input?shot_id=0&task_id=9999", headers=_auth_headers())
+
+        assert resp.status_code == 200
+        assert "提出物が無し" in resp.text
+
+    def test_shot_nonzero_asset_resolution_unaffected_by_task_fallback(self, client, monkeypatch):
+        """正の対照実験: 通常 shot (shot_id != 0) で get_shot_detail が既に
+        asset_list を返している場合、cmd_093 で新設した get_assets_by_task
+        fallback は一切呼ばれず、既存の shot 経由解決のみで latest_asset が
+        決まること (fallback 新設が正常経路を破壊していないことの保証)。"""
+        monkeypatch.setattr("app.routers.pages_director.get_actor_role", lambda actor_id: "director")
+        with patch("app.routers.pages_director.get_calendar_client") as MockClient:
+            mock_inst = MagicMock()
+            mock_inst.get_me.return_value = None
+            mock_inst.get_my_projects.return_value = []
+            mock_inst.get_shots.return_value = []
+            mock_inst.get_shot.return_value = None
+            mock_inst.get_shot_detail.return_value = {
+                "asset_list": [
+                    {"task_id": 555, "version": "v002",
+                     "file_path": "/assets/shot5_task555_v002.png",
+                     "id": 1, "created_at": "2026-07-12T00:00:00"},
+                ],
+            }
+            mock_inst.get_tasks.return_value = []
+            MockClient.return_value = mock_inst
+
+            resp = client.get("/director_retake_input?shot_id=5&task_id=555", headers=_auth_headers())
+
+        assert resp.status_code == 200
+        mock_inst.get_assets_by_task.assert_not_called()
+        assert "shot5_task555_v002.png" in resp.text
+
 
 # ─── ⑤ Retake POST: bff_write.py post_retakes ───────────────────────────────
 

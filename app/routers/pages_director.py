@@ -83,9 +83,14 @@ def get_director_retake_input(
                 asset_list = list(shot_dict.get("asset_list", []) or [])
                 if task_id:
                     asset_list = [a for a in asset_list if isinstance(a, dict) and a.get("task_id") == task_id]
-                asset_list.sort(key=lambda a: (a.get("created_at") if isinstance(a, dict) else "") or "", reverse=True)
-                if asset_list:
-                    latest_asset = asset_list[0]
+            # cmd_093: shotless task (SHOT_000) では get_shot_detail(0) が常に空を返すため
+            # asset が見つからない。get_assets_by_task (cmd_058・next_version と同一設計) で
+            # task_id 直接解決へ fallback する。
+            if not asset_list and task_id and hasattr(client, "get_assets_by_task"):
+                asset_list = list(client.get_assets_by_task(int(task_id), actor_user_id=actor_id) or [])
+            asset_list.sort(key=lambda a: (a.get("created_at") if isinstance(a, dict) else "") or "", reverse=True)
+            if asset_list:
+                latest_asset = asset_list[0]
         except Exception:
             pass
         # task_type
