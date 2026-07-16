@@ -1017,11 +1017,11 @@ def patch_task(
 ):
     """殿御命 2026-06-03: task status / progress 更新
     Calendar PATCH /api/tasks/{id} pass-through
-    (status: 新19値 mk/wip/modeling/lookdev/caching/rig/facial/v1qc/qc/qc_fb/ap/ap_fb/
-    dir_wt/dir_ap/dir_fb/fix/deliver/omit/wt — cmd_075 2026-07-08 刷新。progress: 0-100)"""
+    (status: 新9値 wt/mk/wip/qc/qc_fb/ap/client_ap/deliver/omit
+    — cmd_106 2026-07-16 9値体系刷新。progress: 0-100)"""
     client = get_calendar_client()
     payload = body or {}
-    # validation — 新19値のみ受理。旧7値は互換のため新値へ正規化して受理 (旧クライアント救済)
+    # validation — 新9値のみ受理。旧値は互換のため新値へ正規化して受理 (旧クライアント救済)
     if "status" in payload:
         incoming_status = payload["status"]
         if incoming_status in OLD_TO_NEW_STATUS:
@@ -1393,22 +1393,23 @@ async def post_qc_approve_bff(request: Request, actor_id: str = Depends(get_acto
         raise HTTPException(status_code=400, detail="shot_id 必須")
 
     client = get_calendar_client()
-    # cmd_075 (2026-07-08): task_id 不在時 shot 内 判定待ち (qc/v1qc/dir_wt) な task を auto-resolve
+    # cmd_106 (2026-07-16): task_id 不在時 shot 内 判定待ち (qc) な task を auto-resolve
+    # (9値体系では v1qc/dir_wt は qc へ集約済み — task_status.py OLD_TO_NEW_STATUS 参照)
     # cmd_091c: shot_id=0 (SHOT_000 sentinel) は「値あり」— not shot_id だと falsy-zero で誤判定
     if not task_id and shot_id is not None:
         try:
             tasks = client.get_tasks(int(shot_id), actor_user_id=actor_id) or []
             for t in tasks:
                 st = getattr(t, 'status', None) or (t.get('status') if isinstance(t, dict) else None)
-                if st in ('qc', 'v1qc', 'dir_wt'):
+                if st == 'qc':
                     task_id = getattr(t, 'task_id', None) or (t.get('id') if isinstance(t, dict) else None)
                     if task_id: break
         except Exception:
             pass
     # cmd_089 (2026-07-10・殿御命): Ap(承認)と Deliver(納品)は別ステータス。
-    # cmd_075 の 19値体系導入時に本ハンドラが取り残され deliver 直行のままだった
-    # (ap は internal_check・deliver は completed の唯一値 — task_status.py 参照)。
-    # Deliver への遷移は本ハンドラの責務外 (別トリガーで行う設計)。
+    # cmd_106 (2026-07-16): 9値体系では ap/client_ap/deliver の3値すべてが completed
+    # (task_status.py STATUS_CATEGORY 参照)。本ハンドラは ap への遷移のみ担当し、
+    # client_ap/deliver への遷移は本ハンドラの責務外 (別トリガーで行う設計)。
     if task_id and hasattr(client, "patch_task"):
         try:
             client.patch_task(int(task_id), {"status": "ap"}, actor_user_id=actor_id)

@@ -1,5 +1,5 @@
-"""Task status registry — single source for the 19-value TaskStatus system
-(cmd_075 刷新対応・2026-07-08).
+"""Task status registry — single source for the 9-value TaskStatus system
+(cmd_106 STEP2a 9値刷新対応・2026-07-16).
 
 一次ソースは Calendar 側 backend/app/status_meta.py。色/ラベルは
 GET /api/readonly/task-statuses から動的取得しキャッシュする(ハードコード禁止・
@@ -14,68 +14,61 @@ from datetime import datetime, timedelta, timezone
 from typing import Any, Iterable
 
 NEW_TASK_STATUSES = frozenset({
-    "mk", "wip", "modeling", "lookdev", "caching", "rig", "facial",
-    "v1qc", "qc", "qc_fb", "ap", "ap_fb", "dir_wt", "dir_ap", "dir_fb",
-    "fix", "deliver", "omit", "wt",
+    "wt", "mk", "wip", "qc", "qc_fb", "ap", "client_ap", "deliver", "omit",
 })
 
-# 旧7値 → 新値。delayed は状態ではなく isOverdue 派生フラグへ移行するが、
-# 万一 patch_task に旧値が届いた場合の互換変換先として wip を維持する。
+# 旧値 → 新9値。Calendar 側 canonicalize と同一の写像。
 OLD_TO_NEW_STATUS = {
-    "todo": "mk",
-    "in-progress": "wip",
-    "in_progress": "wip",
-    "review": "qc",
-    "retake": "qc_fb",
-    "approved": "ap",
-    "completed": "deliver",
-    "delayed": "wip",
+    # 旧7値
+    "todo": "mk", "in-progress": "wip", "in_progress": "wip",
+    "review": "qc", "retake": "qc_fb", "approved": "ap",
+    "completed": "deliver", "delayed": "wip",
+    # 旧19体系 → 新9体系(集約)
+    "modeling": "wip", "lookdev": "wip", "caching": "wip", "rig": "wip", "facial": "wip",
+    "v1qc": "qc", "dir_wt": "qc",
+    "ap_fb": "qc_fb", "dir_fb": "qc_fb", "fix": "qc_fb",
+    "dir_ap": "ap",
+    "client-ap": "client_ap",  # ハイフン表記の救済
 }
 
-# ロジック上の状態カテゴリ (6分類・score_compatibility_check.md §2.2 準拠)
+# ロジック上の状態カテゴリ (V2 の5分類。internal_check/external_check は廃止)
 STATUS_CATEGORY: dict[str, frozenset[str]] = {
     "not_started": frozenset({"mk"}),
-    "in_progress": frozenset({"wip", "modeling", "lookdev", "caching", "rig", "facial"}),
-    "internal_check": frozenset({"v1qc", "qc", "qc_fb", "ap"}),
-    "external_check": frozenset({"dir_wt", "dir_ap", "dir_fb", "ap_fb", "fix"}),
-    "completed": frozenset({"deliver"}),
-    "held": frozenset({"omit", "wt"}),
+    "in_progress": frozenset({"wip"}),
+    "review":      frozenset({"qc", "qc_fb"}),
+    "completed":   frozenset({"ap", "client_ap", "deliver"}),  # ★3値すべて完了
+    "held":        frozenset({"wt", "omit"}),
 }
 
-COMPLETED_STATUSES = STATUS_CATEGORY["completed"]  # {"deliver"} — 唯一の完了
+COMPLETED_STATUSES = STATUS_CATEGORY["completed"]   # {"ap","client_ap","deliver"}
 HELD_STATUSES = STATUS_CATEGORY["held"]
-CHECK_STATUSES = STATUS_CATEGORY["internal_check"] | STATUS_CATEGORY["external_check"]
+CHECK_STATUSES = STATUS_CATEGORY["review"]          # 旧 internal|external の代替
 
-# Director/PM が判定アクションを取れる対象 (承認済 ap/dir_ap/fix は除く=判定待ちのみ)
-JUDGE_TARGET_STATUSES = frozenset({"qc", "v1qc", "qc_fb", "ap_fb", "dir_wt", "dir_fb"})
+# Director/PM が判定アクションを取れる対象 (判定待ちのみ)
+JUDGE_TARGET_STATUSES = frozenset({"qc", "qc_fb"})
 # PM ダッシュボード「受領待ち成果物」カウント対象 (FB系=再修正中は含めない)
-RECEPTION_PENDING_STATUSES = frozenset({"qc", "v1qc", "dir_wt"})
+RECEPTION_PENDING_STATUSES = frozenset({"qc"})
 
 # ダッシュボード等のソート優先度 (小さいほど要対応度が高い)
 STATUS_PRIORITY: dict[str, int] = {
-    "qc_fb": 0, "ap_fb": 0, "dir_fb": 0,
-    "qc": 1, "v1qc": 1, "dir_wt": 1,
-    "mk": 2,
-    "wip": 3, "modeling": 3, "lookdev": 3, "caching": 3, "rig": 3, "facial": 3,
-    "wt": 4,
-    "ap": 5, "fix": 5, "dir_ap": 5,
-    "deliver": 9, "omit": 9,
+    "qc_fb": 0,          # FB修正 最優先
+    "qc": 1,             # 社内チェック(判定待ち)
+    "mk": 2,             # 未着手
+    "wip": 3,            # 進行中
+    "wt": 4,             # 待機
+    "ap": 9, "client_ap": 9, "deliver": 9, "omit": 9,  # 完了・対象外は最下位
 }
 
 # 退勤レポート「作業要」判定用 (exit_report.html — score_compatibility_check.md §3.3.D)
 # FB系 (再修正中) も作業要に含む
-WIP_STATUSES: list[str] = [
-    "mk", "wip", "modeling", "lookdev", "caching", "rig", "facial",
-    "qc_fb", "ap_fb", "dir_fb",
-]
+WIP_STATUSES: list[str] = ["mk", "wip", "qc_fb"]
 
-# 退勤レポート等の進捗率デフォルト (score_compatibility_check.md §3.3.D)
+# 退勤レポート等の進捗率デフォルト (score_compatibility_check.md §3.3.D)。完了3値=100
 STATUS_DEFAULT_PROGRESS: dict[str, int] = {
-    "deliver": 100, "dir_ap": 95, "fix": 95, "ap": 85,
-    "qc": 70, "v1qc": 70, "dir_wt": 70,
-    "wip": 40, "modeling": 40, "lookdev": 40, "caching": 40, "rig": 40, "facial": 40,
-    "qc_fb": 40, "ap_fb": 40, "dir_fb": 40,
-    "wt": 20, "mk": 0,
+    "deliver": 100, "client_ap": 100, "ap": 100,
+    "qc": 70,
+    "wip": 40, "qc_fb": 40,
+    "wt": 0, "mk": 0,
 }
 
 FALLBACK_COLOR = "#BDBDBD"  # 不明ステータスのデフォルト (color guide §2 準拠)

@@ -528,27 +528,17 @@ class MockCalendarClient(CalendarClient):
 
     def get_task_statuses(self, actor_user_id: str | None = None) -> list:
         """GET /api/readonly/task-statuses mock — 実 Calendar backend/app/status_meta.py の
-        19値定義を模倣 (calendar_status_color_guide_for_score_2026-07-08.md §4 準拠)。"""
+        9値定義を模倣 (score_new2_status_v2_impact_20260716.md 付録B 準拠)。"""
         return [
-            {"value": "mk", "label": "MK", "color": "#1E88E5", "category": "todo"},
-            {"value": "wt", "label": "WT", "color": "#E53935", "category": "held"},
-            {"value": "wip", "label": "WIP", "color": "#FFA726", "category": "in_progress"},
-            {"value": "modeling", "label": "Modeling", "color": "#FB8C00", "category": "in_progress"},
-            {"value": "lookdev", "label": "LookDev", "color": "#F57C00", "category": "in_progress"},
-            {"value": "caching", "label": "Caching", "color": "#E65100", "category": "in_progress"},
-            {"value": "rig", "label": "Rig", "color": "#FFB300", "category": "in_progress"},
-            {"value": "facial", "label": "Facial", "color": "#FDD835", "category": "in_progress"},
-            {"value": "qc_fb", "label": "QC_FB", "color": "#E91E63", "category": "review"},
-            {"value": "ap_fb", "label": "AP_FB", "color": "#D81B60", "category": "review"},
-            {"value": "dir_fb", "label": "Dir_FB", "color": "#C2185B", "category": "review"},
-            {"value": "v1qc", "label": "V1QC", "color": "#BA68C8", "category": "review"},
-            {"value": "qc", "label": "QC", "color": "#8E24AA", "category": "review"},
-            {"value": "dir_wt", "label": "Dir_WT", "color": "#26A69A", "category": "review"},
-            {"value": "ap", "label": "AP", "color": "#81C784", "category": "review"},
-            {"value": "dir_ap", "label": "Dir_AP", "color": "#4CAF50", "category": "review"},
-            {"value": "fix", "label": "FIX", "color": "#2E7D32", "category": "review"},
-            {"value": "deliver", "label": "Deliver", "color": "#757575", "category": "completed"},
-            {"value": "omit", "label": "Omit", "color": "#E0E0E0", "category": "held"},
+            {"value": "wt",        "label": "WT",        "color": "#BDBDBD", "category": "held"},
+            {"value": "mk",        "label": "MK",        "color": "#2196F3", "category": "todo"},
+            {"value": "wip",       "label": "WIP",       "color": "#FF9800", "category": "in_progress"},
+            {"value": "qc",        "label": "QC",        "color": "#9C27B0", "category": "review"},
+            {"value": "qc_fb",     "label": "QC_FB",     "color": "#E91E63", "category": "review"},
+            {"value": "ap",        "label": "AP",        "color": "#4CAF50", "category": "completed"},
+            {"value": "client_ap", "label": "CLIENT_AP", "color": "#2E7D32", "category": "completed"},
+            {"value": "deliver",   "label": "DELIVER",   "color": "#757575", "category": "completed"},
+            {"value": "omit",      "label": "OMIT",      "color": "#E0E0E0", "category": "held"},
         ]
 
     def get_projects(self, actor_user_id: str | None = None) -> list:
