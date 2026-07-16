@@ -1009,6 +1009,71 @@ async def post_asset_upload(
     return JSONResponse(content=result, headers={"X-Actor-User-Id": actor_id})
 
 
+def _notify_next_artist_on_deliver(client, task_id: int, actor_id: str) -> dict:
+    """cmd_106 パートB (2026-07-16): DELIVER遷移時、同一shot内で status='wt'(待機)
+    な次工程taskの担当者へPush/SSE通知する(例: FX完成→ライトコンプへ渡す時)。
+    次担当を一意に特定できない(0件/複数件)場合は誤送信を避けるため通知をスキップし、
+    ログのみ残す(推測で送信しない — cmd_106d 殿仕様)。"""
+    import sys as _sys
+    if not hasattr(client, "get_task"):
+        print(f"[deliver_notify] task_id={task_id}: client.get_task 未実装 — 次工程解決不可・スキップ", file=_sys.stderr)
+        return {"notified": False, "reason": "get_task_unsupported"}
+    try:
+        task_info = client.get_task(int(task_id), actor_user_id=actor_id) or {}
+    except Exception as e:
+        print(f"[deliver_notify] task_id={task_id}: get_task 失敗 ({e}) — スキップ", file=_sys.stderr)
+        return {"notified": False, "reason": "get_task_failed"}
+    shot_id = task_info.get("shot_id")
+    if not shot_id:
+        print(f"[deliver_notify] task_id={task_id}: shotless task — 次工程解決不可・スキップ", file=_sys.stderr)
+        return {"notified": False, "reason": "shotless"}
+    try:
+        siblings = client.get_tasks(int(shot_id), actor_user_id=actor_id) or []
+    except Exception as e:
+        print(f"[deliver_notify] task_id={task_id}: get_tasks(shot_id={shot_id}) 失敗 ({e}) — スキップ", file=_sys.stderr)
+        return {"notified": False, "reason": "get_tasks_failed"}
+    candidates = []
+    for t in siblings:
+        tid = (t.get("id") or t.get("task_id")) if isinstance(t, dict) else getattr(t, "task_id", None)
+        if tid is None or int(tid) == int(task_id):
+            continue
+        st = (t.get("status") if isinstance(t, dict) else getattr(t, "status", None))
+        assignee = (t.get("assigned_to") or t.get("assignee_id")) if isinstance(t, dict) else getattr(t, "assignee_id", None)
+        if st == "wt" and assignee is not None:
+            candidates.append((tid, assignee))
+    if len(candidates) != 1:
+        print(f"[deliver_notify] task_id={task_id} shot_id={shot_id}: 次工程候補(status=wt) {len(candidates)}件 — 一意特定不可・スキップ", file=_sys.stderr)
+        return {"notified": False, "reason": "ambiguous_or_none", "candidate_count": len(candidates)}
+    next_task_id, next_assignee = candidates[0]
+    try:
+        next_assignee_cuid = int(next_assignee)
+    except (ValueError, TypeError):
+        print(f"[deliver_notify] task_id={task_id}: 次工程 task_id={next_task_id} の assignee 不正 — スキップ", file=_sys.stderr)
+        return {"notified": False, "reason": "invalid_assignee"}
+    from app.routers.pages_notif_settings import get_user_prefs
+    from app.routers.sse_notifications import push_sse_event
+    push_payload = {
+        "title": "📦 DELIVER — 次工程 引き継ぎ",
+        "body": f"task {task_id} が納品されました。担当タスク(task {next_task_id})に着手可能です。",
+        "url": f"/qc/{shot_id}?task_id={next_task_id}",
+        "tag": f"score-deliver-{task_id}",
+    }
+    prefs = get_user_prefs(next_assignee_cuid)
+    push_result = {"sent": 0, "failed": 0, "details": []}
+    sse_result = {"delivered": 0, "skipped_no_listener": 0}
+    if prefs.get("channels", {}).get("push", True):
+        push_result = _push_to_cuids([next_assignee_cuid], push_payload)
+    if prefs.get("channels", {}).get("sse", True):
+        sse_result = push_sse_event([next_assignee_cuid], "notif", push_payload)
+    return {
+        "notified": True,
+        "next_task_id": next_task_id,
+        "next_assignee": next_assignee_cuid,
+        "push_result": push_result,
+        "sse_result": sse_result,
+    }
+
+
 @router.patch("/api/bff/tasks/{task_id}")
 def patch_task(
     task_id: int = Path(...),
@@ -1038,7 +1103,13 @@ def patch_task(
     if not payload:
         raise HTTPException(status_code=400, detail="empty body")
     result = client.patch_task(task_id, payload, actor_user_id=actor_id) if hasattr(client, "patch_task") else {"ok": False, "reason": "client method not implemented"}
-    return JSONResponse(content=result, headers={"X-Actor-User-Id": actor_id})
+    # cmd_106 パートB (2026-07-16・殿御命): DELIVER遷移時、次担当アーティストへ通知
+    # 「【DELIVER】アーティスト — 担当アーティストに通知(例: FX完成→ライトコンプへ渡す時)」
+    deliver_notify = None
+    if payload.get("status") == "deliver":
+        deliver_notify = _notify_next_artist_on_deliver(client, task_id, actor_id)
+    response_content = {**result, "deliver_notify": deliver_notify} if isinstance(result, dict) else result
+    return JSONResponse(content=response_content, headers={"X-Actor-User-Id": actor_id})
 
 
 @router.post("/api/bff/dm/threads")
@@ -1418,6 +1489,10 @@ async def post_qc_approve_bff(request: Request, actor_id: str = Depends(get_acto
 
     # SHOT thread (既存の review thread を探して 通知投稿)
     thread_notified = False
+    # cmd_106 パートB (2026-07-16・殿御命): AP承認 Push/SSE 通知結果
+    # (QC提出/QC_FB は三重通知済だが承認だけ thread post のみで手薄だった是正)
+    approve_push_result = {"sent": 0, "failed": 0, "details": []}
+    approve_sse_result = {"delivered": 0, "skipped_no_listener": 0}
     try:
         if hasattr(client, "get_my_dm_threads"):
             threads = client.get_my_dm_threads(actor_user_id=actor_id) or []
@@ -1533,10 +1608,52 @@ async def post_qc_approve_bff(request: Request, actor_id: str = Depends(get_acto
                 body_lines.append(f"— {sender_name} (Director)")
                 client.post_dm(int(tid), "\n".join(body_lines), actor_user_id=actor_id)
                 thread_notified = True
+
+                # cmd_106 パートB (2026-07-16・殿御命): AP(承認)通知に Push/SSE を追加。
+                # QC提出/QC_FB通知(_push_to_cuids・push_sse_event)と同じパターン。
+                # 宛先はQC_FB同様、アーティスト(assignee)を必ず含める(殿仕様)。
+                from app.routers.pages_notif_settings import get_user_prefs
+                from app.routers.sse_notifications import push_sse_event
+                from app.adapters.calendar_client import _to_calendar_uid
+                notify_targets = set()
+                for _p in (target.get("participants") or []):
+                    try:
+                        notify_targets.add(int(_p))
+                    except (ValueError, TypeError):
+                        pass
+                if task_id and hasattr(client, "get_task"):
+                    try:
+                        _ti = client.get_task(int(task_id), actor_user_id=actor_id) or {}
+                        _assignee = _ti.get("assigned_to") or _ti.get("assignee_id")
+                        if _assignee is not None:
+                            notify_targets.add(int(_assignee))
+                    except Exception:
+                        pass
+                _sender_cuid = _to_calendar_uid(actor_id)
+                if _sender_cuid is not None:
+                    notify_targets.discard(int(_sender_cuid))
+                if notify_targets:
+                    approve_push_payload = {
+                        "title": f"✅ Approved: {title_line}",
+                        "body": (comment[:200] if comment else f"{sender_name} が承認しました"),
+                        "url": f"/qc/{shot_id}" + (f"?task_id={task_id}" if task_id else ""),
+                        "tag": f"score-approve-{tid}",
+                    }
+                    approve_push_targets, approve_sse_targets = [], []
+                    for _cuid in notify_targets:
+                        _prefs = get_user_prefs(int(_cuid))
+                        if _prefs.get("channels", {}).get("push", True):
+                            approve_push_targets.append(_cuid)
+                        if _prefs.get("channels", {}).get("sse", True):
+                            approve_sse_targets.append(_cuid)
+                    if approve_push_targets:
+                        approve_push_result = _push_to_cuids(approve_push_targets, approve_push_payload)
+                    if approve_sse_targets:
+                        approve_sse_result = push_sse_event(approve_sse_targets, "notif", approve_push_payload)
     except Exception:
         pass
 
-    return JSONResponse(content={"ok": True, "shot_id": shot_id, "task_id": task_id, "thread_notified": thread_notified})
+    return JSONResponse(content={"ok": True, "shot_id": shot_id, "task_id": task_id, "thread_notified": thread_notified, "push_result": approve_push_result, "sse_result": approve_sse_result})
 
 
 @router.get("/api/bff/projects/{project_id}/roles")
