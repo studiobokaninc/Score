@@ -9,8 +9,9 @@ from fastapi.responses import JSONResponse
 from typing import Optional
 
 from app.adapters.calendar_factory import get_calendar_client
-from app.deps import get_actor_id
-from app.helpers.task_status import NEW_TASK_STATUSES, OLD_TO_NEW_STATUS
+from app.deps import get_actor_id, get_actor_role
+from app.helpers.task_status import NEW_TASK_STATUSES, OLD_TO_NEW_STATUS, COMPLETED_STATUSES
+from app.qc_delegation import is_qc_delegated
 
 # 殿御命 2026-06-04 cmd_477: Web Push subscription store (簡易 file-based)
 _PUSH_STORE = _Path("/tmp/score_push_subs.json")
@@ -70,6 +71,30 @@ def _push_to_cuids(cuid_list: list[int], payload: dict) -> dict:
     return {"sent": sent, "failed": failed, "details": details}
 
 router = APIRouter()
+
+# cmd_141 (2026-07-23・殿御命): Score書込API server側 role/権限検査 新設。
+# 従来 role gate は qc_viewer.html / pages_director.py 等 HTML 画面側にのみ存在し、
+# 書込 API 本体 (本ファイル) には認可検査が無かった。get_actor_id (認証) はあっても
+# get_actor_role / is_qc_delegated (認可) が一度も呼ばれていなかったため、URL 直叩きで
+# 無権限アクターが承認・差戻し・状態改変を実行できていた。
+# qc_viewer.html の既存クライアント側ゲート (role in ('director','pm','admin') or
+# is_qc_delegated) と同一の判定基準を server 側にも新設し fail-closed で拒否する。
+PRIVILEGED_TASK_STATUSES = COMPLETED_STATUSES | {"qc_fb"}  # {"ap","client_ap","deliver","qc_fb"}
+
+
+def _require_qc_judge_authority(actor_id: str, task_id: int | None = None, shot_id: int | None = None) -> None:
+    """承認/差戻し/完了相当の判定アクションは Director/PM/Admin、または当該
+    task/shot の QC 委任者 (is_qc_delegated・依頼単位の一時委任) のみ許可する。
+    それ以外は 403 (fail-closed)。"""
+    role = get_actor_role(actor_id)
+    if role in ("director", "pm", "admin"):
+        return
+    if is_qc_delegated(actor_id, task_id=task_id, shot_id=shot_id):
+        return
+    raise HTTPException(
+        status_code=403,
+        detail="QC判定権限がありません(Director/PM/Admin、またはこの依頼の委任者のみ実行可)",
+    )
 
 
 @router.post("/api/bff/retakes")
@@ -150,6 +175,9 @@ async def post_retakes(request: Request, actor_id: str = Depends(get_actor_id)):
     comments_list = body.get("comments") or []
     markers_list = body.get("markers") or []
     ref_url = (body.get("reference_url") or "").strip()
+
+    # cmd_141: Retake(差戻し)発行は判定権限アクター限定 (既存 UI ゲートの server 側実装)
+    _require_qc_judge_authority(actor_id, task_id=task_id, shot_id=shot_id)
 
     # 階層解決
     from app.adapters.calendar_client import _to_calendar_uid
@@ -1102,6 +1130,27 @@ def patch_task(
             raise HTTPException(status_code=400, detail="progress must be 0-100")
     if not payload:
         raise HTTPException(status_code=400, detail="empty body")
+
+    # cmd_141: 判定(承認/差戻し/完了)相当ステータスへの直接書込は判定権限アクター限定。
+    # qc/approve・retakes を経由せずこの汎用 EP に直接 status=ap 等を投げる URL 直叩きの
+    # 抜け道を塞ぐ (通常の自己管理系遷移 wt/mk/wip/qc/omit は従来通り誰でも書込可)。
+    if payload.get("status") in PRIVILEGED_TASK_STATUSES:
+        _require_qc_judge_authority(actor_id, task_id=task_id)
+
+    # cmd_141 (任意項目③・限定実装): 完了済 (ap/client_ap/deliver) から未完了への
+    # 逆行 (例: ap→wip) は判定権限アクター以外には認めない。全9値の遷移可否を厳密に
+    # 検証する完全な状態機械は業務ルールが未確定な箇所があり副作用リスクが高いため
+    # 見送り、報告で殿判断を仰ぐ (詳細は report 参照)。ここでは「完了済からの離脱」
+    # という最も実害の大きいケースに限定して fail-closed で防ぐ。
+    if "status" in payload and hasattr(client, "get_task"):
+        try:
+            _current_task = client.get_task(task_id, actor_user_id=actor_id) or {}
+            _current_status = _current_task.get("status")
+        except Exception:
+            _current_status = None
+        if _current_status in COMPLETED_STATUSES and payload["status"] not in COMPLETED_STATUSES:
+            _require_qc_judge_authority(actor_id, task_id=task_id)
+
     result = client.patch_task(task_id, payload, actor_user_id=actor_id) if hasattr(client, "patch_task") else {"ok": False, "reason": "client method not implemented"}
     # cmd_106 パートB (2026-07-16・殿御命): DELIVER遷移時、次担当アーティストへ通知
     # 「【DELIVER】アーティスト — 担当アーティストに通知(例: FX完成→ライトコンプへ渡す時)」
@@ -1477,6 +1526,10 @@ async def post_qc_approve_bff(request: Request, actor_id: str = Depends(get_acto
                     if task_id: break
         except Exception:
             pass
+
+    # cmd_141: Approve(承認)実行は判定権限アクター限定 (既存 UI ゲートの server 側実装)
+    _require_qc_judge_authority(actor_id, task_id=task_id, shot_id=shot_id)
+
     # cmd_089 (2026-07-10・殿御命): Ap(承認)と Deliver(納品)は別ステータス。
     # cmd_106 (2026-07-16): 9値体系では ap/client_ap/deliver の3値すべてが completed
     # (task_status.py STATUS_CATEGORY 参照)。本ハンドラは ap への遷移のみ担当し、

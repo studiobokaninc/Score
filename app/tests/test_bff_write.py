@@ -66,7 +66,9 @@ def _auth_headers() -> dict:
 # ─── POST /api/bff/retakes ───────────────────────────────────────────────────
 
 class TestBffWriteRetakes:
-    def test_post_retakes_valid_jwt(self, client):
+    def test_post_retakes_valid_jwt(self, client, monkeypatch):
+        # cmd_141: post_retakes は判定権限アクター(director/pm/admin)限定のserver側gate新設済
+        monkeypatch.setattr("app.routers.bff_write.get_actor_role", lambda actor_id: "director")
         with patch("app.routers.bff_write.get_calendar_client") as MockClient:
             mock_inst = MagicMock()
             mock_inst.post_retakes.return_value = _MOCK_RESULT
