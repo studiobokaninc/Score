@@ -109,7 +109,7 @@
           <ul class="space-y-2">
             <li class="flex items-start gap-3 text-sm">
               <span class="font-mono text-indigo-700 font-bold shrink-0 whitespace-nowrap">{{ (next_event.date or next_event.start_time or '')[:10] }}</span>
-              {% if next_event.project_name %}<span class="text-[10px] text-slate-500 bg-slate-100 rounded px-1.5 py-0.5 shrink-0" translate="no">{{ next_event.project_name }}</span>{% endif %}
+              {% if next_event.project_name %}<span class="text-[10px] text-emerald-700 bg-slate-100 rounded px-1.5 py-0.5 shrink-0" translate="no">{{ next_event.project_name }}</span>{% endif %}
               <span class="flex-1 min-w-0 text-slate-800" translate="no">{{ next_event.title }}</span>
             </li>
           </ul>
@@ -206,7 +206,7 @@
               <a href="{% if t.is_qc_inbox %}{{ t.qc_url if t.qc_url else '/messages?thread=' + t.thread_id|string }}{% else %}/task/{{ t.task_id }}{% endif %}"{% if t.is_qc_inbox %} data-qc-direct="1"{% endif %} class="flex items-center gap-3 p-3 rounded-2xl hover:bg-white/60 transition-all">
                 <span class="text-xl font-black text-indigo-500 w-6 text-center">{{ loop.index }}</span>
                 <span class="text-xl">{{ _icon }}</span>
-                {% if t.project_name %}<span class="text-[10px] text-slate-500 bg-slate-100 rounded px-1.5 py-0.5 shrink-0" translate="no">{{ t.project_name }}</span>{% endif %}
+                {% if t.project_name %}<span class="text-[10px] text-emerald-700 bg-slate-100 rounded px-1.5 py-0.5 shrink-0" translate="no">{{ t.project_name }}</span>{% endif %}
                 <div class="flex-1 min-w-0">
                   <p class="text-sm font-bold text-slate-800"><span translate="no">{{ t.shot_code }}</span> <span translate="no">{{ t.task_type }}</span></p>
                   <p class="text-xs text-slate-500">
@@ -254,8 +254,8 @@
             {% for m in upcoming_milestones %}
             <li class="flex items-center gap-3 text-sm">
               <span class="font-mono text-amber-800 font-bold shrink-0 w-12">{{ m.date_short or (m.date or '')[5:10] }}</span>
-              <span class="flex-1 text-slate-800" translate="no">{{ m.title }}</span>
-              {% if m.project_name %}<span class="text-[10px] text-slate-500 bg-white/60 rounded px-1.5 py-0.5 shrink-0" translate="no">{{ m.project_name }}</span>{% endif %}
+              {% if m.project_name %}<span class="text-[10px] text-emerald-700 bg-white/60 rounded px-1.5 py-0.5 shrink-0" translate="no">{{ m.project_name }}</span>{% endif %}
+              <span class="flex-1 min-w-0 text-slate-800" translate="no">{{ m.title }}</span>
             </li>
             {% endfor %}
           </ul>
