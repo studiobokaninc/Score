@@ -10,7 +10,7 @@ from typing import Optional
 
 from app.adapters.calendar_factory import get_calendar_client
 from app.deps import get_actor_id, get_actor_role
-from app.helpers.task_status import NEW_TASK_STATUSES, OLD_TO_NEW_STATUS, COMPLETED_STATUSES
+from app.helpers.task_status import NEW_TASK_STATUSES, OLD_TO_NEW_STATUS, COMPLETED_STATUSES, status_label
 from app.qc_delegation import is_qc_delegated
 
 # 殿御命 2026-06-04 cmd_477: Web Push subscription store (簡易 file-based)
@@ -95,6 +95,63 @@ def _require_qc_judge_authority(actor_id: str, task_id: int | None = None, shot_
         status_code=403,
         detail="QC判定権限がありません(Director/PM/Admin、またはこの依頼の委任者のみ実行可)",
     )
+
+
+# cmd_149 (2026-07-29・殿御命): post_retakes の宛先解決/thread投稿+push/SSE配信ロジックを
+# 共通関数化。手動ステータス変更(status_manual)からも同一の宛先解決を再利用するため
+# (★宛先解決ロジックの重複実装禁止・タスクYAML明記)。post_retakes 側の挙動は変更しない
+# (同一ロジックを関数に切り出しただけ)。
+def _resolve_notify_participants(client, actor_id: str, pid: int | None = None, task_id: int | None = None) -> tuple[list[int], int | None]:
+    """PM/Director/Lead/Assignee/Sender 宛先解決 (post_retakes 由来・共通)。
+    戻り値: (participants ソート済list, sender_cuid_int)。"""
+    from app.adapters.calendar_client import _to_calendar_uid
+    sender_cuid = _to_calendar_uid(actor_id)
+    sender_cuid_int = int(sender_cuid) if sender_cuid is not None else None
+    FALLBACK_PM = 52
+    roles = {}
+    if pid is not None and hasattr(client, "get_project_roles"):
+        try: roles = client.get_project_roles(int(pid), actor_user_id=actor_id) or {}
+        except Exception: pass
+    parts = set()
+    parts.add(int(roles.get("pm") or FALLBACK_PM))
+    if roles.get("director"): parts.add(int(roles["director"]))
+    if roles.get("lead") or roles.get("lighting_lead"): parts.add(int(roles.get("lead") or roles.get("lighting_lead")))
+    if task_id:
+        try:
+            tr = client.get_task(int(task_id), actor_user_id=actor_id) or {} if hasattr(client, "get_task") else {}
+            a = tr.get("assigned_to") or tr.get("assignee_id")
+            if a: parts.add(int(a))
+        except Exception: pass
+    if sender_cuid_int is not None: parts.add(sender_cuid_int)
+    return sorted(parts), sender_cuid_int
+
+
+def _notify_thread(client, actor_id: str, participants: list[int], sender_cuid_int: int | None, task_id: int | None,
+                    body_text: str, notif_title: str, notif_body: str, url_path: str, tag_prefix: str) -> tuple[int | None, dict, dict]:
+    """participants 宛 DM thread 投稿 + push/SSE 配信 (post_retakes 由来・共通)。
+    tag は thread_id 確定後に f"{tag_prefix}-{thread_id}" として組み立てる
+    (post_dm_thread 実行前は thread_id 未確定のため呼び出し側で組み立て不可)。
+    戻り値: (thread_id, push_result, sse_result)。"""
+    thread_id = None
+    push_result = {"sent": 0, "failed": 0, "details": []}
+    sse_result = {"delivered": 0, "skipped_no_listener": 0}
+    if hasattr(client, "post_dm_thread") and len(participants) >= 2:
+        thread_resp = client.post_dm_thread(participant_ids=participants, task_id=task_id, actor_user_id=actor_id)
+        thread_id = thread_resp.get("thread_id") or thread_resp.get("id")
+        if thread_id and hasattr(client, "post_dm"):
+            client.post_dm(int(thread_id), body_text, actor_user_id=actor_id)
+            from app.routers.pages_notif_settings import get_user_prefs
+            from app.routers.sse_notifications import push_sse_event
+            payload = {"title": notif_title, "body": notif_body[:200], "url": url_path, "tag": f"{tag_prefix}-{thread_id}"}
+            push_t = []; sse_t = []
+            for cuid in participants:
+                if sender_cuid_int is not None and cuid == sender_cuid_int: continue
+                pref = get_user_prefs(int(cuid))
+                if pref.get("channels", {}).get("push", True): push_t.append(cuid)
+                if pref.get("channels", {}).get("sse", True): sse_t.append(cuid)
+            if push_t: push_result = _push_to_cuids(push_t, payload)
+            if sse_t: sse_result = push_sse_event(sse_t, "notif", payload)
+    return thread_id, push_result, sse_result
 
 
 @router.post("/api/bff/retakes")
@@ -242,26 +299,10 @@ async def post_retakes(request: Request, actor_id: str = Depends(get_actor_id)):
     push_result = {"sent": 0, "failed": 0, "details": []}
     sse_result = {"delivered": 0, "skipped_no_listener": 0}
     try:
-        # 既存 thread を探す or 新規作成 (post_dm_thread = task_id 単位 で 一意 or 新規)
-        # 簡易: shot 関係者 PM/Director/Lead + sender でカレンダー側 thread 作成
-        FALLBACK_PM = 52
-        roles = {}
-        if pid is not None and hasattr(client, "get_project_roles"):
-            try: roles = client.get_project_roles(int(pid), actor_user_id=actor_id) or {}
-            except Exception: pass
-        parts = set()
-        parts.add(int(roles.get("pm") or FALLBACK_PM))
-        if roles.get("director"): parts.add(int(roles["director"]))
-        if roles.get("lead") or roles.get("lighting_lead"): parts.add(int(roles.get("lead") or roles.get("lighting_lead")))
-        # assignee 自動追加 (task)
-        if task_id:
-            try:
-                tr = client.get_task(int(task_id), actor_user_id=actor_id) or {} if hasattr(client, "get_task") else {}
-                a = tr.get("assigned_to") or tr.get("assignee_id")
-                if a: parts.add(int(a))
-            except Exception: pass
-        if sender_cuid_int is not None: parts.add(sender_cuid_int)
-        participants = sorted(parts)
+        # 既存 thread を探す or 新規作成 (post_dm_thread = task_id 単位 で 一意 或 新規)
+        # 宛先解決 (PM/Director/Lead/Assignee/Sender) は _resolve_notify_participants に共通化
+        # (cmd_149・status_manual と共有)
+        participants, _sender_cuid_check = _resolve_notify_participants(client, actor_id, pid=pid, task_id=task_id)
 
         # sender name
         sender_name = actor_id
@@ -305,23 +346,12 @@ async def post_retakes(request: Request, actor_id: str = Depends(get_actor_id)):
         lines.append(""); lines.append(f"— {sender_name} (Director)")
         body_text = "\n".join(lines)
 
-        if hasattr(client, "post_dm_thread") and len(participants) >= 2:
-            thread_resp = client.post_dm_thread(participant_ids=participants, task_id=task_id, actor_user_id=actor_id)
-            thread_id = thread_resp.get("thread_id") or thread_resp.get("id")
-            if thread_id and hasattr(client, "post_dm"):
-                client.post_dm(int(thread_id), body_text, actor_user_id=actor_id)
-                # push / SSE 配信
-                from app.routers.pages_notif_settings import get_user_prefs
-                from app.routers.sse_notifications import push_sse_event
-                payload = {"title": f"🔁 Retake 発令: {title_line}", "body": (direction or "新たな Retake が発令されました")[:200], "url": qc_path, "tag": f"score-retake-{thread_id}"}
-                push_t = []; sse_t = []
-                for cuid in participants:
-                    if sender_cuid_int is not None and cuid == sender_cuid_int: continue
-                    pref = get_user_prefs(int(cuid))
-                    if pref.get("channels", {}).get("push", True): push_t.append(cuid)
-                    if pref.get("channels", {}).get("sse", True): sse_t.append(cuid)
-                if push_t: push_result = _push_to_cuids(push_t, payload)
-                if sse_t: sse_result = push_sse_event(sse_t, "notif", payload)
+        thread_id, push_result, sse_result = _notify_thread(
+            client, actor_id, participants, sender_cuid_int, task_id, body_text,
+            notif_title=f"🔁 Retake 発令: {title_line}",
+            notif_body=(direction or "新たな Retake が発令されました"),
+            url_path=qc_path, tag_prefix="score-retake",
+        )
     except Exception as e:
         return JSONResponse(content={"ok": False, "error": str(e)[:200]}, status_code=500)
 
@@ -330,7 +360,7 @@ async def post_retakes(request: Request, actor_id: str = Depends(get_actor_id)):
         result = client.post_retakes(body, actor_user_id=actor_id) if hasattr(client, "post_retakes") else {}
     except Exception:
         result = {}
-    return JSONResponse(content={"ok": True, "thread_id": thread_id, "participants": list(parts) if 'parts' in dir() else [], "qc_link": qc_link if 'qc_link' in dir() else "", "push_result": push_result, "sse_result": sse_result, "calendar_result": result}, headers={"X-Actor-User-Id": actor_id})
+    return JSONResponse(content={"ok": True, "thread_id": thread_id, "participants": list(participants) if 'participants' in dir() else [], "qc_link": qc_link if 'qc_link' in dir() else "", "push_result": push_result, "sse_result": sse_result, "calendar_result": result}, headers={"X-Actor-User-Id": actor_id})
 
 
 @router.post("/api/bff/shots/{id}/approve")
@@ -1159,6 +1189,98 @@ def patch_task(
         deliver_notify = _notify_next_artist_on_deliver(client, task_id, actor_id)
     response_content = {**result, "deliver_notify": deliver_notify} if isinstance(result, dict) else result
     return JSONResponse(content=response_content, headers={"X-Actor-User-Id": actor_id})
+
+
+@router.post("/api/bff/tasks/{task_id}/status_manual")
+async def post_task_status_manual(request: Request, task_id: int = Path(...), actor_id: str = Depends(get_actor_id)):
+    """cmd_149 (2026-07-29・殿御命): タスク詳細画面(/task/{id})からの手動ステータス変更フロー
+    (クライアントFB受領時、PM/Director がステータスを差し戻し+コメントを入れ+関係者へ
+    通知する一連の操作を1エンドポイントで完結させる)。
+    ★認可: 判定は既存 _require_qc_judge_authority (cmd_141) をそのまま再利用。新規の
+    role判定ロジックは追加しない (本ELではステータス種別に関わらず常時ゲート — 手動変更
+    という操作自体をDirector/PM/Admin/委任者限定にするため)。
+    ★ステータスPATCH本体: 既存 patch_task をそのまま呼び出す(validation・9値正規化・
+    deliver時アーティスト通知等を二重実装しない)。
+    ★通知宛先解決/thread投稿: post_retakes 由来の共通関数 (_resolve_notify_participants /
+    _notify_thread) を再利用 (宛先解決ロジックの重複実装禁止)。"""
+    client = get_calendar_client()
+    body = await request.json()
+    new_status_raw = (body.get("status") or "").strip()
+    comment = (body.get("comment") or "").strip()
+    if not new_status_raw:
+        raise HTTPException(status_code=400, detail="status is required")
+    if not comment:
+        raise HTTPException(status_code=400, detail="comment is required")
+
+    # cmd_149★認可・最重要: 手動ステータス変更はPM/Director(またはこの依頼のQC委任者)限定。
+    # UIで隠すだけでなくserver側で必ず弾く (fail-closed)。
+    _require_qc_judge_authority(actor_id, task_id=task_id)
+
+    new_status = OLD_TO_NEW_STATUS.get(new_status_raw, new_status_raw)
+    if new_status not in NEW_TASK_STATUSES:
+        raise HTTPException(status_code=400, detail=f"Invalid status: {new_status_raw}")
+
+    try:
+        cur = client.get_task(task_id, actor_user_id=actor_id) or {} if hasattr(client, "get_task") else {}
+    except Exception:
+        cur = {}
+    old_status = cur.get("status")
+    pid = cur.get("project_id")
+    shot_id = cur.get("shot_id")
+    task_type = cur.get("type") or ""
+    seq_code = cur.get("seqID") or ""
+    shot_code = cur.get("shotID") or (f"SHOT_{int(shot_id):03d}" if shot_id else "")
+    proj_name = ""
+    if pid is not None and hasattr(client, "get_project"):
+        try:
+            p = client.get_project(int(pid), actor_user_id=actor_id) or {}
+            proj_name = p.get("name") or ""
+        except Exception: pass
+
+    # ステータスPATCH本体 (patch_task を直接呼び出し・validation/正規化/deliver通知を再利用)
+    patch_task(task_id=task_id, body={"status": new_status}, actor_id=actor_id)
+
+    participants, sender_cuid_int = _resolve_notify_participants(client, actor_id, pid=pid, task_id=task_id)
+    sender_name = actor_id
+    try:
+        me = client.get_me(actor_user_id=actor_id)
+        nm = getattr(me, "name", "") or (getattr(me, "email", "") or "").split("@")[0]
+        if nm: sender_name = nm
+    except Exception: pass
+
+    public_base = _os.environ.get("SCORE_PUBLIC_URL", "").rstrip("/")
+    task_path = f"/task/{task_id}"
+    task_link = (public_base + task_path) if public_base else task_path
+
+    hier = [p for p in (proj_name, seq_code, shot_code, task_type) if p]
+    title_line = " / ".join(hier) if hier else f"task#{task_id}"
+    old_label = status_label(old_status, client)
+    new_label = status_label(new_status, client)
+    lines = [
+        "🔧 ステータス手動変更 (クライアントFB受領時)",
+        title_line,
+        "",
+        f"{old_label} → {new_label}",
+        f"コメント: {comment[:500]}",
+        "",
+        task_link,
+        "",
+        f"— {sender_name}",
+    ]
+    body_text = "\n".join(lines)
+
+    thread_id, push_result, sse_result = _notify_thread(
+        client, actor_id, participants, sender_cuid_int, task_id, body_text,
+        notif_title=f"🔧 ステータス変更: {title_line}",
+        notif_body=comment,
+        url_path=task_path, tag_prefix=f"score-status-{task_id}",
+    )
+
+    return JSONResponse(content={
+        "ok": True, "task_id": task_id, "old_status": old_status, "new_status": new_status,
+        "thread_id": thread_id, "participants": participants,
+        "push_result": push_result, "sse_result": sse_result,
+    }, headers={"X-Actor-User-Id": actor_id})
 
 
 @router.post("/api/bff/dm/threads")

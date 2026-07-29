@@ -9,9 +9,16 @@ from jinja2 import Environment, FileSystemLoader
 from app.adapters.calendar_factory import get_calendar_client
 from app.deps import get_actor_id, get_actor_role
 from app.helpers.project_resolver import resolve_project_name, resolve_project_members
-from app.helpers.task_status import attach_status_meta
+from app.helpers.task_status import attach_status_meta, get_status_meta_map, NEW_TASK_STATUSES
+from app.qc_delegation import is_qc_delegated
 
 router = APIRouter()
+
+# cmd_149 (2026-07-29): 手動ステータス変更UIの選択肢表示順 (NEW_TASK_STATUSES と同一集合・
+# 表示順のみの都合であり新たな遷移可否ロジックではない — from→to の合法遷移グラフは
+# 制作部+Calendar側で確定作業中のため本タスクでは発明しない)
+NEW_TASK_STATUSES_ORDERED = ("wt", "mk", "wip", "qc", "qc_fb", "ap", "client_ap", "deliver", "omit")
+assert set(NEW_TASK_STATUSES_ORDERED) == set(NEW_TASK_STATUSES)
 
 _env = Environment(
     loader=FileSystemLoader(str(Path(__file__).parent.parent / "templates")),
@@ -382,6 +389,13 @@ def get_task_detail(
 
     _isolated_tasks = attach_status_meta([found_task], client)  # cmd_075
     upstream_tasks = attach_status_meta(upstream_tasks, client)  # cmd_075
+    # cmd_149 (2026-07-29・殿御命): 手動ステータス変更UIの表示可否 (qc_viewer.html と同一基準
+    # role in (director,pm,admin) or can_qc(=is_qc_delegated) — server側ゲートは
+    # /api/bff/tasks/{id}/status_manual 内 _require_qc_judge_authority が別途 fail-closed で担保)
+    try:
+        can_qc = is_qc_delegated(actor_id, task_id=task_id, shot_id=found_shot_id)
+    except Exception:
+        can_qc = False
     return _templates.TemplateResponse(
         request=request,
         name="shot_detail.html",
@@ -399,6 +413,9 @@ def get_task_detail(
             "user": user,
             "user_name_map": user_name_map,
             "role": get_actor_role(actor_id),
+            "can_qc": can_qc,
+            "status_meta_map": get_status_meta_map(client),
+            "canonical_statuses": list(NEW_TASK_STATUSES_ORDERED),
             "isolated_task": True,
             "next_version": next_version,
             "asset_list": asset_list,

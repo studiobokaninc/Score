@@ -78,13 +78,42 @@
           <div class="flex justify-between items-center">
             <dt class="text-slate-500">ステータス</dt>
             <dd class="font-bold flex items-center gap-2" translate="no">
+              {% if role in ('director', 'pm', 'admin') or can_qc %}
+              <span id="task-status-label" class="cursor-pointer hover:underline decoration-dotted decoration-amber-500" title="クリックで手動変更 (クライアントFB受領時)" onclick="toggleStatusManualPanel()">{{ _t.status_label or _t.status or '—' }}</span>
+              {% else %}
               <span id="task-status-label">{{ _t.status_label or _t.status or '—' }}</span>
+              {% endif %}
               {# cmd_075: mk 時 wip 化ボタン (表示も WIP) #}
               {% if (_t.status or '')|lower == 'mk' %}
               <button type="button" onclick="changeTaskStatus({{ _t.task_id }}, 'wip')" class="text-[10px] bg-indigo-600 hover:bg-indigo-700 text-white font-bold rounded px-2 py-0.5">→ WIP</button>
               {% endif %}
             </dd>
           </div>
+          {% if role in ('director', 'pm', 'admin') or can_qc %}
+          {# cmd_149 (2026-07-29・殿御命): タスク詳細画面上での手動ステータス変更フロー
+             (クライアントFB受領時)。①ステータスクリック→②変更先選択+コメント→③実行、を
+             別画面へ飛ばさず同一パネルで完結。表示ゲートはqc_viewer.htmlと同一基準
+             (role in director/pm/admin or can_qc=is_qc_delegated)。★UI非表示は補助に
+             過ぎず、server側 /api/bff/tasks/{id}/status_manual 内
+             _require_qc_judge_authority が fail-closed で権限を別途強制する。 #}
+          <div id="status-manual-panel" class="hidden mt-1 p-2 bg-amber-50 border border-amber-200 rounded-xl space-y-1.5">
+            <label class="block text-[10px] font-bold text-amber-700">変更先ステータス</label>
+            <select id="status-manual-select" class="w-full text-xs bg-white border border-slate-300 rounded-lg px-2 py-1">
+              {% for s in canonical_statuses %}
+                {% if s != _t.status %}
+                <option value="{{ s }}">{{ (status_meta_map.get(s, {}).get('label')) or s }}</option>
+                {% endif %}
+              {% endfor %}
+            </select>
+            <label class="block text-[10px] font-bold text-amber-700">修正内容コメント (必須)</label>
+            <textarea id="status-manual-comment" rows="2" placeholder="例: ライティングが暗すぎる。もう少し明るく調整してください。" class="w-full text-xs bg-white border border-slate-300 rounded-lg px-2 py-1"></textarea>
+            <div class="flex gap-1">
+              <button type="button" onclick="submitStatusManual({{ _t.task_id }})" class="flex-1 py-1.5 bg-amber-600 hover:bg-amber-700 text-white font-bold rounded-lg text-xs">実行</button>
+              <button type="button" onclick="toggleStatusManualPanel()" class="py-1.5 px-3 bg-slate-200 hover:bg-slate-300 text-slate-700 font-bold rounded-lg text-xs">キャンセル</button>
+            </div>
+            <div id="status-manual-result" class="text-[10px] text-slate-500"></div>
+          </div>
+          {% endif %}
           <div class="flex justify-between"><dt class="text-slate-500">担当者</dt><dd class="font-bold text-slate-800" translate="no">{{ _assignee_name }}</dd></div>
           <div class="flex justify-between"><dt class="text-slate-500">優先度</dt><dd><span class="text-xs font-black rounded-full px-2 py-0.5 {{ _prio_cls }}" translate="no">{{ _prio }}</span></dd></div>
           <div class="flex justify-between"><dt class="text-slate-500">コスト</dt><dd class="font-bold text-slate-800">{% if _t.cost is not none %}{{ _t.cost }}h{% else %}—{% endif %}</dd></div>
@@ -862,6 +891,34 @@
         window.location.reload();
       } catch (e) {
         alert('❌ status 更新失敗: ' + e.message);
+      }
+    };
+    // cmd_149 (2026-07-29・殿御命): 手動ステータス変更 (クライアントFB受領時) パネル開閉+実行
+    window.toggleStatusManualPanel = function() {
+      const el = document.getElementById('status-manual-panel');
+      if (el) el.classList.toggle('hidden');
+    };
+    window.submitStatusManual = async function(taskId) {
+      const sel = document.getElementById('status-manual-select');
+      const cmt = document.getElementById('status-manual-comment');
+      const resultEl = document.getElementById('status-manual-result');
+      const status = sel ? sel.value : '';
+      const comment = cmt ? cmt.value.trim() : '';
+      if (!comment) { if (resultEl) resultEl.textContent = '❌ コメント(修正内容)は必須です'; return; }
+      if (resultEl) resultEl.textContent = '⏳ 実行中...';
+      try {
+        const resp = await fetch('/api/bff/tasks/' + taskId + '/status_manual', {
+          method: 'POST', credentials: 'include',
+          headers: {'Content-Type': 'application/json'},
+          body: JSON.stringify({status: status, comment: comment})
+        });
+        if (!resp.ok) {
+          const errBody = await resp.json().catch(() => ({}));
+          throw new Error('HTTP ' + resp.status + (errBody.detail ? ' — ' + errBody.detail : ''));
+        }
+        window.location.reload();
+      } catch (e) {
+        if (resultEl) resultEl.textContent = '❌ 失敗: ' + e.message;
       }
     };
     window.updateTaskProgress = async function(taskId, progress) {
