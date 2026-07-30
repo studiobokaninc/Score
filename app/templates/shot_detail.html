@@ -109,6 +109,11 @@
             <textarea id="status-manual-comment" rows="2" placeholder="例: ライティングが暗すぎる。もう少し明るく調整してください。" class="w-full text-xs bg-white border border-slate-300 rounded-lg px-2 py-1"></textarea>
             <div class="flex gap-1">
               <button type="button" onclick="submitStatusManual({{ _t.task_id }})" class="flex-1 py-1.5 bg-amber-600 hover:bg-amber-700 text-white font-bold rounded-lg text-xs">実行</button>
+              {# cmd_151 (2026-07-30・殿御命): director_retake_input.html と同等の入力(マーカー/コメント/
+                 全体方針/優先度/期日/参考素材添付)をこの場から行えるようiframe埋め込みで再利用する。
+                 新規実装は作らず既存ページをそのまま呼ぶ (殿明言)。認可は既存 /api/bff/retakes 内
+                 _require_qc_judge_authority (cmd_141) がそのまま効く。 #}
+              <button type="button" onclick="openQCFBDetail({{ _t.task_id }})" class="py-1.5 px-3 bg-indigo-600 hover:bg-indigo-700 text-white font-bold rounded-lg text-xs">QC_FB詳細</button>
               <button type="button" onclick="toggleStatusManualPanel()" class="py-1.5 px-3 bg-slate-200 hover:bg-slate-300 text-slate-700 font-bold rounded-lg text-xs">キャンセル</button>
             </div>
             <div id="status-manual-result" class="text-[10px] text-slate-500"></div>
@@ -393,6 +398,17 @@
             </button>
             {% endif %}
           </div>
+          {# cmd_151 (2026-07-30・殿御命): タスク画面→retake確認への導線。当該 asset に紐づく
+             retake が無ければボタンを出さない (殿明言)。★親カード自体が <a> のため <a> を
+             ネストすると無効HTMLとなり absolute 位置基準が崩れる (実機確認済) — 削除ボタンと
+             同様に <span role="button"> + location 遷移で実装する。 #}
+          {% if a.id in (retake_asset_ids|default([])) %}
+          <span role="button" tabindex="0"
+                onclick="event.stopPropagation();event.preventDefault();window.location.href='/retake_view/{{ a.shot_id }}/{{ a.task_id }}';"
+                class="absolute top-2 left-2 bg-indigo-500/90 hover:bg-indigo-600 text-white text-[10px] font-bold rounded-lg px-2 py-1 shadow z-10 cursor-pointer">
+            🔁 Retake確認
+          </span>
+          {% endif %}
           {# 殿御命 2026-06-03: 削除ボタン (card 内側 absolute・本人 or admin) #}
           <span role="button" tabindex="0"
                 onclick="event.stopPropagation();event.preventDefault();deleteAsset({{ a.id }}, '{{ a.version or '?' }}');"
@@ -771,6 +787,20 @@
   </div>
 </div>
 
+{# cmd_151 (2026-07-30・殿御命): QC_FB詳細 — director_retake_input.html を iframe でそのまま
+   埋め込み、同等の入力(マーカー/コメント/全体方針/優先度/期日/参考素材添付)をこの画面から
+   行えるようにする。新規の別実装は作らない。認可は既存 /api/bff/retakes の
+   _require_qc_judge_authority (server側 fail-closed) がそのまま働く。 #}
+<div id="modal-qcfb-detail" class="hidden fixed inset-0 bg-black/60 backdrop-blur-sm flex items-center justify-center z-50">
+  <div class="bg-white rounded-3xl shadow-2xl w-[95vw] h-[92vh] max-w-6xl flex flex-col overflow-hidden">
+    <div class="flex items-center justify-between px-5 py-3 border-b border-slate-200 shrink-0">
+      <p class="text-sm font-black text-slate-700">📋 QC_FB詳細 (director_retake_input と同等の入力)</p>
+      <button onclick="closeQCFBDetail()" class="text-slate-400 hover:text-slate-600 text-2xl leading-none">×</button>
+    </div>
+    <iframe id="qcfb-detail-iframe" class="flex-1 w-full border-0" src="about:blank"></iframe>
+  </div>
+</div>
+
 <!-- トースト通知 -->
 <div
   id="toast"
@@ -897,6 +927,21 @@
     window.toggleStatusManualPanel = function() {
       const el = document.getElementById('status-manual-panel');
       if (el) el.classList.toggle('hidden');
+    };
+    // cmd_151 (2026-07-30・殿御命): QC_FB詳細 — director_retake_input.html を iframe で呼び出す
+    window.openQCFBDetail = function(taskId) {
+      const modal = document.getElementById('modal-qcfb-detail');
+      const iframe = document.getElementById('qcfb-detail-iframe');
+      if (!modal || !iframe) return;
+      const shotId = {{ shot_id|default(0)|tojson }};
+      modal.classList.remove('hidden');
+      iframe.src = '/director_retake_input?shot_id=' + shotId + '&task_id=' + taskId;
+    };
+    window.closeQCFBDetail = function() {
+      const modal = document.getElementById('modal-qcfb-detail');
+      const iframe = document.getElementById('qcfb-detail-iframe');
+      if (modal) modal.classList.add('hidden');
+      if (iframe) iframe.src = 'about:blank';
     };
     window.submitStatusManual = async function(taskId) {
       const sel = document.getElementById('status-manual-select');

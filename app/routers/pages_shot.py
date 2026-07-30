@@ -396,6 +396,13 @@ def get_task_detail(
         can_qc = is_qc_delegated(actor_id, task_id=task_id, shot_id=found_shot_id)
     except Exception:
         can_qc = False
+    # cmd_151 (2026-07-30・殿御命): タスク画面→retake確認への導線。retake が無いアセットには
+    # ボタンを出さないため、事前に (shot_id, task_id) に紐づく retake の asset_id 集合を解決。
+    from app.helpers.retake_lookup import get_task_retake_asset_ids
+    try:
+        retake_asset_ids = get_task_retake_asset_ids(found_shot_id, task_id)
+    except Exception:
+        retake_asset_ids = set()
     return _templates.TemplateResponse(
         request=request,
         name="shot_detail.html",
@@ -419,6 +426,7 @@ def get_task_detail(
             "isolated_task": True,
             "next_version": next_version,
             "asset_list": asset_list,
+            "retake_asset_ids": retake_asset_ids,
             "project_members": project_members,
             "task_thread_id": getattr(found_task, "thread_id", None) if found_task else None,
             "demo_mode": os.getenv("CALENDAR_MOCK", "0") == "1",

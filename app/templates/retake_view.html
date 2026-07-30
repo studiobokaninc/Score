@@ -40,16 +40,28 @@
       <div class="bg-white/60 backdrop-blur-xl border border-white/80 rounded-3xl shadow-xl p-5">
         <p class="text-xs font-black text-purple-700 mb-3">🎯 リテイク対象 — <span translate="no">{{ target_asset.version or '?' }}</span></p>
         {% set _ext = (target_url|lower).split('.')[-1] %}
-        <div class="relative bg-slate-900 rounded-2xl overflow-hidden aspect-video max-w-3xl mx-auto">
+        <div id="rv-media-box" class="relative bg-slate-900 rounded-2xl overflow-hidden aspect-video max-w-3xl mx-auto">
           {% if _ext in ('mp4','mov','webm','m4v') %}
           <video id="rv-video" src="{{ target_url }}" controls preload="auto" playsinline class="absolute inset-0 w-full h-full object-contain bg-black"></video>
           {% elif _ext in ('png','jpg','jpeg','webp','gif') %}
           <img src="{{ target_url }}" class="absolute inset-0 w-full h-full object-contain" alt="{{ target_asset.version }}">
+          {% elif _ext == 'pdf' %}
+          {# cmd_151 (2026-07-30・殿御命): PDF はダウンロードのみでなく表示できること。
+             <embed type="application/pdf"> によるブラウザ組込み PDF ビューアで inline 表示する
+             (<iframe> はブラウザの PDF viewer extension が起動せず黒画面になる実機確認あり)。 #}
+          <embed src="{{ target_url }}" type="application/pdf" class="absolute inset-0 w-full h-full bg-white">
+
           {% endif %}
           <!-- TC overlay -->
           <div class="absolute top-2 left-2 bg-black/60 backdrop-blur-sm px-3 py-1 rounded-lg pointer-events-none">
             <p id="rv-tc" class="text-white text-sm font-black tracking-wider">00:00.00</p>
           </div>
+          {# cmd_151 (2026-07-30・殿御命): 全画面表示ボタン(右下)。動画・画像・PDFいずれでも
+             #rv-media-box 全体を fullscreen 化するため、コンテンツ種別に依存せず動作する。 #}
+          <button type="button" onclick="rvToggleFullscreen()" title="全画面表示"
+            class="absolute bottom-2 right-2 bg-black/60 hover:bg-black/80 backdrop-blur-sm text-white text-sm rounded-lg px-2.5 py-1.5 z-10">
+            <span id="rv-fullscreen-icon">⛶</span>
+          </button>
         </div>
         {% if latest_meta.markers and latest_meta.markers|length > 0 %}
         <div class="mt-3 flex flex-wrap gap-2">
@@ -118,7 +130,7 @@
 
       <!-- 参考素材 -->
       <div class="bg-white/60 backdrop-blur-xl border border-white/80 rounded-3xl shadow-xl p-5">
-        <p class="text-xs font-black text-purple-700 mb-3">📎 参考素材 ({{ (latest_meta.ref_imgs|length) + (latest_meta.ref_videos|length) }} 件 + URL)</p>
+        <p class="text-xs font-black text-purple-700 mb-3">📎 参考素材 ({{ (latest_meta.ref_imgs|length) + (latest_meta.ref_videos|length) + (latest_meta.ref_docs|length) }} 件 + URL)</p>
         {% if latest_meta.ref_imgs %}
         <p class="text-[10px] font-black text-slate-500 mb-2">📷 静止画 ({{ latest_meta.ref_imgs|length }})</p>
         <div class="flex flex-wrap gap-2 mb-3">
@@ -140,11 +152,24 @@
           {% endfor %}
         </div>
         {% endif %}
+        {% if latest_meta.ref_docs %}
+        {# cmd_151 (2026-07-30・殿御命): PDF も表示できること(DLのみは不可)。<embed> で inline 表示
+           (<iframe> はブラウザの PDF viewer extension が起動せず黒画面になる実機確認あり)。 #}
+        <p class="text-[10px] font-black text-slate-500 mb-2">📄 PDF ({{ latest_meta.ref_docs|length }})</p>
+        <div class="space-y-2 mb-3">
+          {% for fn in latest_meta.ref_docs %}
+          <div class="bg-slate-100 rounded-lg overflow-hidden">
+            <embed src="/api/bff/retake/refs/{{ latest_meta.retake_id }}/{{ fn }}" type="application/pdf" class="w-full" style="height: 240px;">
+            <p class="text-[10px] text-slate-500 px-2 py-1 truncate" translate="no">{{ fn }}</p>
+          </div>
+          {% endfor %}
+        </div>
+        {% endif %}
         {% if latest_meta.reference_url %}
         <p class="text-[10px] font-black text-slate-500 mb-1">🔗 URL</p>
         <a href="{{ latest_meta.reference_url }}" target="_blank" class="text-sm text-indigo-600 hover:text-indigo-800 underline break-all">{{ latest_meta.reference_url }}</a>
         {% endif %}
-        {% if not latest_meta.ref_imgs and not latest_meta.ref_videos and not latest_meta.reference_url %}
+        {% if not latest_meta.ref_imgs and not latest_meta.ref_videos and not latest_meta.ref_docs and not latest_meta.reference_url %}
         <p class="text-sm text-slate-400 italic">(添付 0 件)</p>
         {% endif %}
       </div>
@@ -193,5 +218,20 @@ window.rvSeekTC = function(tc) {
     if (tcEl) tcEl.textContent = rvSecToTC(v.currentTime);
   });
 })();
+// cmd_151 (2026-07-30・殿御命): 全画面表示ボタン — 動画・画像・PDF いずれでも
+// #rv-media-box 全体を fullscreen 化し、押下前の表示に戻せるようにする。
+window.rvToggleFullscreen = function() {
+  const box = document.getElementById('rv-media-box');
+  if (!box) return;
+  if (!document.fullscreenElement) {
+    box.requestFullscreen().catch(() => {});
+  } else {
+    document.exitFullscreen().catch(() => {});
+  }
+};
+document.addEventListener('fullscreenchange', () => {
+  const icon = document.getElementById('rv-fullscreen-icon');
+  if (icon) icon.textContent = document.fullscreenElement ? '✕' : '⛶';
+});
 </script>
 {% endblock %}

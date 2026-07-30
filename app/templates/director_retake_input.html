@@ -65,10 +65,13 @@
             {% elif latest_asset and _ext in ('png','jpg','jpeg','webp','gif') %}
               <img src="{{ _url }}" class="absolute inset-0 w-full h-full object-contain bg-black" alt="{{ _bn }}">
             {% else %}
-              <div class="absolute inset-0 flex items-center justify-center bg-gradient-to-br from-slate-700 to-slate-900">
+              {# cmd_151 (2026-07-30・殿御命): 提出物が無いコンテキスト(QC_FB詳細からの呼出等)
+                 では、⑤で参考素材を添付した時点でこの枠に表示する (_mirrorRefToFramePreview)。
+                 添付前はこれまで通り「提出物が無し」。 #}
+              <div id="frame-preview-empty" class="absolute inset-0 flex items-center justify-center bg-gradient-to-br from-slate-700 to-slate-900">
                 <div class="text-center text-white">
                   <p class="text-3xl mb-2">📦</p>
-                  <p class="text-xs opacity-60">{% if not latest_asset %}提出物が無し{% else %}preview 非対応: {{ _ext or 'file' }}{% endif %}</p>
+                  <p class="text-xs opacity-60">{% if not latest_asset %}提出物が無し (参考素材を添付するとここに表示されます){% else %}preview 非対応: {{ _ext or 'file' }}{% endif %}</p>
                 </div>
               </div>
             {% endif %}
@@ -445,6 +448,10 @@
             class="px-3 py-1.5 rounded-xl text-xs font-bold bg-purple-600 text-white transition-all">📷 静止画</button>
           <button onclick="switchTab('video')" id="tab-video"
             class="px-3 py-1.5 rounded-xl text-xs font-bold bg-white/60 text-slate-600 hover:bg-white/80 transition-all">🎬 動画</button>
+          {# cmd_151 (2026-07-30・殿御命): 参考素材添付にPDFも追加。既存 img/video タブと同一の
+             file input + drag/drop パターンを踏襲 (新規機構は作らない)。 #}
+          <button onclick="switchTab('doc')" id="tab-doc"
+            class="px-3 py-1.5 rounded-xl text-xs font-bold bg-white/60 text-slate-600 hover:bg-white/80 transition-all">📄 PDF</button>
           <button onclick="switchTab('url')" id="tab-url"
             class="px-3 py-1.5 rounded-xl text-xs font-bold bg-white/60 text-slate-600 hover:bg-white/80 transition-all">🔗 URL</button>
         </div>
@@ -469,6 +476,17 @@
             <p class="text-xs">クリック or ドラッグ&ドロップで動画を選択</p>
             <p class="text-[10px] text-slate-300 mt-1">MP4 / MOV / MXF / WebM</p>
             <div id="preview-video" class="mt-3 flex flex-wrap gap-2 justify-center"></div>
+          </label>
+        </div>
+        <!-- PDFパネル (cmd_151) -->
+        <div id="panel-doc" class="hidden">
+          <label id="drop-doc" for="file-doc"
+            class="block border-2 border-dashed border-purple-200 rounded-2xl p-6 text-center text-slate-400 text-sm cursor-pointer hover:border-purple-400 transition-all">
+            <input type="file" id="file-doc" accept="application/pdf" multiple class="hidden" onchange="onFileSelected('doc', this.files)">
+            <div class="text-3xl mb-2">📄</div>
+            <p class="text-xs">クリック or ドラッグ&ドロップでPDFを選択</p>
+            <p class="text-[10px] text-slate-300 mt-1">PDF</p>
+            <div id="preview-doc" class="mt-3 flex flex-wrap gap-2 justify-center"></div>
           </label>
         </div>
         <!-- URLパネル -->
@@ -567,7 +585,8 @@
         const refUrl = (document.getElementById('ref-url') || {}).value?.trim() || '';
         const refImgs = (window._refFiles?.img || []).map(f => f.name);
         const refVideos = (window._refFiles?.video || []).map(f => f.name);
-        return { markers, comments, direction, priority, due, refUrl, refImgs, refVideos };
+        const refDocs = (window._refFiles?.doc || []).map(f => f.name);
+        return { markers, comments, direction, priority, due, refUrl, refImgs, refVideos, refDocs };
       }
       function renderPreview() {
         const d = _collectRetakeData();
@@ -583,6 +602,7 @@
         const parts = [];
         if (d.refImgs.length) parts.push(`📷 静止画 ${d.refImgs.length}`);
         if (d.refVideos.length) parts.push(`🎬 動画 ${d.refVideos.length}`);
+        if (d.refDocs.length) parts.push(`📄 PDF ${d.refDocs.length}`);
         if (d.refUrl) parts.push(`🔗 ${d.refUrl.slice(0,40)}${d.refUrl.length > 40 ? '…' : ''}`);
         pvR.textContent = parts.length > 0 ? parts.join(' · ') : '添付なし';
         document.getElementById('pv-priority').textContent = d.priority === 'high' ? '🔴 高' : (d.priority === 'mid' ? '🟡 中' : '🟢 低');
@@ -632,6 +652,7 @@
         fd.append('reference_url', d.refUrl);
         (window._refFiles?.img || []).forEach((f,i) => fd.append('ref_img_' + i, f));
         (window._refFiles?.video || []).forEach((f,i) => fd.append('ref_video_' + i, f));
+        (window._refFiles?.doc || []).forEach((f,i) => fd.append('ref_doc_' + i, f));
         try {
           const resp = await fetch('/api/bff/retakes', {
             method: 'POST', credentials: 'include',
@@ -709,7 +730,7 @@
       document.getElementById('retakeModal').classList.remove('hidden');
     }
     function switchTab(type) {
-      ['img','video','url'].forEach(t => {
+      ['img','video','doc','url'].forEach(t => {
         document.getElementById('panel-' + t).classList.toggle('hidden', t !== type);
         const btn = document.getElementById('tab-' + t);
         if (t === type) {
@@ -752,12 +773,40 @@
     })();
 
     // 殿御命 2026-06-05: 参考素材添付 — file 選択 + drag/drop
-    window._refFiles = { img: [], video: [] };
+    window._refFiles = { img: [], video: [], doc: [] };
+    // cmd_151 (2026-07-30・殿御命): 提出物(latest_asset)が無いコンテキストでは、フレーム
+    // プレビュー枠に「参考素材として添付したもの」を表示する。
+    window._hasLatestAsset = {{ (latest_asset is not none) | tojson }};
+    function _mirrorRefToFramePreview(kind) {
+      if (window._hasLatestAsset) return;  // 実提出物がある場合はそちらを優先し上書きしない
+      const empty = document.getElementById('frame-preview-empty');
+      if (!empty) return;
+      const f = (window._refFiles[kind] || [])[window._refFiles[kind].length - 1];
+      if (!f) return;
+      empty.innerHTML = '';
+      empty.classList.remove('flex', 'items-center', 'justify-center', 'bg-gradient-to-br', 'from-slate-700', 'to-slate-900');
+      let el;
+      if (kind === 'img') {
+        el = document.createElement('img');
+        el.className = 'absolute inset-0 w-full h-full object-contain bg-black';
+      } else if (kind === 'video') {
+        el = document.createElement('video');
+        el.muted = true; el.preload = 'metadata'; el.controls = true;
+        el.className = 'absolute inset-0 w-full h-full object-contain bg-black';
+      } else {
+        return;
+      }
+      el.src = URL.createObjectURL(f);
+      empty.appendChild(el);
+      const info = document.getElementById('frame-info');
+      if (info) info.textContent = '📎 参考素材として添付 (' + f.name + ')';
+    }
     window.onFileSelected = function(kind, files) {
       if (!files || files.length === 0) return;
       const arr = Array.from(files);
       window._refFiles[kind] = window._refFiles[kind].concat(arr);
       _renderRefPreview(kind);
+      if (kind === 'img' || kind === 'video') _mirrorRefToFramePreview(kind);
       const status = document.getElementById('ref-status');
       if (status) status.textContent = `✓ ${arr.length} 件 添付 (合計 ${window._refFiles[kind].length} 件)`;
     };
@@ -779,6 +828,8 @@
           v.muted = true; v.preload = 'metadata';
           v.className = 'w-full h-full object-cover';
           box.appendChild(v);
+        } else if (kind === 'doc') {
+          box.innerHTML = '<div class="flex items-center justify-center h-full text-2xl">📄</div>';
         } else {
           box.innerHTML = '<div class="flex items-center justify-center h-full text-[10px] font-bold text-slate-500">' + (f.name.split('.').pop() || '?').toUpperCase() + '</div>';
         }
@@ -791,7 +842,8 @@
         container.appendChild(box);
       });
     }
-    ['img','video'].forEach(kind => {
+    const _refMimeFilter = { img: 'image/', video: 'video/', doc: 'application/pdf' };
+    ['img','video','doc'].forEach(kind => {
       const drop = document.getElementById('drop-' + kind);
       if (!drop) return;
       ['dragover','dragenter'].forEach(ev => drop.addEventListener(ev, (e) => {
@@ -804,7 +856,8 @@
       }));
       drop.addEventListener('drop', (e) => {
         e.preventDefault(); e.stopPropagation();
-        const files = Array.from(e.dataTransfer.files).filter(f => kind === 'img' ? f.type.startsWith('image/') : f.type.startsWith('video/'));
+        const want = _refMimeFilter[kind];
+        const files = Array.from(e.dataTransfer.files).filter(f => kind === 'doc' ? f.type === want : f.type.startsWith(want));
         if (files.length > 0) onFileSelected(kind, files);
       });
     });

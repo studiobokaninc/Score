@@ -177,8 +177,9 @@ async def post_retakes(request: Request, actor_id: str = Depends(get_actor_id)):
         ref_dir.mkdir(parents=True, exist_ok=True)
         ref_imgs_saved = []
         ref_videos_saved = []
+        ref_docs_saved = []
         for k, v in form.items():
-            if not (k.startswith("ref_img_") or k.startswith("ref_video_")):
+            if not (k.startswith("ref_img_") or k.startswith("ref_video_") or k.startswith("ref_doc_")):
                 continue
             if hasattr(v, "filename") and hasattr(v, "read"):
                 try:
@@ -187,14 +188,17 @@ async def post_retakes(request: Request, actor_id: str = Depends(get_actor_id)):
                     content = await v.read()
                     p.write_bytes(content)
                     if k.startswith("ref_img_"): ref_imgs_saved.append(fn)
-                    else: ref_videos_saved.append(fn)
+                    elif k.startswith("ref_video_"): ref_videos_saved.append(fn)
+                    else: ref_docs_saved.append(fn)
                 except Exception:
                     pass
         body["retake_id"] = _retake_id
         body["ref_imgs"] = ref_imgs_saved
         body["ref_videos"] = ref_videos_saved
+        body["ref_docs"] = ref_docs_saved
         body["ref_img_count"] = len(ref_imgs_saved)
         body["ref_video_count"] = len(ref_videos_saved)
+        body["ref_doc_count"] = len(ref_docs_saved)
         # retake meta を別途 JSON 保存 (view 用)
         meta_path = ref_dir / "meta.json"
         try:
@@ -211,6 +215,7 @@ async def post_retakes(request: Request, actor_id: str = Depends(get_actor_id)):
                 "comments": body.get("comments") or [],
                 "ref_imgs": ref_imgs_saved,
                 "ref_videos": ref_videos_saved,
+                "ref_docs": ref_docs_saved,
                 "submitted_at": __import__("datetime").datetime.now().isoformat(),
                 "submitted_by": actor_id,
             }, ensure_ascii=False, indent=2), encoding="utf-8")
@@ -338,8 +343,8 @@ async def post_retakes(request: Request, actor_id: str = Depends(get_actor_id)):
                 if isinstance(c, dict):
                     lines.append(f"  ⏱️ {c.get('tc','')}: {(c.get('text','') or '')[:80]}")
         if ref_url: lines.append(f"参考 URL: {ref_url}")
-        nimg = body.get("ref_img_count", 0); nvid = body.get("ref_video_count", 0)
-        if nimg or nvid: lines.append(f"添付: 静止画 {nimg} / 動画 {nvid}")
+        nimg = body.get("ref_img_count", 0); nvid = body.get("ref_video_count", 0); ndoc = body.get("ref_doc_count", 0)
+        if nimg or nvid or ndoc: lines.append(f"添付: 静止画 {nimg} / 動画 {nvid} / PDF {ndoc}")
         if qc_link:
             lines.append("")
             lines.append(qc_link)
