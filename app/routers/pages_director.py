@@ -21,6 +21,9 @@ def get_director_retake_input(
     shot_id: int | None = None,
     task_id: int | None = None,
     as_role: str | None = None,  # 殿御命 2026-06-05 (B 案): admin 限定 role preview
+    embed: int | None = None,  # cmd_155 (2026-07-30・殿御命): shot_detail.htmlのQC_FB詳細
+    # iframe埋込時のみサイドメニュー等を非表示にするためのフラグ。単体表示(通常URL)
+    # では従来通り表示するため、クエリパラメータ未指定時の挙動は無変更。
 ):
     actual_role = get_actor_role(actor_id)
     # admin 元 user は as_role=director で進入可
@@ -150,6 +153,7 @@ def get_director_retake_input(
             "asset_list": asset_list,
             "assignee_name": assignee_name,
             "assignee_uid": assignee_uid,
+            "embed": bool(embed),
         },
     )
 

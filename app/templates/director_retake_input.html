@@ -12,10 +12,16 @@
   ⚠️ DEMO DATA — 本番データではありません
 </div>
 {% endif %}
+{# cmd_155 (2026-07-30・殿御命): shot_detail.htmlのQC_FB詳細モーダルにiframe埋込した際、
+   本体側サイドメニュー等が写り込む不具合是正。embed=1 の時のみ_sidemenu.html を省略し
+   メイン領域のml-24(サイドメニュー分オフセット)も外す。embed未指定(単体表示URL)では
+   従来通りサイドメニュー等を表示する(他用途での単体利用に影響を与えない)。 #}
+{% if not embed %}
 {% include '_sidemenu.html' %}
+{% endif %}
 
   <!-- メインエリア -->
-  <main class="flex-1 ml-24 overflow-y-auto p-8 pb-32">
+  <main class="flex-1 {{ '' if embed else 'ml-24' }} overflow-y-auto p-8 pb-32">
 
     <!-- パンくず -->
     <nav class="text-xs text-slate-500 mb-4">
@@ -687,10 +693,20 @@
       <p class="text-sm text-slate-500 mb-1">通知先: <span class="font-bold text-slate-700"><span translate="no">{{ assignee_name or '担当者' }}</span> / 自動: <span translate="no">PM ・ Director</span></span></p>
       <p class="text-sm text-slate-500 mb-1">優先度: <span id="modal-priority" class="font-bold text-rose-600">🔴 高</span></p>
       <p class="text-sm text-slate-500 mb-6">期日: <span id="modal-due" class="font-bold text-slate-700">-</span></p>
+      {# cmd_155 (2026-07-30・殿御命): QC_FB詳細(embed)からの発行時は「QCビューアに戻る」
+         (別画面遷移)ではなく「閉じる」とし、iframe元のタスク画面に留まって最新状態を
+         反映させる。単体表示(embed未指定)では従来通り。 #}
+      {% if embed %}
+      <button type="button" onclick="window.parent.location.reload();"
+        class="inline-block bg-purple-600 text-white font-black rounded-2xl px-6 py-3 text-sm transition-all hover:bg-purple-700">
+        閉じる
+      </button>
+      {% else %}
       <a href="/qc/{{ shot_id or 0 }}{% if task_id %}?task_id={{ task_id }}{% endif %}"
          class="inline-block bg-purple-600 text-white font-black rounded-2xl px-6 py-3 text-sm transition-all hover:bg-purple-700">
         ✅ QC ビューアに戻る
       </a>
+      {% endif %}
     </div>
   </div>
 

@@ -402,9 +402,16 @@
              retake が無ければボタンを出さない (殿明言)。★親カード自体が <a> のため <a> を
              ネストすると無効HTMLとなり absolute 位置基準が崩れる (実機確認済) — 削除ボタンと
              同様に <span role="button"> + location 遷移で実装する。 #}
+          {# cmd_155 (2026-07-30・殿御命・不具合是正): a.shot_id は shotless task
+             (SHOT_000系) の asset では None を取り得る(0 ではない)。ページ側で既に
+             正規化済の shot_id 変数(この task の実 shot_id・shotless なら0)を
+             None チェックで fallback に使う。a.shot_id or shot_id という書き方は
+             「0 を falsy とみなす」過去のSHOT_000サーガ同型バグを再生産するため
+             使わない(a.shot_id が実際に0の場合に誤って外側shot_idへ落ちてしまう)。 #}
+          {% set _retake_shot_id = a.shot_id if a.shot_id is not none else shot_id %}
           {% if a.id in (retake_asset_ids|default([])) %}
           <span role="button" tabindex="0"
-                onclick="event.stopPropagation();event.preventDefault();window.location.href='/retake_view/{{ a.shot_id }}/{{ a.task_id }}';"
+                onclick="event.stopPropagation();event.preventDefault();window.location.href='/retake_view/{{ _retake_shot_id }}/{{ a.task_id }}';"
                 class="absolute top-2 left-2 bg-indigo-500/90 hover:bg-indigo-600 text-white text-[10px] font-bold rounded-lg px-2 py-1 shadow z-10 cursor-pointer">
             🔁 Retake確認
           </span>
@@ -794,7 +801,7 @@
 <div id="modal-qcfb-detail" class="hidden fixed inset-0 bg-black/60 backdrop-blur-sm flex items-center justify-center z-50">
   <div class="bg-white rounded-3xl shadow-2xl w-[95vw] h-[92vh] max-w-6xl flex flex-col overflow-hidden">
     <div class="flex items-center justify-between px-5 py-3 border-b border-slate-200 shrink-0">
-      <p class="text-sm font-black text-slate-700">📋 QC_FB詳細 (director_retake_input と同等の入力)</p>
+      <p class="text-sm font-black text-slate-700">📋 QC_FB詳細</p>
       <button onclick="closeQCFBDetail()" class="text-slate-400 hover:text-slate-600 text-2xl leading-none">×</button>
     </div>
     <iframe id="qcfb-detail-iframe" class="flex-1 w-full border-0" src="about:blank"></iframe>
@@ -935,7 +942,7 @@
       if (!modal || !iframe) return;
       const shotId = {{ shot_id|default(0)|tojson }};
       modal.classList.remove('hidden');
-      iframe.src = '/director_retake_input?shot_id=' + shotId + '&task_id=' + taskId;
+      iframe.src = '/director_retake_input?shot_id=' + shotId + '&task_id=' + taskId + '&embed=1';
     };
     window.closeQCFBDetail = function() {
       const modal = document.getElementById('modal-qcfb-detail');
