@@ -983,12 +983,27 @@ async def post_asset_upload(
 
     if len(participants) >= 2 and hasattr(client, "post_dm_thread"):
         try:
-            thread_resp = client.post_dm_thread(
-                participant_ids=participants,
-                task_id=task_id,
-                actor_user_id=actor_id,
-            )
-            thread_id = thread_resp.get("thread_id") or thread_resp.get("id")
+            # cmd_159① (2026-07-31・殿御命): QC/Review依頼・通常アップロード通知は
+            # 個人宛てではなく当該タスクの正本スレッド(cmd_156のtask_threads管理)へ
+            # 送るべきところ、従来は毎回 post_dm_thread を直接呼んでおり、外部Calendar
+            # APIがtask_id単位で重複排除しているか不明(get_or_create_task_thread
+            # docstring参照)なため、cmd_149/151/156/157で確立済のスレッド正本管理を
+            # 経由しない不安定な経路になっていた。宛先(participants)自体は無変更、
+            # スレッド解決のみ既存ヘルパーに揃える(_notify_threadと同一のfallback:
+            # task_id有りは正本thread再利用・無しは従来通り毎回post_dm_thread)。
+            if task_id is not None:
+                from app.helpers.task_threads import get_or_create_task_thread, build_thread_title
+                thread_id = get_or_create_task_thread(
+                    client, actor_id, task_id, participants,
+                    title=build_thread_title(proj_name, seq_code, shot_code, task_type, task_id),
+                )
+            else:
+                thread_resp = client.post_dm_thread(
+                    participant_ids=participants,
+                    task_id=task_id,
+                    actor_user_id=actor_id,
+                )
+                thread_id = thread_resp.get("thread_id") or thread_resp.get("id")
             if thread_id and hasattr(client, "post_dm"):
                 fname = result.get("filename", file.filename or "asset")
                 ver = version or "version 未指定"
@@ -1706,169 +1721,134 @@ async def post_qc_approve_bff(request: Request, actor_id: str = Depends(get_acto
         except Exception:
             pass
 
-    # SHOT thread (既存の review thread を探して 通知投稿)
+    # SHOT thread (cmd_159②(2026-07-31・殿御命): 個人宛てを廃し当該タスクの正本スレッドへ)
     thread_notified = False
     # cmd_106 パートB (2026-07-16・殿御命): AP承認 Push/SSE 通知結果
     # (QC提出/QC_FB は三重通知済だが承認だけ thread post のみで手薄だった是正)
     approve_push_result = {"sent": 0, "failed": 0, "details": []}
     approve_sse_result = {"delivered": 0, "skipped_no_listener": 0}
     try:
-        if hasattr(client, "get_my_dm_threads"):
-            threads = client.get_my_dm_threads(actor_user_id=actor_id) or []
-            # task_id 一致 thread を探す (last_message に task: {task_id} 含む thread)
-            target = None
-            for t in threads:
-                last = (t.get("last_message") or "")
-                if task_id and (f"task: {task_id}" in last or f"task_id={task_id}" in last):
-                    target = t; break
-            if not target and threads:
-                # fallback: 最新 thread (sort by updated_at desc)
-                target = sorted(threads, key=lambda x: x.get("updated_at",""), reverse=True)[0] if threads else None
-            if target and hasattr(client, "post_dm"):
-                tid = target.get("thread_id") or target.get("id")
-                # sender name
-                sender_name = actor_id
-                try:
-                    me = client.get_me(actor_user_id=actor_id)
-                    sender_name = getattr(me, "name", "") or sender_name
-                except Exception:
-                    pass
-                # cmd_095 (score Approve通知の可読化): 生 shot_id/task_id のみでは
-                # 受け手が何の承認か判別不能。post_qc_notify_existing と同一パターンで
-                # proj/seq/shot(cut)/task種別 + 対象 asset の version を解決し、
-                # tutorial/qc_flow.html の表記 (例: sq01 c05 Compositing v04) に
-                # 倣った可読形式に整形する。
-                proj_name, seq_code, shot_code, task_type, version = "", "", "", "", ""
-                pid = None
-                asset_list = []
-                try:
-                    shot_info = client.get_shot_detail(int(shot_id), actor_user_id=actor_id) or {}
-                    shot_code = shot_info.get("shotID") or shot_info.get("shot_code") or shot_info.get("name") or ""
-                    seq_code = shot_info.get("seqID") or shot_info.get("seq_code") or ""
-                    pid = shot_info.get("project_id")
-                    for tk in (shot_info.get("task_list") or shot_info.get("tasks") or []):
-                        if isinstance(tk, dict) and task_id and (tk.get("id") == task_id or tk.get("task_id") == task_id):
-                            task_type = tk.get("type") or tk.get("task_type") or ""
-                            break
-                    asset_list = [a for a in (shot_info.get("asset_list") or []) if isinstance(a, dict) and (not task_id or a.get("task_id") == task_id)]
-                except Exception:
-                    pass
-                if not shot_code or not seq_code or pid is None:
-                    try:
-                        s_dto = client.get_shot(int(shot_id), actor_user_id=actor_id)
-                        if s_dto:
-                            if not shot_code: shot_code = getattr(s_dto, "shot_code", "") or getattr(s_dto, "name", "")
-                            if not seq_code: seq_code = getattr(s_dto, "seq_code", "") or ""
-                            if pid is None: pid = getattr(s_dto, "project_id", None)
-                    except Exception:
-                        pass
-                if not shot_code:
-                    shot_code = f"SHOT_{shot_id:03d}"
-                # cmd_094a (SHOT000-PROACTIVE-AUDIT) 準拠: shot_id=0 (SHOT_000・shot 紐付
-                # なし task) は上記 shot 系 lookup が常に空。task_id から project_id を
-                # 直接解決する fallback (post_qc_notify_existing と同一パターン)。
-                if task_id and hasattr(client, "get_task"):
-                    try:
-                        task_info = client.get_task(int(task_id), actor_user_id=actor_id) or {}
-                        if pid is None:
-                            pid = task_info.get("project_id")
-                        if not seq_code:
-                            seq_code = task_info.get("seqID") or task_info.get("seq_code") or ""
-                        if not task_type:
-                            task_type = task_info.get("type") or ""
-                    except Exception:
-                        pass
-                if not task_type and task_id:
-                    try:
-                        for tk in (client.get_tasks(int(shot_id), actor_user_id=actor_id) or []):
-                            tid = tk.get("id") or tk.get("task_id") if isinstance(tk, dict) else getattr(tk, "task_id", None)
-                            if tid == task_id:
-                                task_type = (tk.get("type") or tk.get("task_type") if isinstance(tk, dict) else getattr(tk, "type", "")) or ""
-                                break
-                    except Exception:
-                        pass
-                if pid is not None:
-                    try:
-                        if hasattr(client, "get_project"):
-                            p = client.get_project(int(pid), actor_user_id=actor_id) or {}
-                            proj_name = p.get("name") or ""
-                        if not proj_name:
-                            for p in (client.get_my_projects(actor_user_id=actor_id) or []):
-                                if isinstance(p, dict) and p.get("id") == pid:
-                                    proj_name = p.get("name") or ""; break
-                    except Exception:
-                        pass
-                # shotless (asset_list が shot 経由で取れない) 時は get_assets_by_task へ
-                # fallback (get_retake_view/cmd_094a と同一パターン)
-                if not asset_list and task_id and hasattr(client, "get_assets_by_task"):
-                    try:
-                        asset_list = [a for a in (client.get_assets_by_task(int(task_id), actor_user_id=actor_id) or []) if isinstance(a, dict)]
-                    except Exception:
-                        pass
-                if asset_list:
-                    asset_list.sort(key=lambda a: (a.get("created_at") or ""), reverse=True)
-                    version = asset_list[0].get("version") or ""
+        # sender name
+        sender_name = actor_id
+        try:
+            me = client.get_me(actor_user_id=actor_id)
+            sender_name = getattr(me, "name", "") or sender_name
+        except Exception:
+            pass
+        # cmd_095 (score Approve通知の可読化): 生 shot_id/task_id のみでは
+        # 受け手が何の承認か判別不能。post_qc_notify_existing と同一パターンで
+        # proj/seq/shot(cut)/task種別 + 対象 asset の version を解決し、
+        # tutorial/qc_flow.html の表記 (例: sq01 c05 Compositing v04) に
+        # 倣った可読形式に整形する。
+        proj_name, seq_code, shot_code, task_type, version = "", "", "", "", ""
+        pid = None
+        asset_list = []
+        try:
+            shot_info = client.get_shot_detail(int(shot_id), actor_user_id=actor_id) or {}
+            shot_code = shot_info.get("shotID") or shot_info.get("shot_code") or shot_info.get("name") or ""
+            seq_code = shot_info.get("seqID") or shot_info.get("seq_code") or ""
+            pid = shot_info.get("project_id")
+            for tk in (shot_info.get("task_list") or shot_info.get("tasks") or []):
+                if isinstance(tk, dict) and task_id and (tk.get("id") == task_id or tk.get("task_id") == task_id):
+                    task_type = tk.get("type") or tk.get("task_type") or ""
+                    break
+            asset_list = [a for a in (shot_info.get("asset_list") or []) if isinstance(a, dict) and (not task_id or a.get("task_id") == task_id)]
+        except Exception:
+            pass
+        if not shot_code or not seq_code or pid is None:
+            try:
+                s_dto = client.get_shot(int(shot_id), actor_user_id=actor_id)
+                if s_dto:
+                    if not shot_code: shot_code = getattr(s_dto, "shot_code", "") or getattr(s_dto, "name", "")
+                    if not seq_code: seq_code = getattr(s_dto, "seq_code", "") or ""
+                    if pid is None: pid = getattr(s_dto, "project_id", None)
+            except Exception:
+                pass
+        if not shot_code:
+            shot_code = f"SHOT_{shot_id:03d}"
+        # cmd_094a (SHOT000-PROACTIVE-AUDIT) 準拠: shot_id=0 (SHOT_000・shot 紐付
+        # なし task) は上記 shot 系 lookup が常に空。task_id から project_id を
+        # 直接解決する fallback (post_qc_notify_existing と同一パターン)。
+        if task_id and hasattr(client, "get_task"):
+            try:
+                task_info = client.get_task(int(task_id), actor_user_id=actor_id) or {}
+                if pid is None:
+                    pid = task_info.get("project_id")
+                if not seq_code:
+                    seq_code = task_info.get("seqID") or task_info.get("seq_code") or ""
+                if not task_type:
+                    task_type = task_info.get("type") or ""
+            except Exception:
+                pass
+        if not task_type and task_id:
+            try:
+                for tk in (client.get_tasks(int(shot_id), actor_user_id=actor_id) or []):
+                    tid_ = tk.get("id") or tk.get("task_id") if isinstance(tk, dict) else getattr(tk, "task_id", None)
+                    if tid_ == task_id:
+                        task_type = (tk.get("type") or tk.get("task_type") if isinstance(tk, dict) else getattr(tk, "type", "")) or ""
+                        break
+            except Exception:
+                pass
+        if pid is not None:
+            try:
+                if hasattr(client, "get_project"):
+                    p = client.get_project(int(pid), actor_user_id=actor_id) or {}
+                    proj_name = p.get("name") or ""
+                if not proj_name:
+                    for p in (client.get_my_projects(actor_user_id=actor_id) or []):
+                        if isinstance(p, dict) and p.get("id") == pid:
+                            proj_name = p.get("name") or ""; break
+            except Exception:
+                pass
+        # shotless (asset_list が shot 経由で取れない) 時は get_assets_by_task へ
+        # fallback (get_retake_view/cmd_094a と同一パターン)
+        if not asset_list and task_id and hasattr(client, "get_assets_by_task"):
+            try:
+                asset_list = [a for a in (client.get_assets_by_task(int(task_id), actor_user_id=actor_id) or []) if isinstance(a, dict)]
+            except Exception:
+                pass
+        if asset_list:
+            asset_list.sort(key=lambda a: (a.get("created_at") or ""), reverse=True)
+            version = asset_list[0].get("version") or ""
 
-                hier = [p for p in (proj_name, seq_code, shot_code, task_type) if p]
-                title_line = " ".join(hier) if hier else f"shot:{shot_id} task:{task_id or '-'}"
-                if version:
-                    title_line += f" {version}"
-                # task_type 未解決時は hier だけでは task を一意特定できない (例:
-                # "SHOT_055" のみ) — 生 task_id を括弧で補い追跡可能性を維持する。
-                if task_id and not task_type:
-                    title_line += f" (task:{task_id})"
+        hier = [p for p in (proj_name, seq_code, shot_code, task_type) if p]
+        title_line = " ".join(hier) if hier else f"shot:{shot_id} task:{task_id or '-'}"
+        if version:
+            title_line += f" {version}"
+        # task_type 未解決時は hier だけでは task を一意特定できない (例:
+        # "SHOT_055" のみ) — 生 task_id を括弧で補い追跡可能性を維持する。
+        if task_id and not task_type:
+            title_line += f" (task:{task_id})"
 
-                body_lines = [
-                    "✅ Approved",
-                    title_line,
-                ]
-                if comment:
-                    body_lines.append(f"comment: {comment[:200]}")
-                body_lines.append(f"— {sender_name} (Director)")
-                client.post_dm(int(tid), "\n".join(body_lines), actor_user_id=actor_id)
-                thread_notified = True
+        body_lines = [
+            "✅ Approved",
+            title_line,
+        ]
+        if comment:
+            body_lines.append(f"comment: {comment[:200]}")
+        body_lines.append(f"— {sender_name} (Director)")
+        body_text = "\n".join(body_lines)
 
-                # cmd_106 パートB (2026-07-16・殿御命): AP(承認)通知に Push/SSE を追加。
-                # QC提出/QC_FB通知(_push_to_cuids・push_sse_event)と同じパターン。
-                # 宛先はQC_FB同様、アーティスト(assignee)を必ず含める(殿仕様)。
-                from app.routers.pages_notif_settings import get_user_prefs
-                from app.routers.sse_notifications import push_sse_event
-                from app.adapters.calendar_client import _to_calendar_uid
-                notify_targets = set()
-                for _p in (target.get("participants") or []):
-                    try:
-                        notify_targets.add(int(_p))
-                    except (ValueError, TypeError):
-                        pass
-                if task_id and hasattr(client, "get_task"):
-                    try:
-                        _ti = client.get_task(int(task_id), actor_user_id=actor_id) or {}
-                        _assignee = _ti.get("assigned_to") or _ti.get("assignee_id")
-                        if _assignee is not None:
-                            notify_targets.add(int(_assignee))
-                    except Exception:
-                        pass
-                _sender_cuid = _to_calendar_uid(actor_id)
-                if _sender_cuid is not None:
-                    notify_targets.discard(int(_sender_cuid))
-                if notify_targets:
-                    approve_push_payload = {
-                        "title": f"✅ Approved: {title_line}",
-                        "body": (comment[:200] if comment else f"{sender_name} が承認しました"),
-                        "url": f"/qc/{shot_id}" + (f"?task_id={task_id}" if task_id else ""),
-                        "tag": f"score-approve-{tid}",
-                    }
-                    approve_push_targets, approve_sse_targets = [], []
-                    for _cuid in notify_targets:
-                        _prefs = get_user_prefs(int(_cuid))
-                        if _prefs.get("channels", {}).get("push", True):
-                            approve_push_targets.append(_cuid)
-                        if _prefs.get("channels", {}).get("sse", True):
-                            approve_sse_targets.append(_cuid)
-                    if approve_push_targets:
-                        approve_push_result = _push_to_cuids(approve_push_targets, approve_push_payload)
-                    if approve_sse_targets:
-                        approve_sse_result = push_sse_event(approve_sse_targets, "notif", approve_push_payload)
+        # cmd_159②: 従来は get_my_dm_threads() を last_message 文字列一致(無ければ
+        # 「最新thread」)で探す不安定な経路で宛先スレッドを特定していた(一致しない/
+        # 一致すべきでない場合に無関係な最新threadへ誤配信されうる — 個人宛てのように
+        # 見える不具合の実質的な原因)。cmd_149/151(post_retakes/status_manual)と
+        # 同一の宛先解決(_resolve_notify_participants)+スレッド投稿(_notify_thread、
+        # 内部で cmd_156 の get_or_create_task_thread によりタスク正本threadを再利用)
+        # に揃える(★新規通知機構は作らず既存2関数を再利用・重複実装禁止の遵守)。
+        participants, sender_cuid_int = _resolve_notify_participants(client, actor_id, pid=pid, task_id=task_id)
+        if len(participants) >= 2:
+            from app.helpers.task_threads import build_thread_title
+            thread_id, approve_push_result, approve_sse_result = _notify_thread(
+                client, actor_id, participants, sender_cuid_int, task_id,
+                body_text=body_text,
+                notif_title=f"✅ Approved: {title_line}",
+                notif_body=(comment[:200] if comment else f"{sender_name} が承認しました"),
+                url_path=f"/qc/{shot_id}" + (f"?task_id={task_id}" if task_id else ""),
+                tag_prefix="score-approve",
+                thread_title=build_thread_title(proj_name, seq_code, shot_code, task_type, task_id),
+            )
+            thread_notified = thread_id is not None
     except Exception:
         pass
 
