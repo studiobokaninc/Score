@@ -399,11 +399,32 @@ def get_task_detail(
     # cmd_151 (2026-07-30・殿御命): タスク画面→retake確認への導線。retake が無いアセットには
     # ボタンを出さないため、事前に (shot_id, task_id) に紐づく retake の asset_id 集合を解決。
     from app.helpers.retake_lookup import get_task_retake_asset_ids
-    from app.helpers.task_threads import get_task_thread_id
+    from app.helpers.task_threads import get_task_thread_id, get_or_create_task_thread, build_thread_title
     try:
         retake_asset_ids = get_task_retake_asset_ids(found_shot_id, task_id)
     except Exception:
         retake_asset_ids = set()
+
+    # cmd_157② (2026-07-31・殿御命): Score はタスクを自ら作成せず上流Calendarが正本の
+    # ため、Score側に「作成時点」のフックが無い。この task ページ (/task/{task_id}) が
+    # Score がそのタスクを最初に取り込む(=表示する)地点であるため、ここでスレッド未作成
+    # なら「何の操作もせぬうちに」(状態変更・Retake等より前に)作成する。既存の
+    # get_task_thread_id と同じ DB を参照する get_or_create_task_thread が土台なので、
+    # 既存スレッドがあれば新規作成せず再利用(二重作成なし)。失敗時は従来通り
+    # None のままページ表示は継続する(通知送信という重要機能を巻き込まない・cmd_156踏襲)。
+    task_thread_id = get_task_thread_id(task_id)
+    if task_thread_id is None:
+        try:
+            from app.routers.bff_write import _resolve_notify_participants
+            _participants, _ = _resolve_notify_participants(client, actor_id, pid=project_id, task_id=task_id)
+            title_proj = project_name if (project_id and project_name and project_name != "-") else ""
+            task_thread_id = get_or_create_task_thread(
+                client, actor_id, task_id, _participants,
+                title=build_thread_title(title_proj, seq_code or "", found_shotID or "", found_task.type or "", task_id),
+            )
+        except Exception:
+            task_thread_id = None
+
     return _templates.TemplateResponse(
         request=request,
         name="shot_detail.html",
@@ -431,7 +452,8 @@ def get_task_detail(
             "project_members": project_members,
             # cmd_156① (2026-07-31・殿御命): task_thread_id はScore自身のDB(task_threads)を
             # 正本とする(旧: 外部Calendarのtask.thread_idパススルー・実際は常に未設定だった)。
-            "task_thread_id": get_task_thread_id(task_id),
+            # cmd_157② (2026-07-31): 上で未作成なら先んじて作成済のIDをそのまま使う。
+            "task_thread_id": task_thread_id,
             "demo_mode": os.getenv("CALENDAR_MOCK", "0") == "1",
         },
     )

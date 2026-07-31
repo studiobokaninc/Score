@@ -1246,8 +1246,32 @@ async def post_task_status_manual(request: Request, task_id: int = Path(...), ac
     pid = cur.get("project_id")
     shot_id = cur.get("shot_id")
     task_type = cur.get("type") or ""
-    seq_code = cur.get("seqID") or ""
-    shot_code = cur.get("shotID") or (f"SHOT_{int(shot_id):03d}" if shot_id else "")
+    # cmd_157① (2026-07-31・殿御裁可): get_task().seqID は上流Calendarが誤って project名
+    # そのものを返すことがあり(実例: task_id=2648 で seqID='marukome'、本来'sq01')、
+    # proj_name と結合するとスレッド名で案件名が二重出現する(marukome-marukome-c01-...)。
+    # post_retakes 由来の shot 単位解決(get_shot_detail→不完全なら get_shot DTO fallback)
+    # に参照経路を揃える(実データ検証: get_shot_detail は /api/me/shots/{id} が空を返す
+    # ケースがあり、その際は get_shot の DTO(shot_code/seq_code)に正しい値がある —
+    # post_retakes と全く同じ2段構成でなければ実際のバグ再現ケースを取り逃す)。
+    seq_code = ""
+    shot_code = ""
+    if shot_id is not None:
+        try:
+            si = client.get_shot_detail(int(shot_id), actor_user_id=actor_id) or {} if hasattr(client, "get_shot_detail") else {}
+            shot_code = si.get("shotID") or si.get("name") or ""
+            seq_code = si.get("seqID") or ""
+        except Exception: pass
+        if not shot_code or not seq_code:
+            try:
+                s_dto = client.get_shot(int(shot_id), actor_user_id=actor_id) if hasattr(client, "get_shot") else None
+                if s_dto:
+                    if not shot_code: shot_code = getattr(s_dto, "shot_code", "") or getattr(s_dto, "name", "")
+                    if not seq_code: seq_code = getattr(s_dto, "seq_code", "") or ""
+            except Exception: pass
+    if not seq_code:
+        seq_code = cur.get("seqID") or ""
+    if not shot_code:
+        shot_code = cur.get("shotID") or (f"SHOT_{int(shot_id):03d}" if shot_id else "")
     proj_name = ""
     if pid is not None and hasattr(client, "get_project"):
         try:
