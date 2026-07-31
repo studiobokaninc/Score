@@ -64,6 +64,22 @@ class RoutineLog(Base):
     created_at = Column(DateTime, default=datetime.utcnow)
 
 
+class TaskThread(Base):
+    """cmd_156 (2026-07-31・殿御命): スレッドの単位を『宛先の組み合わせ』から『タスク』へ
+    改めるための正本マッピング。1 task_id につき 1 thread_id を保持し、宛先の顔ぶれが
+    異なっても同一タスクの会話は同一スレッド(thread_id)に集約されるようにする。
+    Score 自身のDB(外部Calendarサービスとは別)で管理する新規テーブル — 外部Calendar
+    APIのスレッド重複排除挙動に依存しないための正本索引。"""
+    __tablename__ = "task_threads"
+
+    id = Column(Integer, primary_key=True, index=True)
+    task_id = Column(String, nullable=False, unique=True, index=True)
+    thread_id = Column(String, nullable=False, index=True)
+    title = Column(String, nullable=True)  # project-shot-cut-task-Thread 形式 (cmd_156②)
+    created_at = Column(DateTime, default=datetime.utcnow)
+    updated_at = Column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
+
+
 class TimecardLog(Base):
     """殿御命 2026-06-09: 退勤打刻を Score 側にも保存 (Calendar に加え記録保持)。"""
     __tablename__ = "timecard_logs"

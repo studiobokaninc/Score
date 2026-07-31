@@ -399,6 +399,7 @@ def get_task_detail(
     # cmd_151 (2026-07-30・殿御命): タスク画面→retake確認への導線。retake が無いアセットには
     # ボタンを出さないため、事前に (shot_id, task_id) に紐づく retake の asset_id 集合を解決。
     from app.helpers.retake_lookup import get_task_retake_asset_ids
+    from app.helpers.task_threads import get_task_thread_id
     try:
         retake_asset_ids = get_task_retake_asset_ids(found_shot_id, task_id)
     except Exception:
@@ -428,7 +429,9 @@ def get_task_detail(
             "asset_list": asset_list,
             "retake_asset_ids": retake_asset_ids,
             "project_members": project_members,
-            "task_thread_id": getattr(found_task, "thread_id", None) if found_task else None,
+            # cmd_156① (2026-07-31・殿御命): task_thread_id はScore自身のDB(task_threads)を
+            # 正本とする(旧: 外部Calendarのtask.thread_idパススルー・実際は常に未設定だった)。
+            "task_thread_id": get_task_thread_id(task_id),
             "demo_mode": os.getenv("CALENDAR_MOCK", "0") == "1",
         },
     )

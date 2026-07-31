@@ -62,7 +62,11 @@
           {% if _lines|length >= 2 and (_lines[0].startswith('🔍') or _lines[0].startswith('📌') or _lines[0].startswith('✅')) %}
             {% set _ns_t.title = _lines[1] %}
           {% endif %}
-          {% set _title = _ns_t.title or (_names|join(', ') if _names else ('thread ' ~ t.thread_id)) %}
+          {# cmd_156②③ (2026-07-31・殿御命): task_threads(正本)のtitleを最優先。
+             無ければ従来の last_message 解析 → 宛先名 → thread_id の順でfallback
+             (捏造値は入れない・取得できる情報の範囲で表示)。宛先ではなくタイトルで
+             見分けが付くようにする。 #}
+          {% set _title = t.title or _ns_t.title or (_names|join(', ') if _names else ('thread ' ~ t.thread_id)) %}
           <button type="button" onclick="openRealThread('{{ t.thread_id }}')"
                   data-real-thread-row="{{ t.thread_id }}"
                   class="thread-row w-full text-left block px-3 py-3 rounded-2xl hover:bg-white/50 mb-1 transition-colors">
@@ -73,7 +77,7 @@
                   <span class="font-bold text-slate-800 text-xs truncate" translate="no">{{ _title }}</span>
                   <span class="text-[10px] text-slate-400">{{ (t.updated_at or '')[:10] }}</span>
                 </div>
-                <p class="text-[11px] text-slate-500 truncate">👥 {{ _parts|length }} 名 ({{ _names|join(', ') }}) · {{ _lines[0] if _lines else '' }}</p>
+                <p class="text-[11px] text-slate-500 truncate">👥 {{ _parts|length }} 名 · {{ _lines[0] if _lines else '' }}</p>
               </div>
             </div>
           </button>
@@ -822,12 +826,16 @@ async function openRealThread(threadId) {
   const names = parts.map(p => p.name).filter(n => n && n !== 'Me');
   const isMulti = parts.length > 2;
   // header
+  // cmd_156③ (2026-07-31・殿御命): スレッドのタイトルを上(#conv-title)に置き、
+  // メンバー表示の詳細(「👥 N名 thread」・宛先名の列挙)は出さない。#conv-membersは
+  // 日時のみとする。タイトルは task_threads 正本(t.title)を最優先し、無ければ
+  // (宛先組合せの一般DM等)従来通り宛先名にfallbackする。
   const iconEl = document.getElementById('conv-icon');
   iconEl.className = `w-10 h-10 ${isMulti ? 'bg-purple-100' : 'bg-emerald-100'} rounded-full flex items-center justify-center text-base`;
   iconEl.textContent = isMulti ? '👥' : '💬';
-  document.getElementById('conv-title').textContent = names.length ? names.join(', ') : ('thread ' + t.thread_id);
+  document.getElementById('conv-title').textContent = t.title || (names.length ? names.join(', ') : ('thread ' + t.thread_id));
   const updated = t.updated_at || '';
-  document.getElementById('conv-members').textContent = (isMulti ? `👥 ${parts.length} 名 thread · ` : '') + updated.slice(0, 16).replace('T', ' ');
+  document.getElementById('conv-members').textContent = updated.slice(0, 16).replace('T', ' ');
   // body 殿御命 2026-06-05 (nibu Phase 2): 全件取得 EP に切替
   const area = document.getElementById('conv-messages');
   const nameLine = names.length ? names.join(', ') : ('thread ' + t.thread_id);
@@ -953,6 +961,16 @@ const dmAvatarMap = {
 
 function openNewDMModal() { document.getElementById('newDMModal').classList.remove('hidden'); }
 function closeNewDMModal() { document.getElementById('newDMModal').classList.add('hidden'); }
+// cmd_156⑤ (2026-07-31・殿御命): 宛先候補は data-* 属性から読み取る (onclick への
+// tojson 直埋め込みによる属性破壊を避けるため — 真因は上のテンプレコメント参照)。
+document.addEventListener('click', function(ev) {
+  const btn = ev.target.closest('.new-dm-candidate');
+  if (!btn) return;
+  const slug = btn.dataset.dmSlug;
+  const name = btn.dataset.dmName;
+  const uid = parseInt(btn.dataset.dmUid, 10);
+  startDM(slug, name, uid);
+});
 
 // 殿御命 2026-06-04: 新規 DM thread 作成 (nibu POST /api/dm/threads 経由)
 async function startDM(userId, userName, calendarUid) {
@@ -1167,9 +1185,15 @@ async function sendMessage() {
       {# 殿御命 2026-06-04: Calendar 実機 user 一覧から動的描画 (リアルタイム性重視・cache 無し) #}
       <p class="text-xs text-slate-400 font-bold px-2 py-1">👤 個人 ({{ dm_candidates|length }} 名 — 自分除く)</p>
       {% if dm_candidates %}
+        {# cmd_156⑤ (2026-07-31・殿御命・不具合是正): onclick="startDM('...', {{ u.name|tojson }}, ...)"
+           は tojson が二重引用符で出力するため、同じく二重引用符で囲まれた onclick 属性値の
+           途中で属性が打ち切られ("startDM('casper', までで属性終了)、不完全な式
+           (Unexpected end of input) となり宛先クリックが常に無反応になっていた
+           (真因)。onclick 内へのJS文字列直接埋め込みは cmd_056 で既に禁止されていた
+           パターンと同型。data-* 属性 + addEventListener に切替えて解消する。 #}
         {% for u in dm_candidates %}
-        <button onclick="startDM('{{ u.slug }}', {{ u.name|tojson }}, {{ u.uid }})"
-                class="w-full flex items-center gap-3 p-3 rounded-2xl hover:bg-indigo-50 transition text-left">
+        <button data-dm-slug="{{ u.slug }}" data-dm-name="{{ u.name }}" data-dm-uid="{{ u.uid }}"
+                class="new-dm-candidate w-full flex items-center gap-3 p-3 rounded-2xl hover:bg-indigo-50 transition text-left">
           <span class="w-8 h-8 rounded-full {{ u.color }} text-white text-xs font-black flex items-center justify-center">{{ u.initial }}</span>
           <div class="min-w-0 flex-1">
             <p class="font-black text-slate-800 text-sm truncate" translate="no">{{ u.name }}</p>

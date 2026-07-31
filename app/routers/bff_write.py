@@ -127,17 +127,28 @@ def _resolve_notify_participants(client, actor_id: str, pid: int | None = None, 
 
 
 def _notify_thread(client, actor_id: str, participants: list[int], sender_cuid_int: int | None, task_id: int | None,
-                    body_text: str, notif_title: str, notif_body: str, url_path: str, tag_prefix: str) -> tuple[int | None, dict, dict]:
+                    body_text: str, notif_title: str, notif_body: str, url_path: str, tag_prefix: str,
+                    thread_title: str | None = None) -> tuple[int | None, dict, dict]:
     """participants 宛 DM thread 投稿 + push/SSE 配信 (post_retakes 由来・共通)。
     tag は thread_id 確定後に f"{tag_prefix}-{thread_id}" として組み立てる
     (post_dm_thread 実行前は thread_id 未確定のため呼び出し側で組み立て不可)。
+    cmd_156①(2026-07-31・殿御命): スレッドの単位を『宛先の組み合わせ』ではなく
+    『タスク』に改める。task_id が指定されている場合、Score自身のDB(task_threads)
+    で管理する正本thread_idを app.helpers.task_threads.get_or_create_task_thread 経由で
+    取得し、既存があれば再利用する(宛先の顔ぶれが変わっても同一task=同一thread)。
+    task_id が無い(taskに紐付かない一般DM等)場合は従来通り毎回 post_dm_thread する。
+    ★宛先(participants)の解決ロジック自体は無変更 — 通知を受け取る顔ぶれは従来通り。
     戻り値: (thread_id, push_result, sse_result)。"""
     thread_id = None
     push_result = {"sent": 0, "failed": 0, "details": []}
     sse_result = {"delivered": 0, "skipped_no_listener": 0}
     if hasattr(client, "post_dm_thread") and len(participants) >= 2:
-        thread_resp = client.post_dm_thread(participant_ids=participants, task_id=task_id, actor_user_id=actor_id)
-        thread_id = thread_resp.get("thread_id") or thread_resp.get("id")
+        if task_id is not None:
+            from app.helpers.task_threads import get_or_create_task_thread
+            thread_id = get_or_create_task_thread(client, actor_id, task_id, participants, title=thread_title)
+        else:
+            thread_resp = client.post_dm_thread(participant_ids=participants, task_id=task_id, actor_user_id=actor_id)
+            thread_id = thread_resp.get("thread_id") or thread_resp.get("id")
         if thread_id and hasattr(client, "post_dm"):
             client.post_dm(int(thread_id), body_text, actor_user_id=actor_id)
             from app.routers.pages_notif_settings import get_user_prefs
@@ -351,11 +362,13 @@ async def post_retakes(request: Request, actor_id: str = Depends(get_actor_id)):
         lines.append(""); lines.append(f"— {sender_name} (Director)")
         body_text = "\n".join(lines)
 
+        from app.helpers.task_threads import build_thread_title
         thread_id, push_result, sse_result = _notify_thread(
             client, actor_id, participants, sender_cuid_int, task_id, body_text,
             notif_title=f"🔁 Retake 発令: {title_line}",
             notif_body=(direction or "新たな Retake が発令されました"),
             url_path=qc_path, tag_prefix="score-retake",
+            thread_title=build_thread_title(proj_name, seq_code, shot_code, task_type, task_id),
         )
     except Exception as e:
         return JSONResponse(content={"ok": False, "error": str(e)[:200]}, status_code=500)
@@ -1274,11 +1287,13 @@ async def post_task_status_manual(request: Request, task_id: int = Path(...), ac
     ]
     body_text = "\n".join(lines)
 
+    from app.helpers.task_threads import build_thread_title
     thread_id, push_result, sse_result = _notify_thread(
         client, actor_id, participants, sender_cuid_int, task_id, body_text,
         notif_title=f"🔧 ステータス変更: {title_line}",
         notif_body=comment,
         url_path=task_path, tag_prefix=f"score-status-{task_id}",
+        thread_title=build_thread_title(proj_name, seq_code, shot_code, task_type, task_id),
     )
 
     return JSONResponse(content={

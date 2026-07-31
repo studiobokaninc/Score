@@ -31,6 +31,16 @@ def _safe_user(actor_id: str) -> CalendarUser:
 
 @router.get("/messages")
 def get_messages(request: Request, thread: str | None = None, actor_id: str = Depends(get_actor_id)):
+    # cmd_156① (2026-07-31・殿御命): `?thread=task{id}` の仮キー(task_thread_id未設定時に
+    # shot_detail.html等が発行するリンク)は、task_threads(Score正本)に実threadがあれば
+    # 実thread_idへ解決してリダイレクトする。無ければ従来通り(JS側の「まだthreadが
+    # ありません」案内)に委ねる。自動でthreadを新規作成することはしない
+    # (閲覧しただけでthreadが生成されるのは意図しない挙動のため — 既存方針を維持)。
+    if thread and thread.startswith("task") and thread[4:].isdigit():
+        from app.helpers.task_threads import get_task_thread_id
+        real_thread_id = get_task_thread_id(thread[4:])
+        if real_thread_id:
+            return RedirectResponse(url=f"/messages?thread={real_thread_id}", status_code=303)
     user = _safe_user(actor_id)
     client = get_calendar_client()
     # mock の messages を取得 (state.messages list)
@@ -103,12 +113,28 @@ def get_messages(request: Request, thread: str | None = None, actor_id: str = De
     #   1) last_message が 🔍 QC 依頼 / 📌 Review 依頼 / ✅ Approved で始まる → SHOT (content 優先・participants 2 名でも)
     #   2) participants 3 名以上 → SHOT
     #   3) participants 2 名 + content QC 系でない → DM
+    # cmd_156②③ (2026-07-31・殿御命): task_threads(Score自身のDB)に記録された正本タイトルを
+    # thread_id で逆引きして各threadに付与する。宛先の顔ぶれではなくタイトルで見分けが
+    # 付くようにするための情報源(既存の宛先組合せthreadにはタイトルが無いため、その場合は
+    # 従来通り名前へfallbackする — 捏造値は入れない)。
+    from app.helpers.task_threads import get_all_task_threads
+    _thread_titles = get_all_task_threads()
+    for t in calendar_dm_threads:
+        t["title"] = _thread_titles.get(str(t.get("thread_id")))
+
     shot_group_threads = []
     dm_oneonone_threads = []
     for t in calendar_dm_threads:
         last_msg = (t.get("last_message") or "").lstrip()
-        is_qc_content = last_msg.startswith("🔍 QC 依頼") or last_msg.startswith("📌 Review 依頼") or last_msg.startswith("✅ Approved") or last_msg.startswith("🔁 Retake")
-        if is_qc_content or len(t.get("participants") or []) > 2:
+        is_qc_content = (
+            last_msg.startswith("🔍 QC 依頼") or last_msg.startswith("📌 Review 依頼")
+            or last_msg.startswith("✅ Approved") or last_msg.startswith("🔁 Retake")
+            or last_msg.startswith("🔧 ステータス手動変更")  # cmd_156②③: QC_FB通知も分類漏れなく SHOT タブへ
+        )
+        # cmd_156①②③: task_threads に正本titleがある(=タスク単位スレッド)なら
+        # 宛先人数に関わらずSHOTタブへ(旧来のtext-matching heuristicより信頼できる判定)。
+        has_task_title = bool(t.get("title"))
+        if is_qc_content or has_task_title or len(t.get("participants") or []) > 2:
             shot_group_threads.append(t)
         else:
             dm_oneonone_threads.append(t)
@@ -121,6 +147,7 @@ def get_messages(request: Request, thread: str | None = None, actor_id: str = De
                 "participants": t.get("participants") or [],
                 "last_message": t.get("last_message") or "",
                 "updated_at": t.get("updated_at") or "",
+                "title": t.get("title"),
             }
             for t in calendar_dm_threads
         ]
@@ -133,7 +160,11 @@ def get_messages(request: Request, thread: str | None = None, actor_id: str = De
         from app.adapters.calendar_client import _to_calendar_uid
         me_cuid = _to_calendar_uid(actor_id)
         me_cuid_int = int(me_cuid) if me_cuid is not None else None
-        _colors = ["bg-purple-600", "bg-emerald-600", "bg-amber-500", "bg-indigo-600", "bg-rose-500", "bg-sky-600", "bg-slate-700", "bg-fuchsia-600", "bg-teal-600", "bg-orange-500"]
+        # cmd_156④ (2026-07-31・殿御命): 新規DM宛先アバターの背景色のうち amber-500(白文字と
+        # の実測コントラスト比 2.15:1)・orange-500(2.80:1)がWCAG AA(大文字最低3:1)を割り込み
+        # 判読困難だったため、同系統でより濃い amber-700(5.02:1)・orange-700(5.18:1)に変更。
+        # 他8色は3.6以上あり据置(既存の他画面の配色との統一感を保つため変更を最小限に留める)。
+        _colors = ["bg-purple-600", "bg-emerald-600", "bg-amber-700", "bg-indigo-600", "bg-rose-500", "bg-sky-600", "bg-slate-700", "bg-fuchsia-600", "bg-teal-600", "bg-orange-700"]
         if hasattr(client, "get_users"):
             for u in (client.get_users(actor_user_id=actor_id) or []):
                 if not isinstance(u, dict):

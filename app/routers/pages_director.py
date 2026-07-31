@@ -284,37 +284,12 @@ def get_retake_view(
                     target_url = f"http://192.168.44.253:8001/static/assets/{_bn}"
         except Exception: pass
 
-    # 殿御命 2026-06-05: SHOT thread 探索 — 段階 fallback
-    # ① shot_code + (task_type or task_name) を含む thread (= 該当 task 関連の SHOT thread)
-    # ② shot_code を含む thread
-    # ③ 任意の最新 SHOT 関係者 thread (participants > 2 or QC/Review/Approved/Retake content)
-    task_thread_id = None
-    try:
-        if hasattr(client, "get_my_dm_threads"):
-            threads = client.get_my_dm_threads(actor_user_id=actor_id) or []
-            # 更新日時 降順
-            threads_sorted = sorted([t for t in threads if isinstance(t, dict)], key=lambda x: x.get("updated_at", ""), reverse=True)
-            # ① shot_code + task 名で完全一致 を探す
-            sc_low = (shot_code or "").lower()
-            tn_low = (task_name or task_type or "").lower()
-            for t in threads_sorted:
-                lm = (t.get("last_message") or "").lower()
-                if sc_low and tn_low and sc_low in lm and tn_low in lm:
-                    task_thread_id = t.get("thread_id"); break
-            # ② shot_code のみ
-            if not task_thread_id:
-                for t in threads_sorted:
-                    lm = (t.get("last_message") or "").lower()
-                    if sc_low and sc_low in lm:
-                        task_thread_id = t.get("thread_id"); break
-            # ③ 任意の SHOT thread (3+名 or QC/Review/Retake)
-            if not task_thread_id:
-                for t in threads_sorted:
-                    lm = (t.get("last_message") or "").lstrip()
-                    parts_n = len(t.get("participants") or [])
-                    if parts_n > 2 or any(lm.startswith(k) for k in ("🔍 QC 依頼", "📌 Review 依頼", "✅ Approved", "🔁 Retake")):
-                        task_thread_id = t.get("thread_id"); break
-    except Exception: pass
+    # cmd_156① (2026-07-31・殿御命): 旧・last_message文字列一致による段階fallback探索を廃止。
+    # task_thread_id はScore自身のDB(task_threads)を正本として引く
+    # (宛先の組み合わせが変わっても同一taskは同一threadに集約される新設計・回帰不可能な
+    # テキストマッチングに依存しない)。
+    from app.helpers.task_threads import get_task_thread_id
+    task_thread_id = get_task_thread_id(task_id)
 
     return _templates.TemplateResponse(
         request=request, name="retake_view.html",

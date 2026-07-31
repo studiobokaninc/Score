@@ -11,6 +11,7 @@ from app.deps import get_actor_id, get_actor_role
 from app.qc_delegation import is_qc_delegated
 from app.helpers.project_resolver import resolve_project_name, resolve_project_members
 from app.helpers.task_status import attach_status_meta, JUDGE_TARGET_STATUSES
+from app.helpers.task_threads import get_task_thread_id
 
 router = APIRouter()
 
@@ -205,7 +206,8 @@ def get_qc_viewer(
             "user": user,
             "asset_list": asset_list,
             "selected_asset_id": asset_id,
-            "task_thread_id": getattr(selected_task, "thread_id", None) if selected_task else None,
+            # cmd_156① (2026-07-31・殿御命): task_thread_id はScore自身のDB(task_threads)を正本とする。
+            "task_thread_id": get_task_thread_id(task_id),
             # 暫定: Calendar コメント/リテイク schema 確認中 → 空リスト (cmd_475 Phase A)
             "comment_list": [],
             "retake_history": [],
