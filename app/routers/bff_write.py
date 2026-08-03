@@ -1623,8 +1623,18 @@ async def post_qc_notify_existing(request: Request, actor_id: str = Depends(get_
     qc_link = (public_base + qc_path) if public_base else qc_path
 
     # thread + body
-    thread_resp = client.post_dm_thread(participant_ids=participants, task_id=task_id, actor_user_id=actor_id)
-    thread_id = thread_resp.get("thread_id") or thread_resp.get("id")
+    # cmd_159a2 (2026-08-02・軍師検分是正): notify_existing は post_asset_upload と
+    # 別経路のため cmd_159①の是正が未適用のまま残っていた。同一fallback
+    # (task_id有りは正本thread再利用・無しは従来通り毎回post_dm_thread)に揃える。
+    if task_id is not None:
+        from app.helpers.task_threads import get_or_create_task_thread, build_thread_title
+        thread_id = get_or_create_task_thread(
+            client, actor_id, task_id, participants,
+            title=build_thread_title(proj_name, seq_code, shot_code, task_type, task_id),
+        )
+    else:
+        thread_resp = client.post_dm_thread(participant_ids=participants, task_id=task_id, actor_user_id=actor_id)
+        thread_id = thread_resp.get("thread_id") or thread_resp.get("id")
     head = "🔍 QC 依頼" if submission_type == "qc" else "📌 Review 依頼"
     hier = [p for p in (proj_name, seq_code, shot_code, task_type) if p]
     title_line = " / ".join(hier) if hier else "(対象未指定)"
