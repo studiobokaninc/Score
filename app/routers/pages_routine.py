@@ -89,9 +89,13 @@ def _has_prev_day_exit_submitted(client, actor_id: str) -> bool:
     timecard shape (nibu 殿納品 2026-06-01): {id, user_id, date, clock_out_at, worked_minutes, break_minutes, memo}
       - `type` field は存在しない (旧 logic は type='clock_out' filter で全 record skip していたバグ)
     業務日定義: 5:00 JST 〜 翌 5:00 JST。 例: 5am 前にログインなら 業務日 = 前日付。
-    判定: 前業務日 もしくは 当業務日 で clock_out_at が記録されていれば True。
-    content check: memo (退勤メモ) もしくは worked_minutes > 0 を伴うものを優先するが、
-                  clock_out_at の存在のみでも valid (memo は任意仕様)。
+    判定: 「直近の実業務日 (土日・祝日を除く)」もしくは当業務日で clock_out_at が
+          記録されていれば True。
+    cmd_165 (2026-08-05, 殿ご本人が実務で遭遇): 旧実装は biz_yesterday とのカレンダー日
+    一致のみを見ていたため、休日を挟むと前業務日の記録まで届かず誤って未退勤と判定
+    していた (例: 金曜退勤済 → 土日 (打刻なし) を挟んだ月曜出勤で誤検知)。
+    休日・週末はカレンダー祝日 API (get_holidays、pages_calendar.py と同じ機構) を
+    参照して読み飛ばし、実際に打刻され得た最後の業務日まで遡って判定する。
     """
     from datetime import datetime, timedelta, timezone
     if not hasattr(client, "get_timecards"):
@@ -107,9 +111,13 @@ def _has_prev_day_exit_submitted(client, actor_id: str) -> bool:
         biz_today = (now_jst - timedelta(days=1)).date()
     else:
         biz_today = now_jst.date()
-    biz_yesterday = biz_today - timedelta(days=1)
+
+    clocked_out_dates: set = set()
     for t in tcs:
         if not isinstance(t, dict):
+            continue
+        # content check: clock_out_at 必須 (打刻あり)
+        if not t.get("clock_out_at"):
             continue
         # 業務日 = date field 優先・無ければ clock_out_at の日付部
         d_raw = t.get("date") or ((t.get("clock_out_at") or "")[:10])
@@ -119,13 +127,36 @@ def _has_prev_day_exit_submitted(client, actor_id: str) -> bool:
             d = datetime.strptime(str(d_raw)[:10], "%Y-%m-%d").date()
         except (ValueError, TypeError):
             continue
-        if d != biz_yesterday and d != biz_today:
-            continue
-        # content check: clock_out_at 必須 (打刻あり)
-        if not t.get("clock_out_at"):
-            continue
-        return True
-    return False
+        clocked_out_dates.add(d)
+
+    # 遡り探索が跨ぎ得る年をまとめて取得 (最大31日遡るため前年跨ぎも考慮)
+    holiday_dates: set = set()
+    if hasattr(client, "get_holidays"):
+        for y in {biz_today.year, (biz_today - timedelta(days=31)).year}:
+            try:
+                holidays_raw = client.get_holidays(y, actor_user_id=actor_id) or []
+            except Exception:
+                holidays_raw = []
+            for h in holidays_raw:
+                if not isinstance(h, dict):
+                    continue
+                h_date = h.get("date")
+                if not h_date:
+                    continue
+                try:
+                    holiday_dates.add(datetime.strptime(str(h_date)[:10], "%Y-%m-%d").date())
+                except (ValueError, TypeError):
+                    continue
+
+    # 直近の実業務日 (土日祝日を除く) を biz_today の前日から遡って探す。
+    # データ欠損等で無限ループにならぬよう最大31日で打ち切る (捏造せず単に見つからず終了)。
+    prev_biz_day = biz_today - timedelta(days=1)
+    for _ in range(31):
+        if prev_biz_day.weekday() < 5 and prev_biz_day not in holiday_dates:
+            break
+        prev_biz_day -= timedelta(days=1)
+
+    return biz_today in clocked_out_dates or prev_biz_day in clocked_out_dates
 
 
 def _has_submitted_routine_today(user_id) -> bool:
