@@ -79,7 +79,13 @@ router = APIRouter()
 # 無権限アクターが承認・差戻し・状態改変を実行できていた。
 # qc_viewer.html の既存クライアント側ゲート (role in ('director','pm','admin') or
 # is_qc_delegated) と同一の判定基準を server 側にも新設し fail-closed で拒否する。
-PRIVILEGED_TASK_STATUSES = COMPLETED_STATUSES | {"qc_fb"}  # {"ap","client_ap","deliver","qc_fb"}
+# cmd_162① (2026-08-05・軍師検分是正): COMPLETED_STATUSES ({"ap","client_ap","deliver"})
+# は「進捗上は完了扱い」という業務分類 (task_status.py) であり、判定権限の要否とは
+# 別軸。確定稿では DELIVER の変更者は User (WIP/QCと同じ自己管理系) と定められて
+# おり、ap/client_ap (承認結果)・qc_fb (差戻し) とは異なる。COMPLETED_STATUSES を
+# 流用すると業務分類の変更がそのまま権限緩急に波及するため、権限バケットは独立
+# 定数として定義する (deliver は含めない)。
+PRIVILEGED_TASK_STATUSES = frozenset({"ap", "client_ap", "qc_fb"})
 
 
 def _require_qc_judge_authority(actor_id: str, task_id: int | None = None, shot_id: int | None = None) -> None:

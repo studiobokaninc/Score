@@ -390,9 +390,20 @@
               <span class="font-mono">{{ (a.created_at or '')[:16] }}</span>
             </p>
             <p class="text-[10px] text-indigo-500 font-bold mt-1">▶ クリックで再生画面へ</p>
+            {# cmd_155 (2026-07-30・殿御命・不具合是正): a.shot_id は shotless task
+               (SHOT_000系) の asset では None を取り得る(0 ではない)。ページ側で既に
+               正規化済の shot_id 変数(この task の実 shot_id・shotless なら0)を
+               None チェックで fallback に使う。a.shot_id or shot_id という書き方は
+               「0 を falsy とみなす」過去のSHOT_000サーガ同型バグを再生産するため
+               使わない(a.shot_id が実際に0の場合に誤って外側shot_idへ落ちてしまう)。
+               cmd_162② (2026-08-05・軍師検分是正): openQCNotifyModal でも同型の
+               取り違え(a.shot_id を素の値のまま埋め込み、Noneの場合JSに"None"という
+               無効なリテラルが埋め込まれ ReferenceError で落ちる)が見つかったため、
+               retakeボタンと共用の正規化済み変数として先に括り出す。 #}
+            {% set _asset_shot_id = a.shot_id if a.shot_id is not none else shot_id %}
             {# 殿御命 2026-06-05: 既存 asset から QC/Review 依頼 (新 upload なし) — admin/director/lead/pm/lighting_lead 限定 #}
             {% if role in ('admin','director','lead','pm','lighting_lead','kato') %}
-            <button type="button" onclick="event.preventDefault(); event.stopPropagation(); openQCNotifyModal({{ a.id }}, {{ a.shot_id }}, {{ a.task_id }}, '{{ a.version or "?" }}');"
+            <button type="button" onclick="event.preventDefault(); event.stopPropagation(); openQCNotifyModal({{ a.id }}, {{ _asset_shot_id }}, {{ a.task_id }}, '{{ a.version or "?" }}');"
                     class="mt-2 w-full bg-rose-500 hover:bg-rose-600 text-white text-[11px] font-bold rounded-lg py-1.5 transition">
               📤 既存 asset で QC 依頼
             </button>
@@ -402,16 +413,9 @@
              retake が無ければボタンを出さない (殿明言)。★親カード自体が <a> のため <a> を
              ネストすると無効HTMLとなり absolute 位置基準が崩れる (実機確認済) — 削除ボタンと
              同様に <span role="button"> + location 遷移で実装する。 #}
-          {# cmd_155 (2026-07-30・殿御命・不具合是正): a.shot_id は shotless task
-             (SHOT_000系) の asset では None を取り得る(0 ではない)。ページ側で既に
-             正規化済の shot_id 変数(この task の実 shot_id・shotless なら0)を
-             None チェックで fallback に使う。a.shot_id or shot_id という書き方は
-             「0 を falsy とみなす」過去のSHOT_000サーガ同型バグを再生産するため
-             使わない(a.shot_id が実際に0の場合に誤って外側shot_idへ落ちてしまう)。 #}
-          {% set _retake_shot_id = a.shot_id if a.shot_id is not none else shot_id %}
           {% if a.id in (retake_asset_ids|default([])) %}
           <span role="button" tabindex="0"
-                onclick="event.stopPropagation();event.preventDefault();window.location.href='/retake_view/{{ _retake_shot_id }}/{{ a.task_id }}';"
+                onclick="event.stopPropagation();event.preventDefault();window.location.href='/retake_view/{{ _asset_shot_id }}/{{ a.task_id }}';"
                 class="absolute top-2 left-2 bg-indigo-500/90 hover:bg-indigo-600 text-white text-[10px] font-bold rounded-lg px-2 py-1 shadow z-10 cursor-pointer">
             🔁 Retake確認
           </span>

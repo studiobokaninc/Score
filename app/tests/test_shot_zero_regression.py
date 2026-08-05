@@ -154,6 +154,45 @@ class TestShotDetailPageShotZero:
         assert "shot_id: 0," in resp.text
         assert "shot_id: 1," not in resp.text
 
+    def test_open_qc_notify_modal_shot_zero_not_rendered_as_none_literal(self, client, monkeypatch):
+        """cmd_162② 回帰防止: shot_detail.html の openQCNotifyModal 呼び出しは
+        asset自身の shot_id (a.shot_id) を素の値のまま埋め込んでおり、shotless task
+        (SHOT_000) の asset では a.shot_id=None のため Jinja が JS へ literal "None"
+        を埋め込み、ボタン押下時に ReferenceError で落ちていた (cmd_155① で
+        retakeボタンに適用済の `a.shot_id if a.shot_id is not none else shot_id`
+        パターンが、この呼び出しにだけ未適用だった)。是正後は a.shot_id=None の場合
+        ページの正規化済 shot_id (shotless task なら 0) が embedded されることを
+        確認する。"""
+        import app.adapters.calendar_client as cc
+
+        monkeypatch.setattr("app.routers.pages_shot.resolve_project_name", lambda pid, uid, **kw: "Score検証")
+        monkeypatch.setattr("app.routers.pages_shot.resolve_project_members", lambda *a, **kw: [])
+        monkeypatch.setattr("app.routers.pages_shot.get_actor_role", lambda actor_id: "admin")
+        monkeypatch.setattr(cc.CalendarClient, "get_users", lambda self, *a, **kw: [])
+        monkeypatch.setattr(cc.CalendarClient, "get_tasks_by_project", lambda self, *a, **kw: [])
+        monkeypatch.setattr(cc.CalendarClient, "next_version", lambda self, *a, **kw: "v001")
+        monkeypatch.setattr(
+            cc.CalendarClient, "get_assets_by_task",
+            lambda self, *a, **kw: [
+                {"id": 500, "shot_id": None, "task_id": 3282, "version": "v01",
+                 "file_path": "fix_v01.mov", "created_by": 1, "created_at": "2026-08-01T00:00:00"},
+            ],
+        )
+
+        def _fake_get_task(self, task_id, *a, **kw):
+            return {
+                "id": task_id, "shot_id": None, "shotID": None, "seqID": None,
+                "project_id": 80, "type": "other", "name": "Score修正3日分",
+                "status": "wip",
+            }
+        monkeypatch.setattr(cc.CalendarClient, "get_task", _fake_get_task)
+
+        resp = client.get("/task/3282", headers=_auth_headers())
+
+        assert resp.status_code == 200
+        assert "openQCNotifyModal(500, None, 3282" not in resp.text
+        assert "openQCNotifyModal(500, 0, 3282" in resp.text
+
 
 # ─── ③ QC ビューア表示 (Task 件数・SHOT.status) 耐性確認: pages_qc.py ───────
 

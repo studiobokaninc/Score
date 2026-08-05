@@ -250,3 +250,42 @@ class TestPatchTaskAuthz:
             MockClient.return_value = mock_inst
             resp = client.patch("/api/bff/tasks/10", json={"status": "wip"}, headers=_auth_headers())
         assert resp.status_code == 200
+        mock_inst.patch_task.assert_called_once_with(10, {"status": "wip"}, actor_user_id=_RESOLVED_ACTOR_ID)
+
+    def test_deliver_status_user_role_allowed_200(self, client, monkeypatch):
+        """cmd_162① 回帰防止: 確定稿ではDELIVERの変更者はUser。cmd_141がCOMPLETED_STATUSES
+        ({"ap","client_ap","deliver"}) を丸ごと判定権限バケットへ流用した際にDELIVERが
+        巻き添えで403化していた (旧コードでは本テストはrole='user'のまま403になっていた)。"""
+        monkeypatch.setattr("app.routers.bff_write.get_actor_role", lambda actor_id: "user")
+        _deny_delegation(monkeypatch)
+        with patch("app.routers.bff_write.get_calendar_client") as MockClient:
+            mock_inst = MagicMock()
+            mock_inst.get_task.return_value = {"status": "qc"}
+            mock_inst.patch_task.return_value = {"ok": True}
+            mock_inst.get_project_roles.return_value = {}
+            MockClient.return_value = mock_inst
+            resp = client.patch("/api/bff/tasks/10", json={"status": "deliver"}, headers=_auth_headers())
+        assert resp.status_code == 200
+        mock_inst.patch_task.assert_called_once_with(10, {"status": "deliver"}, actor_user_id=_RESOLVED_ACTOR_ID)
+
+    def test_client_ap_status_unauthorized_user_still_rejected_403(self, client, monkeypatch):
+        """cmd_162①の限界確認: DELIVER以外(client_ap)の権限は緩めていないこと。"""
+        monkeypatch.setattr("app.routers.bff_write.get_actor_role", lambda actor_id: "user")
+        _deny_delegation(monkeypatch)
+        with patch("app.routers.bff_write.get_calendar_client") as MockClient:
+            mock_inst = MagicMock()
+            MockClient.return_value = mock_inst
+            resp = client.patch("/api/bff/tasks/10", json={"status": "client_ap"}, headers=_auth_headers())
+        assert resp.status_code == 403
+        mock_inst.patch_task.assert_not_called()
+
+    def test_qc_fb_status_unauthorized_user_still_rejected_403(self, client, monkeypatch):
+        """cmd_162①の限界確認: DELIVER以外(qc_fb)の権限は緩めていないこと。"""
+        monkeypatch.setattr("app.routers.bff_write.get_actor_role", lambda actor_id: "user")
+        _deny_delegation(monkeypatch)
+        with patch("app.routers.bff_write.get_calendar_client") as MockClient:
+            mock_inst = MagicMock()
+            MockClient.return_value = mock_inst
+            resp = client.patch("/api/bff/tasks/10", json={"status": "qc_fb"}, headers=_auth_headers())
+        assert resp.status_code == 403
+        mock_inst.patch_task.assert_not_called()
