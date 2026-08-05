@@ -1626,7 +1626,11 @@ async def post_qc_notify_existing(request: Request, actor_id: str = Depends(get_
     # cmd_159a2 (2026-08-02・軍師検分是正): notify_existing は post_asset_upload と
     # 別経路のため cmd_159①の是正が未適用のまま残っていた。同一fallback
     # (task_id有りは正本thread再利用・無しは従来通り毎回post_dm_thread)に揃える。
-    if task_id is not None:
+    # cmd_159a3 (2026-08-05・軍師検分是正 QC159A2-1): get_or_create_task_thread は
+    # 内部で len(participant_ids) < 2 だと None を返す(_notify_thread L145・
+    # post_asset_upload L984 と同じ門番)。ここに同じ門番が無く、宛先1名の座組で
+    # thread_id=None のまま post_dm(int(None)) へ流れ TypeError=500 になっていた。
+    if task_id is not None and len(participants) >= 2 and hasattr(client, "post_dm_thread"):
         from app.helpers.task_threads import get_or_create_task_thread, build_thread_title
         thread_id = get_or_create_task_thread(
             client, actor_id, task_id, participants,
@@ -1659,7 +1663,11 @@ async def post_qc_notify_existing(request: Request, actor_id: str = Depends(get_
         lines.append(""); lines.append(qc_link)
     lines.append(""); lines.append(f"— {sender_name}")
     body_text = "\n".join(lines)
-    client.post_dm(int(thread_id), body_text, actor_user_id=actor_id)
+    # cmd_159a3: _notify_thread L152 と同じ構え(二重の安全)。上の門番で通常は
+    # thread_id は必ず確定するが、post_dm_thread 側の失敗等で None が返る場合も
+    # int(None) の TypeError を起こさぬようここでも確かめる。
+    if thread_id and hasattr(client, "post_dm"):
+        client.post_dm(int(thread_id), body_text, actor_user_id=actor_id)
 
     # push + SSE 配信
     from app.routers.pages_notif_settings import get_user_prefs
