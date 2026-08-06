@@ -17,7 +17,13 @@ def patch_jwt_secret(monkeypatch):
 
 @pytest.fixture()
 def client_fixture(monkeypatch):
-    monkeypatch.setattr("app.routers.pages_director.get_actor_role", lambda actor_id: "director")
+    # cmd_167: /director_retake_input の役職ゲートは get_actor_project_role (系B) 経由。
+    # 本テストはページ描画の smoke test が主眼のため、ゲート解決自体の検証は
+    # test_bff_write_qc_authz.py 側の専用テストに譲り、ここでは authorized 前提を注入する。
+    monkeypatch.setattr(
+        "app.routers.pages_director.get_actor_project_role",
+        lambda actor_id, project_id, client=None: "director",
+    )
     _test_app.dependency_overrides[get_actor_id] = lambda: "test-actor"
     with TestClient(_test_app) as c:
         yield c

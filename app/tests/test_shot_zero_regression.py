@@ -223,7 +223,7 @@ class TestDirectorRetakeInputShotZero:
         shot/asset 解決ブロック全体をスキップしていた。`if shot_id is not None:` へ
         の是正により、shot_id=0 でも client.get_shot(0, ...) が実際に呼ばれる
         (解決ロジックがスキップされない) ことを確認する。"""
-        monkeypatch.setattr("app.routers.pages_director.get_actor_role", lambda actor_id: "director")
+        monkeypatch.setattr("app.routers.pages_director.get_actor_project_role", lambda actor_id, project_id, client=None: "director")
         with patch("app.routers.pages_director.get_calendar_client") as MockClient:
             mock_inst = MagicMock()
             mock_inst.get_me.return_value = None
@@ -245,7 +245,7 @@ class TestDirectorRetakeInputShotZero:
         SHOT_000 (shot_id=0) が実 shot#1 に化ける重大なデータ破壊バグがあった。
         `{{ shot_id or 0 }}` 是正後、shot_id=0 が 1 にすり替わらず送信・遷移される
         ことを確認する。"""
-        monkeypatch.setattr("app.routers.pages_director.get_actor_role", lambda actor_id: "director")
+        monkeypatch.setattr("app.routers.pages_director.get_actor_project_role", lambda actor_id, project_id, client=None: "director")
         with patch("app.routers.pages_director.get_calendar_client") as MockClient:
             mock_inst = MagicMock()
             mock_inst.get_me.return_value = None
@@ -268,7 +268,7 @@ class TestDirectorRetakeInputShotZero:
         `if shot_id:` だと falsy 判定で `/dashboard` へ誤誘導されていた。
         `if shot_id is not None:` 是正後は `/qc/0...` へ正しく誘導されることを
         確認する (303 リダイレクト先を検証・qc_delegation は未委任前提)。"""
-        monkeypatch.setattr("app.routers.pages_director.get_actor_role", lambda actor_id: "artist")
+        monkeypatch.setattr("app.routers.pages_director.get_actor_project_role", lambda actor_id, project_id, client=None: "artist")
         monkeypatch.setattr("app.routers.pages_director.is_qc_delegated", lambda *a, **kw: False)
 
         resp = client.get(
@@ -289,7 +289,7 @@ class TestDirectorRetakeInputShotZero:
         get_assets_by_task (cmd_058・next_version と同一設計) への fallback が
         機能し、created_at 最新の v003.png が latest_asset として解決され、
         画像プレビューに反映されることを確認する。"""
-        monkeypatch.setattr("app.routers.pages_director.get_actor_role", lambda actor_id: "director")
+        monkeypatch.setattr("app.routers.pages_director.get_actor_project_role", lambda actor_id, project_id, client=None: "director")
         with patch("app.routers.pages_director.get_calendar_client") as MockClient:
             mock_inst = MagicMock()
             mock_inst.get_me.return_value = None
@@ -323,7 +323,7 @@ class TestDirectorRetakeInputShotZero:
         """上記 fallback 追加の regression ガード: get_assets_by_task も空を返す
         (＝本当に提出物が無いtask) 場合は、誤って何かをでっち上げず正しく
         「提出物が無し」のままであることを確認する (false-positive 防止)。"""
-        monkeypatch.setattr("app.routers.pages_director.get_actor_role", lambda actor_id: "director")
+        monkeypatch.setattr("app.routers.pages_director.get_actor_project_role", lambda actor_id, project_id, client=None: "director")
         with patch("app.routers.pages_director.get_calendar_client") as MockClient:
             mock_inst = MagicMock()
             mock_inst.get_me.return_value = None
@@ -345,7 +345,7 @@ class TestDirectorRetakeInputShotZero:
         asset_list を返している場合、cmd_093 で新設した get_assets_by_task
         fallback は一切呼ばれず、既存の shot 経由解決のみで latest_asset が
         決まること (fallback 新設が正常経路を破壊していないことの保証)。"""
-        monkeypatch.setattr("app.routers.pages_director.get_actor_role", lambda actor_id: "director")
+        monkeypatch.setattr("app.routers.pages_director.get_actor_project_role", lambda actor_id, project_id, client=None: "director")
         with patch("app.routers.pages_director.get_calendar_client") as MockClient:
             mock_inst = MagicMock()
             mock_inst.get_me.return_value = None
@@ -378,7 +378,7 @@ class TestBffWriteRetakesShotZero:
         是正後は shot_id=0 でも client.get_shot_detail(0, ...) が実際に呼ばれる
         (=「値あり」として扱われる) ことを確認する。"""
         # cmd_141: post_retakes は判定権限アクター限定のserver側gate新設済
-        monkeypatch.setattr("app.routers.bff_write.get_actor_role", lambda actor_id: "director")
+        monkeypatch.setattr("app.routers.bff_write.get_actor_project_role", lambda actor_id, project_id, client=None: "director")
         with patch("app.routers.bff_write.get_calendar_client") as MockClient:
             mock_inst = MagicMock()
             mock_inst.get_shot_detail.return_value = {}
@@ -420,7 +420,7 @@ class TestBffWriteRetakesFallbackPmMisroute:
         """task_id→project_id fallback (notify_existing と同一設計) 是正後は、
         shot_id=0 でも task_id 経由で実プロジェクトの PM/Director/Lead が解決され、
         参加者リストに FALLBACK_PM(52) が混入しないことを確認する。"""
-        monkeypatch.setattr("app.routers.bff_write.get_actor_role", lambda actor_id: "director")
+        monkeypatch.setattr("app.routers.bff_write.get_actor_project_role", lambda actor_id, project_id, client=None: "director")
         with patch("app.routers.bff_write.get_calendar_client") as MockClient:
             mock_inst = MagicMock()
             mock_inst.get_shot_detail.return_value = {}
@@ -456,7 +456,7 @@ class TestBffWriteRetakesFallbackPmMisroute:
         上書きしていないことを get_project_roles の呼び出し引数で保証する
         (get_task 自体は既存の assignee 自動追加処理で呼ばれ得るため、その戻り値の
         project_id が pid 解決に混入しないことのみを検証する)。"""
-        monkeypatch.setattr("app.routers.bff_write.get_actor_role", lambda actor_id: "director")
+        monkeypatch.setattr("app.routers.bff_write.get_actor_project_role", lambda actor_id, project_id, client=None: "director")
         with patch("app.routers.bff_write.get_calendar_client") as MockClient:
             mock_inst = MagicMock()
             mock_inst.get_shot_detail.return_value = {"shotID": "SH010", "seqID": "SEQ01", "project_id": 33}
@@ -490,7 +490,7 @@ class TestBffWriteQcApproveShotZero:
         Approve 実行自体が拒否される新規バグだった)。`if shot_id is None:` 是正後は
         shot_id=0 が 400 を引き起こさないことを確認する。"""
         # cmd_141: post_qc_approve_bff は判定権限アクター限定のserver側gate新設済
-        monkeypatch.setattr("app.routers.bff_write.get_actor_role", lambda actor_id: "director")
+        monkeypatch.setattr("app.routers.bff_write.get_actor_project_role", lambda actor_id, project_id, client=None: "director")
         with patch("app.routers.bff_write.get_calendar_client") as MockClient:
             mock_inst = MagicMock()
             mock_inst.get_tasks.return_value = []
@@ -514,7 +514,7 @@ class TestBffWriteQcApproveShotZero:
         auto-resolve 自体がスキップされていた。`shot_id is not None` 是正後は
         shot_id=0 でも client.get_tasks(0, ...) が呼ばれ、判定待ち task が
         auto-resolve されて patch_task が正しい task_id で呼ばれることを確認する。"""
-        monkeypatch.setattr("app.routers.bff_write.get_actor_role", lambda actor_id: "director")
+        monkeypatch.setattr("app.routers.bff_write.get_actor_project_role", lambda actor_id, project_id, client=None: "director")
         with patch("app.routers.bff_write.get_calendar_client") as MockClient:
             mock_inst = MagicMock()
             mock_inst.get_tasks.return_value = [
@@ -538,7 +538,7 @@ class TestBffWriteQcApproveShotZero:
     def test_shot_positive_control_still_works(self, client, monkeypatch):
         """control: shot_id が正の実値の場合も従来どおり 200 で機能すること
         (shot_id=0 専用の分岐追加が非ゼロ shot_id の既存経路を壊していないか対照確認)。"""
-        monkeypatch.setattr("app.routers.bff_write.get_actor_role", lambda actor_id: "director")
+        monkeypatch.setattr("app.routers.bff_write.get_actor_project_role", lambda actor_id, project_id, client=None: "director")
         with patch("app.routers.bff_write.get_calendar_client") as MockClient:
             mock_inst = MagicMock()
             mock_inst.get_tasks.return_value = []
@@ -800,7 +800,7 @@ class TestBffWriteRetakesQcPathShotZero:
         /qc/0 (どの shotless task の Retake か特定不能) に誤フォールバックしていた。
         `(shot_id is not None and task_id)` 是正後の挙動を確認する。"""
         monkeypatch.delenv("SCORE_PUBLIC_URL", raising=False)
-        monkeypatch.setattr("app.routers.bff_write.get_actor_role", lambda actor_id: "director")
+        monkeypatch.setattr("app.routers.bff_write.get_actor_project_role", lambda actor_id, project_id, client=None: "director")
         with patch("app.routers.bff_write.get_calendar_client") as MockClient:
             mock_inst = MagicMock()
             mock_inst.get_shot_detail.return_value = {}
@@ -829,7 +829,7 @@ class TestBffWriteRetakesQcPathShotZero:
         """正の対照実験: 通常 shot (shot_id=5) は従来通り /retake_view/5/{task_id}
         へ遷移し、is not None 化による回帰が無いことを保証する。"""
         monkeypatch.delenv("SCORE_PUBLIC_URL", raising=False)
-        monkeypatch.setattr("app.routers.bff_write.get_actor_role", lambda actor_id: "director")
+        monkeypatch.setattr("app.routers.bff_write.get_actor_project_role", lambda actor_id, project_id, client=None: "director")
         with patch("app.routers.bff_write.get_calendar_client") as MockClient:
             mock_inst = MagicMock()
             mock_inst.get_shot_detail.return_value = {"shotID": "SHOT_005", "seqID": "SEQ01", "project_id": 33}

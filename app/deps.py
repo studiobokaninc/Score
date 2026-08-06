@@ -81,3 +81,49 @@ def get_actor_role(actor_id: str) -> str:
         return user.role if user and user.role else "user"
     except Exception:
         return "user"
+
+
+# cmd_167 (2026-08-05・殿ご裁可=案あ): 役職ゲートの解決先を系A(本関数・グローバル
+# per-user固定表)から系B(案件ごとの実役職・director_uid/pm_uid/lead_uid)へ寄せる。
+# SCORE_ROLE_MAP は6件中5件が実在せず、Calendar User.role もadmin/userの2択のみの
+# ため、get_actor_role() は実運用上 admin/user の2値しか返さない
+# (director/pm/lead に解決される者が一人も居ない=十数箇所の役職ゲートが悉く
+# 「adminだけが通る門」と化していた・cmd_162 QC162B-1で判明)。
+def get_actor_project_role(actor_id: str, project_id: int | None, client=None) -> str:
+    """役職を (利用者 actor_id × 案件 project_id) の組で解決する。
+    優先順位:
+      1. admin はスタジオ全体の据え置き権限 (案件に紐付かない) のため、系A の
+         get_actor_role() が "admin" を返す場合はそれを最優先で返す (④admin据え置き)。
+      2. project_id があれば 系B (CalendarClient.get_project_roles・実案件の
+         director/pm/lead 割当) を引き、actor_id と一致する役職名を返す。
+      3. project_id が未解決、または系Bの取得に失敗、またはどの役職にも一致しない
+         場合は "user" を返す (⑤fail-closed・昇格権限なしがデフォルト)。
+    client: 呼び出し元が既に保持する CalendarClient インスタンス (bff_write.py の
+    _require_qc_judge_authority 等・route 内で既に取得/mock 済のものを再利用する。
+    省略時のみ本関数が自前で取得する)。
+    """
+    if get_actor_role(actor_id) == "admin":
+        return "admin"
+    if project_id is None:
+        return "user"
+    try:
+        if client is None:
+            from app.adapters.calendar_factory import get_calendar_client
+            client = get_calendar_client()
+        roles = client.get_project_roles(int(project_id), actor_user_id=actor_id) or {}
+        if not isinstance(roles, dict):
+            roles = {}
+    except Exception:
+        roles = {}
+    try:
+        uid = int(actor_id)
+    except (ValueError, TypeError):
+        return "user"
+    if roles.get("director") is not None and int(roles["director"]) == uid:
+        return "director"
+    if roles.get("pm") is not None and int(roles["pm"]) == uid:
+        return "pm"
+    _lead = roles.get("lead") if roles.get("lead") is not None else roles.get("lighting_lead")
+    if _lead is not None and int(_lead) == uid:
+        return "lead"
+    return "user"

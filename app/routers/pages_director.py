@@ -3,7 +3,7 @@ from fastapi import APIRouter, Depends, HTTPException, Request
 from fastapi.templating import Jinja2Templates
 from jinja2 import Environment, FileSystemLoader
 from pathlib import Path
-from app.deps import get_actor_id, get_actor_role
+from app.deps import get_actor_id, get_actor_role, get_actor_project_role
 from app.adapters.calendar_factory import get_calendar_client
 from app.qc_delegation import is_qc_delegated
 
@@ -25,7 +25,28 @@ def get_director_retake_input(
     # iframe埋込時のみサイドメニュー等を非表示にするためのフラグ。単体表示(通常URL)
     # では従来通り表示するため、クエリパラメータ未指定時の挙動は無変更。
 ):
-    actual_role = get_actor_role(actor_id)
+    client = get_calendar_client()
+    # cmd_167 (殿ご裁可=案あ): 役職ゲート(系B)の解決に要る project_id を本体処理より
+    # 先に解決する (shot_id優先→task_idフォールバック・本ファイル get_retake_view と同型)。
+    # 取得した shot DTO / task 情報はキャッシュし、後段の shot_code/pj 解決で再利用する
+    # (get_shot/get_task の二重呼び出し防止)。
+    _gate_pid = None
+    _s_dto_cache = None
+    _task_info_cache = None
+    if shot_id is not None:
+        try:
+            _s_dto_cache = client.get_shot(int(shot_id), actor_user_id=actor_id)
+            if _s_dto_cache:
+                _gate_pid = getattr(_s_dto_cache, "project_id", None)
+        except Exception:
+            pass
+    if _gate_pid is None and task_id and hasattr(client, "get_task"):
+        try:
+            _task_info_cache = client.get_task(int(task_id), actor_user_id=actor_id) or {}
+            _gate_pid = _task_info_cache.get("project_id")
+        except Exception:
+            pass
+    actual_role = get_actor_project_role(actor_id, _gate_pid, client=client)
     # admin 元 user は as_role=director で進入可
     role = "director" if (as_role == "director" and actual_role == "admin") else actual_role
     # 殿御命 2026-06-09: admin=Director 同等で直接可・pm も可・案A 委任 user も この依頼に限り可
@@ -37,7 +58,6 @@ def get_director_retake_input(
             _q = f"?task_id={task_id}" if task_id else ""
             return _RR(url=f"/qc/{shot_id}{_q}", status_code=303)
         return _RR(url="/dashboard", status_code=303)
-    client = get_calendar_client()
     try:
         user = client.get_me(actor_user_id=actor_id)
     except Exception:
@@ -60,9 +80,9 @@ def get_director_retake_input(
     assignee_uid = None
     pj = None
     if shot_id is not None:
-        # shot DTO
+        # shot DTO (cmd_167: 役職ゲート解決時に取得済のキャッシュを再利用・get_shot二重呼び出し防止)
         try:
-            s_dto = client.get_shot(int(shot_id), actor_user_id=actor_id)
+            s_dto = _s_dto_cache
             if s_dto:
                 shot_code = getattr(s_dto, "shot_code", "") or getattr(s_dto, "name", "") or f"SHOT_{shot_id:03d}"
                 seq_code = getattr(s_dto, "seq_code", "") or ""
@@ -74,7 +94,7 @@ def get_director_retake_input(
         # (get_retake_view/post_troubles と同一パターン)。
         if pj is None and task_id and hasattr(client, "get_task"):
             try:
-                task_info = client.get_task(int(task_id), actor_user_id=actor_id) or {}
+                task_info = _task_info_cache if _task_info_cache is not None else (client.get_task(int(task_id), actor_user_id=actor_id) or {})
                 pj = task_info.get("project_id")
             except Exception:
                 pass

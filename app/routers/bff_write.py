@@ -9,7 +9,7 @@ from fastapi.responses import JSONResponse
 from typing import Optional
 
 from app.adapters.calendar_factory import get_calendar_client
-from app.deps import get_actor_id, get_actor_role
+from app.deps import get_actor_id, get_actor_project_role
 from app.helpers.task_status import NEW_TASK_STATUSES, OLD_TO_NEW_STATUS, COMPLETED_STATUSES, status_label
 from app.qc_delegation import is_qc_delegated
 
@@ -88,11 +88,34 @@ router = APIRouter()
 PRIVILEGED_TASK_STATUSES = frozenset({"ap", "client_ap", "qc_fb"})
 
 
+def _resolve_gate_project_id(client, actor_id: str, task_id: int | None, shot_id: int | None) -> int | None:
+    """cmd_167: _require_qc_judge_authority の系B(案件ごとの実役職)解決に要る
+    project_id を task_id 優先→shot_id フォールバックで解決する
+    (cmd_092b/094a等、既存の shot_id=0 対応と同型のフォールバック順序)。"""
+    pid = None
+    if task_id is not None and hasattr(client, "get_task"):
+        try:
+            pid = (client.get_task(int(task_id), actor_user_id=actor_id) or {}).get("project_id")
+        except Exception:
+            pid = None
+    if pid is None and shot_id is not None and hasattr(client, "get_shot_detail"):
+        try:
+            pid = (client.get_shot_detail(int(shot_id), actor_user_id=actor_id) or {}).get("project_id")
+        except Exception:
+            pid = None
+    return pid
+
+
 def _require_qc_judge_authority(actor_id: str, task_id: int | None = None, shot_id: int | None = None) -> None:
     """承認/差戻し/完了相当の判定アクションは Director/PM/Admin、または当該
     task/shot の QC 委任者 (is_qc_delegated・依頼単位の一時委任) のみ許可する。
-    それ以外は 403 (fail-closed)。"""
-    role = get_actor_role(actor_id)
+    それ以外は 403 (fail-closed)。
+    cmd_167 (殿ご裁可=案あ): 役職は (利用者×案件) の組で解く (系B)。admin は
+    案件に紐付かないスタジオ全体の据え置き権限のため get_actor_project_role
+    内で系Aから最優先判定される。"""
+    client = get_calendar_client()
+    pid = _resolve_gate_project_id(client, actor_id, task_id, shot_id)
+    role = get_actor_project_role(actor_id, pid, client=client)
     if role in ("director", "pm", "admin"):
         return
     if is_qc_delegated(actor_id, task_id=task_id, shot_id=shot_id):

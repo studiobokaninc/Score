@@ -71,7 +71,9 @@ def _grant_delegation(monkeypatch):
 
 class TestQcApproveAuthz:
     def test_unauthorized_user_role_rejected_403(self, client, monkeypatch):
-        monkeypatch.setattr("app.routers.bff_write.get_actor_role", lambda actor_id: "user")
+        """cmd_167: role は系B(get_project_roles)で解決される。project_id/role とも
+        未 mock (デフォルト) のため actor はどの案件役職にも一致せず fail-closed で 'user'
+        に解決される (get_actor_role の直接 monkeypatch は cmd_167 以降不要)。"""
         _deny_delegation(monkeypatch)
         with patch("app.routers.bff_write.get_calendar_client") as MockClient:
             mock_inst = MagicMock()
@@ -86,11 +88,14 @@ class TestQcApproveAuthz:
         mock_inst.patch_task.assert_not_called()
 
     def test_director_role_allowed_200(self, client, monkeypatch):
-        monkeypatch.setattr("app.routers.bff_write.get_actor_role", lambda actor_id: "director")
+        """cmd_167: 系B(get_project_roles)で actor_id(=42) が該当案件の director と
+        一致する場合に許可されることを検証 (旧: get_actor_role直接monkeypatch)。"""
         with patch("app.routers.bff_write.get_calendar_client") as MockClient:
             mock_inst = MagicMock()
             mock_inst.get_my_dm_threads.return_value = []
             mock_inst.patch_task.return_value = {}
+            mock_inst.get_task.return_value = {"project_id": 33}
+            mock_inst.get_project_roles.return_value = {"director": int(_RESOLVED_ACTOR_ID)}
             MockClient.return_value = mock_inst
             resp = client.post(
                 "/api/bff/qc/approve",
@@ -102,7 +107,6 @@ class TestQcApproveAuthz:
 
     def test_qc_delegated_user_allowed_200(self, client, monkeypatch):
         """★最重要: is_qc_delegated による委任者Approveは新gateでも維持されねばならない"""
-        monkeypatch.setattr("app.routers.bff_write.get_actor_role", lambda actor_id: "user")
         _grant_delegation(monkeypatch)
         with patch("app.routers.bff_write.get_calendar_client") as MockClient:
             mock_inst = MagicMock()
@@ -122,6 +126,7 @@ class TestQcApproveAuthz:
 
 def _mock_retake_calendar(mock_inst):
     mock_inst.get_shot_detail.return_value = {"shotID": "SH010", "seqID": "SEQ01", "project_id": 33}
+    mock_inst.get_task.return_value = {"project_id": 33}
     mock_inst.get_tasks.return_value = []
     mock_inst.get_project.return_value = {"name": "Score検証"}
     mock_inst.get_project_roles.return_value = {"pm": 3, "director": 7, "lead": 9}
@@ -134,7 +139,9 @@ def _mock_retake_calendar(mock_inst):
 
 class TestRetakesAuthz:
     def test_unauthorized_user_role_rejected_403(self, client, monkeypatch):
-        monkeypatch.setattr("app.routers.bff_write.get_actor_role", lambda actor_id: "user")
+        """cmd_167: role は系B(get_project_roles)で解決される。project_id/role未 mock
+        (デフォルト) のため actor はどの案件役職にも一致せず fail-closed で 'user' に
+        解決される (get_actor_role の直接 monkeypatch は cmd_167 以降不要)。"""
         _deny_delegation(monkeypatch)
         with patch("app.routers.bff_write.get_calendar_client") as MockClient:
             mock_inst = MagicMock()
@@ -149,10 +156,12 @@ class TestRetakesAuthz:
         mock_inst.post_retakes.assert_not_called()
 
     def test_director_role_allowed_200(self, client, monkeypatch):
-        monkeypatch.setattr("app.routers.bff_write.get_actor_role", lambda actor_id: "director")
+        """cmd_167: 系B(get_project_roles)で actor_id(=42) が該当案件の director と
+        一致する場合に許可されることを検証。"""
         with patch("app.routers.bff_write.get_calendar_client") as MockClient:
             mock_inst = MagicMock()
             _mock_retake_calendar(mock_inst)
+            mock_inst.get_project_roles.return_value = {"director": int(_RESOLVED_ACTOR_ID)}
             MockClient.return_value = mock_inst
             resp = client.post(
                 "/api/bff/retakes",
@@ -163,7 +172,8 @@ class TestRetakesAuthz:
         mock_inst.patch_task.assert_called_once_with(10, {"status": "qc_fb"}, actor_user_id=_RESOLVED_ACTOR_ID)
 
     def test_qc_delegated_user_allowed_200(self, client, monkeypatch):
-        monkeypatch.setattr("app.routers.bff_write.get_actor_role", lambda actor_id: "user")
+        """actor の案件役職(get_project_roles: pm=3/director=7/lead=9)は42と不一致=非昇格
+        ('user')のまま、is_qc_delegated による委任のみで許可されることを検証。"""
         _grant_delegation(monkeypatch)
         with patch("app.routers.bff_write.get_calendar_client") as MockClient:
             mock_inst = MagicMock()
@@ -182,8 +192,8 @@ class TestRetakesAuthz:
 
 class TestPatchTaskAuthz:
     def test_privileged_status_unauthorized_rejected_403(self, client, monkeypatch):
-        """URL直叩きでの status=ap 直接書込 (qc/approve 迂回) は無権限アクター拒否"""
-        monkeypatch.setattr("app.routers.bff_write.get_actor_role", lambda actor_id: "user")
+        """URL直叩きでの status=ap 直接書込 (qc/approve 迂回) は無権限アクター拒否
+        (cmd_167: role は系B・project_id/role とも未 mock のため fail-closed で 'user')"""
         _deny_delegation(monkeypatch)
         with patch("app.routers.bff_write.get_calendar_client") as MockClient:
             mock_inst = MagicMock()
@@ -193,10 +203,12 @@ class TestPatchTaskAuthz:
         mock_inst.patch_task.assert_not_called()
 
     def test_privileged_status_director_allowed_200(self, client, monkeypatch):
-        monkeypatch.setattr("app.routers.bff_write.get_actor_role", lambda actor_id: "director")
+        """cmd_167: 系B(get_project_roles)で actor_id(=42) が該当案件の director と
+        一致する場合に許可されることを検証。"""
         with patch("app.routers.bff_write.get_calendar_client") as MockClient:
             mock_inst = MagicMock()
-            mock_inst.get_task.return_value = {"status": "qc"}
+            mock_inst.get_task.return_value = {"status": "qc", "project_id": 33}
+            mock_inst.get_project_roles.return_value = {"director": int(_RESOLVED_ACTOR_ID)}
             mock_inst.patch_task.return_value = {"ok": True}
             MockClient.return_value = mock_inst
             resp = client.patch("/api/bff/tasks/10", json={"status": "ap"}, headers=_auth_headers())
@@ -204,7 +216,6 @@ class TestPatchTaskAuthz:
         mock_inst.patch_task.assert_called_once_with(10, {"status": "ap"}, actor_user_id=_RESOLVED_ACTOR_ID)
 
     def test_privileged_status_qc_delegated_allowed_200(self, client, monkeypatch):
-        monkeypatch.setattr("app.routers.bff_write.get_actor_role", lambda actor_id: "user")
         _grant_delegation(monkeypatch)
         with patch("app.routers.bff_write.get_calendar_client") as MockClient:
             mock_inst = MagicMock()
@@ -218,7 +229,6 @@ class TestPatchTaskAuthz:
     def test_non_privileged_status_any_actor_allowed_200(self, client, monkeypatch):
         """回帰防止: 通常の自己管理系遷移 (wip 等) は従来通り role 制限なしで通ること
         (artist の自己進捗更新を壊さない — shot_detail.html changeTaskStatus() 相当)"""
-        monkeypatch.setattr("app.routers.bff_write.get_actor_role", lambda actor_id: "user")
         _deny_delegation(monkeypatch)
         with patch("app.routers.bff_write.get_calendar_client") as MockClient:
             mock_inst = MagicMock()
@@ -230,8 +240,8 @@ class TestPatchTaskAuthz:
         mock_inst.patch_task.assert_called_once_with(10, {"status": "wip"}, actor_user_id=_RESOLVED_ACTOR_ID)
 
     def test_regression_from_completed_status_blocked_for_non_judge(self, client, monkeypatch):
-        """任意項目③(限定実装): 完了済(ap)からの逆行(wip等)は判定権限者以外拒否"""
-        monkeypatch.setattr("app.routers.bff_write.get_actor_role", lambda actor_id: "user")
+        """任意項目③(限定実装): 完了済(ap)からの逆行(wip等)は判定権限者以外拒否
+        (cmd_167: role は系B・project_id/role とも未 mock のため fail-closed で 'user')"""
         _deny_delegation(monkeypatch)
         with patch("app.routers.bff_write.get_calendar_client") as MockClient:
             mock_inst = MagicMock()
@@ -242,10 +252,12 @@ class TestPatchTaskAuthz:
         mock_inst.patch_task.assert_not_called()
 
     def test_regression_from_completed_status_allowed_for_director(self, client, monkeypatch):
-        monkeypatch.setattr("app.routers.bff_write.get_actor_role", lambda actor_id: "director")
+        """cmd_167: 系B(get_project_roles)で actor_id(=42) が該当案件の director と
+        一致する場合に許可されることを検証。"""
         with patch("app.routers.bff_write.get_calendar_client") as MockClient:
             mock_inst = MagicMock()
-            mock_inst.get_task.return_value = {"status": "ap"}
+            mock_inst.get_task.return_value = {"status": "ap", "project_id": 33}
+            mock_inst.get_project_roles.return_value = {"director": int(_RESOLVED_ACTOR_ID)}
             mock_inst.patch_task.return_value = {"ok": True}
             MockClient.return_value = mock_inst
             resp = client.patch("/api/bff/tasks/10", json={"status": "wip"}, headers=_auth_headers())
@@ -256,7 +268,6 @@ class TestPatchTaskAuthz:
         """cmd_162① 回帰防止: 確定稿ではDELIVERの変更者はUser。cmd_141がCOMPLETED_STATUSES
         ({"ap","client_ap","deliver"}) を丸ごと判定権限バケットへ流用した際にDELIVERが
         巻き添えで403化していた (旧コードでは本テストはrole='user'のまま403になっていた)。"""
-        monkeypatch.setattr("app.routers.bff_write.get_actor_role", lambda actor_id: "user")
         _deny_delegation(monkeypatch)
         with patch("app.routers.bff_write.get_calendar_client") as MockClient:
             mock_inst = MagicMock()
@@ -270,7 +281,6 @@ class TestPatchTaskAuthz:
 
     def test_client_ap_status_unauthorized_user_still_rejected_403(self, client, monkeypatch):
         """cmd_162①の限界確認: DELIVER以外(client_ap)の権限は緩めていないこと。"""
-        monkeypatch.setattr("app.routers.bff_write.get_actor_role", lambda actor_id: "user")
         _deny_delegation(monkeypatch)
         with patch("app.routers.bff_write.get_calendar_client") as MockClient:
             mock_inst = MagicMock()
@@ -281,7 +291,6 @@ class TestPatchTaskAuthz:
 
     def test_qc_fb_status_unauthorized_user_still_rejected_403(self, client, monkeypatch):
         """cmd_162①の限界確認: DELIVER以外(qc_fb)の権限は緩めていないこと。"""
-        monkeypatch.setattr("app.routers.bff_write.get_actor_role", lambda actor_id: "user")
         _deny_delegation(monkeypatch)
         with patch("app.routers.bff_write.get_calendar_client") as MockClient:
             mock_inst = MagicMock()

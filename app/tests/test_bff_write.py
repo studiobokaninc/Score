@@ -68,10 +68,12 @@ def _auth_headers() -> dict:
 class TestBffWriteRetakes:
     def test_post_retakes_valid_jwt(self, client, monkeypatch):
         # cmd_141: post_retakes は判定権限アクター(director/pm/admin)限定のserver側gate新設済
-        monkeypatch.setattr("app.routers.bff_write.get_actor_role", lambda actor_id: "director")
+        # cmd_167: role は系B(get_project_roles)で解決 (actor_id=42 を該当案件の director に)
         with patch("app.routers.bff_write.get_calendar_client") as MockClient:
             mock_inst = MagicMock()
             mock_inst.post_retakes.return_value = _MOCK_RESULT
+            mock_inst.get_shot_detail.return_value = {"project_id": 33}
+            mock_inst.get_project_roles.return_value = {"director": int(_RESOLVED_ACTOR_ID)}
             MockClient.return_value = mock_inst
             resp = client.post("/api/bff/retakes", json={"shot_id": 1}, headers=_auth_headers())
         assert resp.status_code == 200
