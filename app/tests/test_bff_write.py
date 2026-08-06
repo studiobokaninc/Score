@@ -237,6 +237,18 @@ class TestBffWriteNotificationRead:
         assert resp.status_code == 401
 
 
+# ─── PATCH /api/bff/tasks/{task_id} ──────────────────────────────────────────
+# cmd_169b(d): Casper経由書込も本EPを共用するため、role/認可の検証は
+# test_bff_write_qc_authz.py に集約済み (画面側と同一経路ゆえ区別不要)。
+# 本クラスは無認証(401)のみを補う — get_actor_id を上書きしない real dependency
+# 経由の 401 検証が test_bff_write_qc_authz.py 側には無かったための追加。
+
+class TestBffWriteTaskPatchNoAuth:
+    def test_patch_task_no_auth(self, client_no_auth):
+        resp = client_no_auth.patch("/api/bff/tasks/10", json={"status": "wip"})
+        assert resp.status_code == 401
+
+
 # ─── resolve失敗(403) テスト ─────────────────────────────────────────────────
 
 class TestBffWriteResolveFailure:
