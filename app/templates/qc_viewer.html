@@ -579,7 +579,7 @@
             {% if _task_status == 'qc_fb' %}<br>→ Compositor の QC_FB 修正待ち中・修正完了後(status=qc)に Approve/Retake 判定可能{% endif %}
             {% if _task_status == 'mk' %}<br>→ 未着手・Compositor が作業着手・提出待ち{% endif %}
             {% if _task_status in ('wip', 'modeling', 'lookdev', 'caching', 'rig', 'facial') %}<br>→ Compositor 作業中・提出(status=qc)後に判定可能{% endif %}
-            {% if _task_status in ('ap', 'fix', 'dir_ap', 'deliver') %}<br>→ 既に承認済 ✓{% endif %}
+            {% if _task_status in ('ap', 'fix', 'dir_ap', 'deliver', 'completed') %}<br>→ 既に承認済 ✓{% endif %}
           </p>
           {% endif %}
           {% endif %}

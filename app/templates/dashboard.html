@@ -221,6 +221,7 @@
                     {% elif t.status == 'wt' %}⏸ 停止
                     {% elif t.status == 'omit' %}➖ 対象外
                     {% elif t.status == 'deliver' %}✅ 納品完了
+                    {% elif t.status == 'completed' %}🏁 COMPLETED(最終完了)
                     {% else %}{{ t.status | capitalize }}{% endif %}
                   </p>
                 </div>

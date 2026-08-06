@@ -85,7 +85,22 @@ router = APIRouter()
 # おり、ap/client_ap (承認結果)・qc_fb (差戻し) とは異なる。COMPLETED_STATUSES を
 # 流用すると業務分類の変更がそのまま権限緩急に波及するため、権限バケットは独立
 # 定数として定義する (deliver は含めない)。
-PRIVILEGED_TASK_STATUSES = frozenset({"ap", "client_ap", "qc_fb"})
+# cmd_164② (2026-08-06・cmd_158確定稿突合の是正): 値ごとに変更者が異なる
+# (WT/MK=PM、WIP/QC/DELIVER=User=ゲート不要、QC_FB/AP=Dir・PM、
+# CLIENT_AP/COMPLETED=PM)。単一バケットでは CLIENT_AP が Director にも
+# 開いてしまう(確定稿より緩い)・WT/MK が無条件書込可のまま(確定稿より緩い)
+# という2つの乖離があったため、値ごとに要求役職を持つ dict へ置き換える
+# (PRIVILEGED_TASK_STATUSES は本 dict のキー集合に統合され廃止)。
+# OMIT は確定稿に変更者の定めが無い(殿ご裁可2026-08-05=案B)ため、ゲートを
+# 新設せず現状(誰でも書込可)のまま据え置く。
+STATUS_REQUIRED_ROLES: dict[str, tuple[str, ...]] = {
+    "wt": ("pm",),
+    "mk": ("pm",),
+    "qc_fb": ("director", "pm"),
+    "ap": ("director", "pm"),
+    "client_ap": ("pm",),
+    "completed": ("pm",),
+}
 
 
 def _resolve_gate_project_id(client, actor_id: str, task_id: int | None, shot_id: int | None) -> int | None:
@@ -106,17 +121,24 @@ def _resolve_gate_project_id(client, actor_id: str, task_id: int | None, shot_id
     return pid
 
 
-def _require_qc_judge_authority(actor_id: str, task_id: int | None = None, shot_id: int | None = None) -> None:
-    """承認/差戻し/完了相当の判定アクションは Director/PM/Admin、または当該
-    task/shot の QC 委任者 (is_qc_delegated・依頼単位の一時委任) のみ許可する。
-    それ以外は 403 (fail-closed)。
-    cmd_167 (殿ご裁可=案あ): 役職は (利用者×案件) の組で解く (系B)。admin は
-    案件に紐付かないスタジオ全体の据え置き権限のため get_actor_project_role
-    内で系Aから最優先判定される。"""
+def _require_qc_judge_authority(
+    actor_id: str,
+    task_id: int | None = None,
+    shot_id: int | None = None,
+    required_roles: tuple[str, ...] = ("director", "pm"),
+) -> None:
+    """判定/完了相当のアクションは required_roles に列挙された役職、または admin
+    (④案件に紐付かないスタジオ全体の据え置き権限・required_rolesの内容に関わらず
+    常時許可)、または当該task/shotのQC委任者 (is_qc_delegated・依頼単位の一時委任)
+    のみ許可する。それ以外は 403 (fail-closed)。
+    cmd_167 (殿ご裁可=案あ): 役職は (利用者×案件) の組で解く (系B)。
+    cmd_164② (確定稿突合の是正): 既定値 ("director","pm") は QC_FB/AP 相当。
+    CLIENT_AP/COMPLETED/WT/MK は呼び出し元が STATUS_REQUIRED_ROLES から
+    個別の required_roles を渡すこと。"""
     client = get_calendar_client()
     pid = _resolve_gate_project_id(client, actor_id, task_id, shot_id)
     role = get_actor_project_role(actor_id, pid, client=client)
-    if role in ("director", "pm", "admin"):
+    if role == "admin" or role in required_roles:
         return
     if is_qc_delegated(actor_id, task_id=task_id, shot_id=shot_id):
         return
@@ -1202,11 +1224,12 @@ def patch_task(
 ):
     """殿御命 2026-06-03: task status / progress 更新
     Calendar PATCH /api/tasks/{id} pass-through
-    (status: 新9値 wt/mk/wip/qc/qc_fb/ap/client_ap/deliver/omit
-    — cmd_106 2026-07-16 9値体系刷新。progress: 0-100)"""
+    (status: 新10値 wt/mk/wip/qc/qc_fb/ap/client_ap/deliver/completed/omit
+    — cmd_106 2026-07-16 9値体系刷新・cmd_164①でcompleted追加し新10値。
+    progress: 0-100)"""
     client = get_calendar_client()
     payload = body or {}
-    # validation — 新9値のみ受理。旧値は互換のため新値へ正規化して受理 (旧クライアント救済)
+    # validation — 新10値のみ受理。旧値は互換のため新値へ正規化して受理 (旧クライアント救済)
     if "status" in payload:
         incoming_status = payload["status"]
         if incoming_status in OLD_TO_NEW_STATUS:
@@ -1223,17 +1246,26 @@ def patch_task(
     if not payload:
         raise HTTPException(status_code=400, detail="empty body")
 
-    # cmd_141: 判定(承認/差戻し/完了)相当ステータスへの直接書込は判定権限アクター限定。
+    # cmd_141: 判定/完了/PM管理相当ステータスへの直接書込は値ごとの要求役職限定。
     # qc/approve・retakes を経由せずこの汎用 EP に直接 status=ap 等を投げる URL 直叩きの
-    # 抜け道を塞ぐ (通常の自己管理系遷移 wt/mk/wip/qc/omit は従来通り誰でも書込可)。
-    if payload.get("status") in PRIVILEGED_TASK_STATUSES:
-        _require_qc_judge_authority(actor_id, task_id=task_id)
+    # 抜け道を塞ぐ (WIP/QC/DELIVER=Userの自己管理系遷移・OMITは従来通り誰でも書込可)。
+    # cmd_164②: 値ごとに要求役職が異なるため STATUS_REQUIRED_ROLES から個別に引く
+    # (単一バケットでは CLIENT_AP=PM限定・WT/MK=PM限定という確定稿の粒度を表現できない)。
+    if payload.get("status") in STATUS_REQUIRED_ROLES:
+        _require_qc_judge_authority(
+            actor_id, task_id=task_id,
+            required_roles=STATUS_REQUIRED_ROLES[payload["status"]],
+        )
 
-    # cmd_141 (任意項目③・限定実装): 完了済 (ap/client_ap/deliver) から未完了への
-    # 逆行 (例: ap→wip) は判定権限アクター以外には認めない。全9値の遷移可否を厳密に
-    # 検証する完全な状態機械は業務ルールが未確定な箇所があり副作用リスクが高いため
-    # 見送り、報告で殿判断を仰ぐ (詳細は report 参照)。ここでは「完了済からの離脱」
-    # という最も実害の大きいケースに限定して fail-closed で防ぐ。
+    # cmd_141 (任意項目③・限定実装): 完了済 (ap/client_ap/deliver/completed) から
+    # 未完了への逆行 (例: ap→wip) は判定権限アクター (director/pm/admin) 以外には
+    # 認めない。全10値の遷移可否を厳密に検証する完全な状態機械は業務ルールが未確定な
+    # 箇所があり副作用リスクが高いため見送り、報告で殿判断を仰ぐ (詳細は report 参照)。
+    # ここでは「完了済からの離脱」という最も実害の大きいケースに限定して
+    # fail-closed で防ぐ。★本ガードは cmd_164②の値ごと粒度(確定稿の変更者表)とは
+    # 別軸の既存 cmd_141 保護機能のため、離脱元の値に関わらず一律
+    # (director,pm)+admin+委任者を要求する従来どおりの粒度を維持する(据え置き・
+    # 新たな遷移グラフ/値別ロジックは発明しない・③参照)。
     if "status" in payload and hasattr(client, "get_task"):
         try:
             _current_task = client.get_task(task_id, actor_user_id=actor_id) or {}

@@ -298,3 +298,113 @@ class TestPatchTaskAuthz:
             resp = client.patch("/api/bff/tasks/10", json={"status": "qc_fb"}, headers=_auth_headers())
         assert resp.status_code == 403
         mock_inst.patch_task.assert_not_called()
+
+
+# ─── cmd_164② 値ごとの要求役職(確定稿突合の是正) ────────────────────────
+
+class TestPatchTaskStatusSpecificRoles:
+    """確定稿: WT/MK=PM、QC_FB/AP=Dir・PM、CLIENT_AP/COMPLETED=PM。
+    単一バケット(旧PRIVILEGED_TASK_STATUSES)では表現できなかった
+    値ごとの要求役職の粒度(STATUS_REQUIRED_ROLES)を検証する。"""
+
+    def _mock_client(self, actor_uid: int, role: str, current_status: str = "wip"):
+        mock_inst = MagicMock()
+        mock_inst.get_task.return_value = {"status": current_status, "project_id": 33}
+        mock_inst.patch_task.return_value = {"ok": True}
+        mock_inst.get_project_roles.return_value = {role: actor_uid} if role != "admin" else {}
+        return mock_inst
+
+    def test_client_ap_rejects_director_pm_only_per_confirmed_spec(self, client, monkeypatch):
+        """★是正の核心: 確定稿ではCLIENT_AP=PMのみ。旧実装はdirectorも通していたが
+        (cmd_158突合で発見済の乖離)、cmd_164②是正後はdirectorが403で拒否される
+        こと(role='director'では通らない・pmのみ通ること)を検証する。"""
+        _deny_delegation(monkeypatch)
+        with patch("app.routers.bff_write.get_calendar_client") as MockClient:
+            mock_inst = self._mock_client(int(_RESOLVED_ACTOR_ID), "director")
+            MockClient.return_value = mock_inst
+            resp = client.patch("/api/bff/tasks/10", json={"status": "client_ap"}, headers=_auth_headers())
+        assert resp.status_code == 403
+        mock_inst.patch_task.assert_not_called()
+
+    def test_client_ap_allowed_for_pm(self, client, monkeypatch):
+        with patch("app.routers.bff_write.get_calendar_client") as MockClient:
+            mock_inst = self._mock_client(int(_RESOLVED_ACTOR_ID), "pm")
+            MockClient.return_value = mock_inst
+            resp = client.patch("/api/bff/tasks/10", json={"status": "client_ap"}, headers=_auth_headers())
+        assert resp.status_code == 200
+        mock_inst.patch_task.assert_called_once_with(10, {"status": "client_ap"}, actor_user_id=_RESOLVED_ACTOR_ID)
+
+    def test_completed_allowed_for_pm(self, client, monkeypatch):
+        """cmd_164①②: 新設COMPLETEDはPM限定で書込可。"""
+        with patch("app.routers.bff_write.get_calendar_client") as MockClient:
+            mock_inst = self._mock_client(int(_RESOLVED_ACTOR_ID), "pm")
+            MockClient.return_value = mock_inst
+            resp = client.patch("/api/bff/tasks/10", json={"status": "completed"}, headers=_auth_headers())
+        assert resp.status_code == 200
+        mock_inst.patch_task.assert_called_once_with(10, {"status": "completed"}, actor_user_id=_RESOLVED_ACTOR_ID)
+
+    def test_completed_rejects_director(self, client, monkeypatch):
+        """①検証: PM以外(Director)がCOMPLETEDへ直接書込を試みると403で弾かれること。"""
+        _deny_delegation(monkeypatch)
+        with patch("app.routers.bff_write.get_calendar_client") as MockClient:
+            mock_inst = self._mock_client(int(_RESOLVED_ACTOR_ID), "director")
+            MockClient.return_value = mock_inst
+            resp = client.patch("/api/bff/tasks/10", json={"status": "completed"}, headers=_auth_headers())
+        assert resp.status_code == 403
+        mock_inst.patch_task.assert_not_called()
+
+    def test_completed_rejects_plain_user(self, client, monkeypatch):
+        """①検証: PM以外(User=無役職)がCOMPLETEDへ直接書込を試みると403で弾かれること。"""
+        _deny_delegation(monkeypatch)
+        with patch("app.routers.bff_write.get_calendar_client") as MockClient:
+            mock_inst = self._mock_client(int(_RESOLVED_ACTOR_ID), "user")
+            MockClient.return_value = mock_inst
+            resp = client.patch("/api/bff/tasks/10", json={"status": "completed"}, headers=_auth_headers())
+        assert resp.status_code == 403
+        mock_inst.patch_task.assert_not_called()
+
+    def test_wt_rejects_user_now_gated_per_confirmed_spec(self, client, monkeypatch):
+        """★是正の核心: 確定稿ではWT=PMのみ。旧実装は無条件で誰でも書込可だったが
+        (cmd_158突合で発見済の乖離)、cmd_164②是正後はPM以外が403で拒否されること
+        を検証する。"""
+        _deny_delegation(monkeypatch)
+        with patch("app.routers.bff_write.get_calendar_client") as MockClient:
+            mock_inst = self._mock_client(int(_RESOLVED_ACTOR_ID), "user")
+            MockClient.return_value = mock_inst
+            resp = client.patch("/api/bff/tasks/10", json={"status": "wt"}, headers=_auth_headers())
+        assert resp.status_code == 403
+        mock_inst.patch_task.assert_not_called()
+
+    def test_mk_allowed_for_pm(self, client, monkeypatch):
+        with patch("app.routers.bff_write.get_calendar_client") as MockClient:
+            mock_inst = self._mock_client(int(_RESOLVED_ACTOR_ID), "pm")
+            MockClient.return_value = mock_inst
+            resp = client.patch("/api/bff/tasks/10", json={"status": "mk"}, headers=_auth_headers())
+        assert resp.status_code == 200
+        mock_inst.patch_task.assert_called_once_with(10, {"status": "mk"}, actor_user_id=_RESOLVED_ACTOR_ID)
+
+    def test_admin_always_passes_wt_mk_client_ap_completed(self, client, monkeypatch):
+        """④admin据え置き: 新設・是正した全ゲート(wt/mk/client_ap/completed)で
+        adminは引き続き通ること。"""
+        for status in ("wt", "mk", "client_ap", "completed"):
+            with patch("app.routers.bff_write.get_calendar_client") as MockClient, \
+                 patch("app.deps.get_actor_role", return_value="admin"):
+                mock_inst = MagicMock()
+                mock_inst.get_task.return_value = {"status": "wip", "project_id": 33}
+                mock_inst.patch_task.return_value = {"ok": True}
+                MockClient.return_value = mock_inst
+                resp = client.patch("/api/bff/tasks/10", json={"status": status}, headers=_auth_headers())
+            assert resp.status_code == 200, f"admin should pass for status={status}"
+
+    def test_omit_remains_ungated(self, client, monkeypatch):
+        """殿ご裁可(2026-08-05・案B): OMITの変更者は確定稿に定めが無いため、
+        cmd_164②の是正対象外(ゲート新設せず現状=誰でも書込可のまま)。"""
+        _deny_delegation(monkeypatch)
+        with patch("app.routers.bff_write.get_calendar_client") as MockClient:
+            mock_inst = MagicMock()
+            mock_inst.get_task.return_value = {"status": "wip"}
+            mock_inst.patch_task.return_value = {"ok": True}
+            MockClient.return_value = mock_inst
+            resp = client.patch("/api/bff/tasks/10", json={"status": "omit"}, headers=_auth_headers())
+        assert resp.status_code == 200
+        mock_inst.patch_task.assert_called_once_with(10, {"status": "omit"}, actor_user_id=_RESOLVED_ACTOR_ID)

@@ -528,7 +528,8 @@ class MockCalendarClient(CalendarClient):
 
     def get_task_statuses(self, actor_user_id: str | None = None) -> list:
         """GET /api/readonly/task-statuses mock — 実 Calendar backend/app/status_meta.py の
-        9値定義を模倣 (score_new2_status_v2_impact_20260716.md 付録B 準拠)。"""
+        9値定義を模倣 (score_new2_status_v2_impact_20260716.md 付録B 準拠)・
+        cmd_164①でcompleted追加し10値。"""
         return [
             {"value": "wt",        "label": "WT",        "color": "#BDBDBD", "category": "held"},
             {"value": "mk",        "label": "MK",        "color": "#2196F3", "category": "todo"},
@@ -538,6 +539,7 @@ class MockCalendarClient(CalendarClient):
             {"value": "ap",        "label": "AP",        "color": "#4CAF50", "category": "completed"},
             {"value": "client_ap", "label": "CLIENT_AP", "color": "#2E7D32", "category": "completed"},
             {"value": "deliver",   "label": "DELIVER",   "color": "#757575", "category": "completed"},
+            {"value": "completed", "label": "COMPLETED", "color": "#1B5E20", "category": "completed"},
             {"value": "omit",      "label": "OMIT",      "color": "#E0E0E0", "category": "held"},
         ]
 

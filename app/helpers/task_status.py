@@ -14,16 +14,21 @@ from datetime import datetime, timedelta, timezone
 from typing import Any, Iterable
 
 NEW_TASK_STATUSES = frozenset({
-    "wt", "mk", "wip", "qc", "qc_fb", "ap", "client_ap", "deliver", "omit",
+    "wt", "mk", "wip", "qc", "qc_fb", "ap", "client_ap", "deliver", "omit", "completed",
 })
 
-# 旧値 → 新9値。Calendar 側 canonicalize と同一の写像。
+# 旧値 → 新10値。Calendar 側 canonicalize と同一の写像。
+# cmd_164①: 旧7値時代の "completed"(→deliverの意)は、確定稿10値目の新 "completed"
+# (納品完了時・DELIVERとは別概念)と文字列が衝突するため撤去した。撤去しないと
+# canonicalize_status("completed") が新値をそのまま通さず "deliver" へ誤変換して
+# しまい、COMPLETED新設が機能しなくなる(退行)。旧クライアントが "completed" を
+# 送ってくる経路は現状確認されていない(grep該当ゼロ・テスト依存もゼロ)。
 OLD_TO_NEW_STATUS = {
     # 旧7値
     "todo": "mk", "in-progress": "wip", "in_progress": "wip",
     "review": "qc", "retake": "qc_fb", "approved": "ap",
-    "completed": "deliver", "delayed": "wip",
-    # 旧19体系 → 新9体系(集約)
+    "delayed": "wip",
+    # 旧19体系 → 新10体系(集約)
     "modeling": "wip", "lookdev": "wip", "caching": "wip", "rig": "wip", "facial": "wip",
     "v1qc": "qc", "dir_wt": "qc",
     "ap_fb": "qc_fb", "dir_fb": "qc_fb", "fix": "qc_fb",
@@ -36,11 +41,11 @@ STATUS_CATEGORY: dict[str, frozenset[str]] = {
     "not_started": frozenset({"mk"}),
     "in_progress": frozenset({"wip"}),
     "review":      frozenset({"qc", "qc_fb"}),
-    "completed":   frozenset({"ap", "client_ap", "deliver"}),  # ★3値すべて完了
+    "completed":   frozenset({"ap", "client_ap", "deliver", "completed"}),  # ★4値すべて完了
     "held":        frozenset({"wt", "omit"}),
 }
 
-COMPLETED_STATUSES = STATUS_CATEGORY["completed"]   # {"ap","client_ap","deliver"}
+COMPLETED_STATUSES = STATUS_CATEGORY["completed"]   # {"ap","client_ap","deliver","completed"}
 HELD_STATUSES = STATUS_CATEGORY["held"]
 CHECK_STATUSES = STATUS_CATEGORY["review"]          # 旧 internal|external の代替
 
@@ -56,16 +61,16 @@ STATUS_PRIORITY: dict[str, int] = {
     "mk": 2,             # 未着手
     "wip": 3,            # 進行中
     "wt": 4,             # 待機
-    "ap": 9, "client_ap": 9, "deliver": 9, "omit": 9,  # 完了・対象外は最下位
+    "ap": 9, "client_ap": 9, "deliver": 9, "omit": 9, "completed": 9,  # 完了・対象外は最下位
 }
 
 # 退勤レポート「作業要」判定用 (exit_report.html — score_compatibility_check.md §3.3.D)
 # FB系 (再修正中) も作業要に含む
 WIP_STATUSES: list[str] = ["mk", "wip", "qc_fb"]
 
-# 退勤レポート等の進捗率デフォルト (score_compatibility_check.md §3.3.D)。完了3値=100
+# 退勤レポート等の進捗率デフォルト (score_compatibility_check.md §3.3.D)。完了4値=100
 STATUS_DEFAULT_PROGRESS: dict[str, int] = {
-    "deliver": 100, "client_ap": 100, "ap": 100,
+    "deliver": 100, "client_ap": 100, "ap": 100, "completed": 100,
     "qc": 70,
     "wip": 40, "qc_fb": 40,
     "wt": 0, "mk": 0,

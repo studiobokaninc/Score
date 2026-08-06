@@ -17,7 +17,7 @@ router = APIRouter()
 # cmd_149 (2026-07-29): 手動ステータス変更UIの選択肢表示順 (NEW_TASK_STATUSES と同一集合・
 # 表示順のみの都合であり新たな遷移可否ロジックではない — from→to の合法遷移グラフは
 # 制作部+Calendar側で確定作業中のため本タスクでは発明しない)
-NEW_TASK_STATUSES_ORDERED = ("wt", "mk", "wip", "qc", "qc_fb", "ap", "client_ap", "deliver", "omit")
+NEW_TASK_STATUSES_ORDERED = ("wt", "mk", "wip", "qc", "qc_fb", "ap", "client_ap", "deliver", "completed", "omit")
 assert set(NEW_TASK_STATUSES_ORDERED) == set(NEW_TASK_STATUSES)
 
 _env = Environment(
