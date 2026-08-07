@@ -340,7 +340,29 @@ class TestAutomationMarkerHeader:
             headers = client._headers(actor_user_id="28")
         finally:
             set_service_call(False)
-        assert headers.get("X-Score-Action-Source") == "システム操作"
+        from urllib.parse import quote, unquote
+        assert headers.get("X-Score-Action-Source") == quote("システム操作")
+        assert unquote(headers["X-Score-Action-Source"]) == "システム操作"
+
+    def test_all_header_values_are_ascii_safe(self, monkeypatch):
+        """実機検証で発見した回帰の再発防止: HTTPヘッダの値は ASCII/latin-1 で
+        なければならず(RFC 7230)、生の日本語をそのまま値に積むと httpx が送信時に
+        例外を送出する(Calendar呼出そのものが失敗し、fail-closed側のexceptに
+        飲まれて正当な利用者への名乗りまで403になる・モックのみの単体試験では
+        検出できず実機検証で初めて判明した)。全ヘッダ値がASCIIエンコード可能で
+        あることを機械的に保証する。"""
+        from app.adapters.calendar_client import CalendarClient
+        from app.request_context import set_service_call
+
+        set_service_call(True)
+        try:
+            monkeypatch.setenv("CALENDAR_MOCK", "1")
+            client = CalendarClient()
+            headers = client._headers(actor_user_id="28")
+        finally:
+            set_service_call(False)
+        for k, v in headers.items():
+            v.encode("ascii")  # 例外が飛ばないこと自体がアサーション
 
     def test_marker_absent_for_normal_calls(self, monkeypatch):
         from app.adapters.calendar_client import CalendarClient

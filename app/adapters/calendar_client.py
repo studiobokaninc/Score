@@ -119,11 +119,18 @@ class CalendarClient:
         # 組み立てられ共通の一箇所を通らないため足し忘れが生じうる。_headers()は
         # 全送信(61箇所)が通る唯一の出口であり、ここに載せれば載せ忘れが構造的に
         # 起こらない。語彙は独自語を作らず Calendar 側既存の「システム操作」を
-        # そのまま用いる。★ヘッダ名・値の正式フォーマットはニブ陣(Calendar担当)
-        # との協議事項として残る暫定実装。
+        # そのまま用いる。★実機検証で判明した実装上の必須事項: HTTPヘッダの値は
+        # ASCII/latin-1 でなければならず(RFC 7230)、日本語を生のまま値に積むと
+        # httpx が送信時に例外を送出し Calendar 呼出そのものが失敗する(fail-closed
+        # 側の except に飲まれ、実在の非admin利用者への正当な名乗りまで403に
+        # なっていた・実機検証で発見)。ゆえに percent-encode してヘッダ値に載せる
+        # (Calendar側で urllib.parse.unquote すれば元の「システム操作」に戻る)。
+        # ★ヘッダ名・エンコード方式の正式フォーマットはニブ陣(Calendar担当)との
+        # 協議事項として残る暫定実装。
+        from urllib.parse import quote as _quote
         from app.request_context import is_service_call
         if is_service_call():
-            h["X-Score-Action-Source"] = "システム操作"
+            h["X-Score-Action-Source"] = _quote("システム操作")
         return h
 
     def _request_with_retry(self, method: str, url: str, **kwargs) -> httpx.Response:
