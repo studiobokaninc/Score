@@ -261,13 +261,17 @@ class TestGetActorRoleStrict:
 
 # ─── (j) 記録機構: 名乗り採用時に監査ログが実際に書き込まれること ──────────
 
-@pytest.fixture
+@pytest.fixture(autouse=True)
 def isolated_audit_db(monkeypatch):
     """本物の score.db を汚さないよう、専用の in-memory SQLite に差し替える
     (test_pages_routine.py の isolated_routine_db と同型)。★app.deps は
     `from app.database import SessionLocal` でモジュール importステップ時に
     参照を保持するため、app.database.SessionLocal ではなく app.deps.SessionLocal
-    自体を差し替える必要がある。"""
+    自体を差し替える必要がある。★autouse=True: 名乗り採用が成功する経路の
+    テストは本fixtureを明示要求せずとも監査ログ書込みが発生しうる
+    (test_service_credential_non_admin_uid_accepted 等)。個別テストの要求漏れで
+    本物の score.db に試験データが混入するのを防ぐため、本ファイル全体へ
+    無条件適用する(実機汚染事故の再発防止・2026-08-07実機検証時に発覚)。"""
     from app.database import Base
 
     engine = create_engine(
