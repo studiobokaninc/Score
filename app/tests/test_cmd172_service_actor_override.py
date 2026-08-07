@@ -330,6 +330,98 @@ def test_rejected_override_does_not_write_audit_record(isolated_audit_db):
     assert len(rows) == 0
 
 
+# ─── QC172B-1: fail-closed拒否理由の内部区別(外部応答は不変) ──────────────
+# subtask_172b実機検証で発覚: 実装バグ(自動化印ヘッダの非ASCII送信失敗)が
+# 「Calendar未応答」と全く見分けの付かない403で表に出た。①admin解決 ②uid未解決
+# ③Calendar未応答 ④その他の想定外例外(実装の誤りの疑い)の4区分を内部ログで
+# 区別できることを確認する(外部応答の文言・ステータスコードは不変)。
+
+class TestActorResolutionFailureReason:
+    def test_classify_admin_resolved_and_logged(self, capsys):
+        """① admin解決: 外部応答は従来どおり403+専用文言、内部ログに
+        reason=admin_resolved が残ること。"""
+        with patch("app.adapters.calendar_factory.get_calendar_client") as MockFactory:
+            mock_client = MagicMock()
+            mock_client.get_me.return_value = _mock_user(1, "admin")
+            MockFactory.return_value = mock_client
+            resp = _client().get("/whoami", headers=_service_headers(acting_uid=1))
+        assert resp.status_code == 403
+        assert resp.json()["detail"] == "Acting as an admin-resolved user is forbidden"
+        err = capsys.readouterr().err
+        assert "reason=admin_resolved" in err
+        assert "acting_uid=1" in err
+
+    def test_classify_uid_not_found_and_logged(self, capsys):
+        """② uid未解決(Calendarからエラー応答受信): 外部応答は従来どおりの
+        汎用403文言、内部ログに reason=uid_not_found が残ること。"""
+        import httpx as _httpx
+        req = _httpx.Request("GET", "http://calendar.test/api/me")
+        resp_404 = _httpx.Response(404, request=req)
+        exc = _httpx.HTTPStatusError("404 Not Found", request=req, response=resp_404)
+        with patch("app.adapters.calendar_factory.get_calendar_client") as MockFactory:
+            mock_client = MagicMock()
+            mock_client.get_me.side_effect = exc
+            MockFactory.return_value = mock_client
+            resp = _client().get("/whoami", headers=_service_headers(acting_uid=555))
+        assert resp.status_code == 403
+        assert resp.json()["detail"] == "Acting user could not be resolved"
+        err = capsys.readouterr().err
+        assert "reason=uid_not_found" in err
+        assert "acting_uid=555" in err
+        assert "!!UNEXPECTED_ERROR!!" not in err
+
+    def test_classify_calendar_unresponsive_and_logged(self, capsys):
+        """③ Calendar未応答(接続そのものが失敗): 外部応答は従来どおりの
+        汎用403文言、内部ログに reason=calendar_unresponsive が残ること。"""
+        import httpx as _httpx
+        with patch("app.adapters.calendar_factory.get_calendar_client") as MockFactory:
+            mock_client = MagicMock()
+            mock_client.get_me.side_effect = _httpx.ConnectError("connection refused")
+            MockFactory.return_value = mock_client
+            resp = _client().get("/whoami", headers=_service_headers(acting_uid=42))
+        assert resp.status_code == 403
+        assert resp.json()["detail"] == "Acting user could not be resolved"
+        err = capsys.readouterr().err
+        assert "reason=calendar_unresponsive" in err
+        assert "acting_uid=42" in err
+        assert "!!UNEXPECTED_ERROR!!" not in err
+
+    def test_classify_unexpected_error_and_logged(self, capsys):
+        """④ 上記いずれでもない例外(実装の誤りの疑い): 外部応答は従来どおりの
+        汎用403文言のまま(理由を漏らさない)だが、内部ログには他と区別できる
+        目印(!!UNEXPECTED_ERROR!!)付きで reason=unexpected_error が残ること。
+        (subtask_172bで実際に踏んだ、自動化印ヘッダのASCIIエンコード失敗
+        UnicodeEncodeError 相当の再現)。"""
+        with patch("app.adapters.calendar_factory.get_calendar_client") as MockFactory:
+            mock_client = MagicMock()
+            mock_client.get_me.side_effect = UnicodeEncodeError(
+                "ascii", "システム操作", 0, 1, "ordinal not in range(128)"
+            )
+            MockFactory.return_value = mock_client
+            resp = _client().get("/whoami", headers=_service_headers(acting_uid=77))
+        assert resp.status_code == 403
+        assert resp.json()["detail"] == "Acting user could not be resolved"
+        err = capsys.readouterr().err
+        assert "reason=unexpected_error" in err
+        assert "!!UNEXPECTED_ERROR!!" in err
+        assert "acting_uid=77" in err
+
+    def test_classify_helper_function_directly(self):
+        """_classify_actor_resolution_failure 単体の分類ロジック確認。"""
+        import httpx as _httpx
+        from app.deps import _classify_actor_resolution_failure
+
+        req = _httpx.Request("GET", "http://calendar.test/api/me")
+        status_exc = _httpx.HTTPStatusError(
+            "500", request=req, response=_httpx.Response(500, request=req)
+        )
+        assert _classify_actor_resolution_failure(status_exc) == "uid_not_found"
+        assert _classify_actor_resolution_failure(_httpx.ReadTimeout("timeout")) == "calendar_unresponsive"
+        assert _classify_actor_resolution_failure(_httpx.ConnectError("refused")) == "calendar_unresponsive"
+        assert _classify_actor_resolution_failure(RuntimeError("boom")) == "unexpected_error"
+        assert _classify_actor_resolution_failure(KeyError("id")) == "unexpected_error"
+
+
 # ─── (k) 自動化印: _headers() 単一choke pointにのみ付与される ───────────────
 
 class TestAutomationMarkerHeader:

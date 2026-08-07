@@ -8,6 +8,9 @@ from unittest.mock import MagicMock, patch
 import jwt
 import pytest
 from fastapi.testclient import TestClient
+from sqlalchemy import create_engine
+from sqlalchemy.orm import sessionmaker
+from sqlalchemy.pool import StaticPool
 
 os.environ.setdefault("JWT_SECRET", "test_secret_key_32bytes_minimum!")
 
@@ -40,6 +43,37 @@ def _mock_get_actor_id():
 @pytest.fixture(autouse=True)
 def patch_jwt_secret(monkeypatch):
     monkeypatch.setenv("JWT_SECRET", _SECRET)
+
+
+@pytest.fixture(autouse=True)
+def isolated_score_db(monkeypatch):
+    """cmd_172 QC172B-2(本タスクsubtask_172cで発覚): 本物の score.db を汚さない
+    よう、専用の in-memory SQLite に差し替える(test_cmd172_service_actor_
+    override.py の isolated_audit_db・test_pages_routine.py の
+    isolated_routine_db と同型)。★POST /api/bff/timecards/clock_out・
+    POST /api/bff/routines は Depends(get_db) を使わず、関数内で都度
+    `from app.database import SessionLocal` して直接書込むため、client
+    fixtureのget_db差替え(_db_override)はこの書込経路には一切効かない
+    (呼び出し時import=毎回app.database側の値を見るため、app.database.
+    SessionLocal自体を差し替えれば足りる。app.deps等モジュールロード時に
+    importを固定するモジュールはこの方式では効かない点が異なる)。
+    (実DB汚染の実例: 本タスクの点検で timecard_logs id22-26・routine_logs
+    id37-41 に本ファイルの試験由来と特定できる偽データ(user_id=42固定・
+    raw_json='{"hours": 8}'・condition='good')が混入済みと判明した。ローカル
+    score.db がroot所有でbokanユーザからは書込不可のため今回のテスト実行
+    自体はエラーを内部で握り潰していたが、書込可能な環境では実際に混入する)。
+    """
+    from app.database import Base
+
+    engine = create_engine(
+        "sqlite:///:memory:",
+        connect_args={"check_same_thread": False},
+        poolclass=StaticPool,
+    )
+    Base.metadata.create_all(bind=engine)
+    TestSessionLocal = sessionmaker(autocommit=False, autoflush=False, bind=engine)
+    monkeypatch.setattr("app.database.SessionLocal", TestSessionLocal)
+    return TestSessionLocal
 
 
 @pytest.fixture()
@@ -121,7 +155,7 @@ class TestBffWriteLookDistributions:
 # ─── POST /api/bff/timecards/clock_out ──────────────────────────────────────
 
 class TestBffWriteTimecardClockOut:
-    def test_post_timecard_clock_out_valid_jwt(self, client):
+    def test_post_timecard_clock_out_valid_jwt(self, client, isolated_score_db):
         with patch("app.routers.bff_write.get_calendar_client") as MockClient:
             mock_inst = MagicMock()
             mock_inst.post_timecard_clock_out.return_value = _MOCK_RESULT
@@ -129,6 +163,17 @@ class TestBffWriteTimecardClockOut:
             resp = client.post("/api/bff/timecards/clock_out", json={"hours": 8}, headers=_auth_headers())
         assert resp.status_code == 200
         mock_inst.post_timecard_clock_out.assert_called_once()
+        # QC172B-2: isolated_score_db への差替えが実際に効き、この付随書込
+        # (app/routers/bff_write.py の TimecardLog 保存)がisolated DBへ着地
+        # していること(=本物のscore.dbへは書き込まれていないこと)を確認する。
+        from app.models import TimecardLog
+        db = isolated_score_db()
+        try:
+            rows = db.query(TimecardLog).all()
+        finally:
+            db.close()
+        assert len(rows) == 1
+        assert rows[0].user_id == _RESOLVED_ACTOR_ID
 
     def test_post_timecard_clock_out_no_auth(self, client_no_auth):
         resp = client_no_auth.post("/api/bff/timecards/clock_out", json={"hours": 8})
@@ -138,7 +183,7 @@ class TestBffWriteTimecardClockOut:
 # ─── POST /api/bff/routines ─────────────────────────────────────────────────
 
 class TestBffWriteRoutines:
-    def test_post_routines_valid_jwt(self, client):
+    def test_post_routines_valid_jwt(self, client, isolated_score_db):
         with patch("app.routers.bff_write.get_calendar_client") as MockClient:
             mock_inst = MagicMock()
             mock_inst.post_routines.return_value = _MOCK_RESULT
@@ -146,6 +191,17 @@ class TestBffWriteRoutines:
             resp = client.post("/api/bff/routines", json={"condition": "good"}, headers=_auth_headers())
         assert resp.status_code == 200
         mock_inst.post_routines.assert_called_once()
+        # QC172B-2: isolated_score_db への差替えが実際に効き、この付随書込
+        # (app/routers/bff_write.py の RoutineLog 保存)がisolated DBへ着地
+        # していること(=本物のscore.dbへは書き込まれていないこと)を確認する。
+        from app.models import RoutineLog
+        db = isolated_score_db()
+        try:
+            rows = db.query(RoutineLog).all()
+        finally:
+            db.close()
+        assert len(rows) == 1
+        assert rows[0].user_id == _RESOLVED_ACTOR_ID
 
     def test_post_routines_no_auth(self, client_no_auth):
         resp = client_no_auth.post("/api/bff/routines", json={"condition": "good"})

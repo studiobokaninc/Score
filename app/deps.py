@@ -75,6 +75,47 @@ def get_actor_role_strict(actor_id: str, client=None) -> str:
     return user.role if user and user.role else "user"
 
 
+def _classify_actor_resolution_failure(exc: Exception) -> str:
+    """cmd_172 QC172B-1(軍師検分・subtask_172b実機検証で発覚): get_actor_role_strict
+    が例外で失敗した際、fail-closed拒否(403)に至った理由を内部で区別するための
+    分類。★外部へ返す403応答の文言・ステータスコードは一切変えない(理由を
+    明かさない)——区別はサーバ内側のログにのみ残す。
+    (背景): subtask_172b実機検証で見つかった実装バグ(自動化印ヘッダに日本語を
+    生のまま積んだ誤り)はhttpxの送信時エンコード例外を起こし、fail-closedの
+    except節に飲まれて「Calendarが応答しなかった」場合と全く見分けの付かない
+    「Acting user could not be resolved」という顔で表に出た。安全側の拒否その
+    ものが実装の誤りを隠す隠れ蓑にならぬよう、この分類を設ける。
+    戻り値は以下のいずれか:
+      "uid_not_found"        : 名乗られたuidについてCalendarからエラー応答を
+                                受けた(response受信済・4xx/5xx等)。
+      "calendar_unresponsive": Calendarへの接続そのものが失敗した(応答を
+                                受け取れていない・タイムアウト/接続エラー等)。
+      "unexpected_error"     : 上記いずれでもない例外。★実装の誤りの疑いが
+                                ある要注意区分——「安全に閉じた」のではなく
+                                「壊れて閉じた」ことを意味する。
+    """
+    import httpx as _httpx
+    if isinstance(exc, _httpx.HTTPStatusError):
+        return "uid_not_found"
+    if isinstance(exc, _httpx.RequestError):
+        return "calendar_unresponsive"
+    return "unexpected_error"
+
+
+def _log_actor_resolution_rejected(reason: str, acting_uid: str, exc: Exception | None = None) -> None:
+    """QC172B-1: fail-closed拒否に至った理由を内部ログ(stderr)へ残す
+    (_record_service_overrideと同様の可視化方式に揃える)。外部応答は一切
+    変えない。★"unexpected_error" は他と分けて目立たせる——実装の誤りが
+    安全な拒否の顔をして見過ごされることを防ぐため。"""
+    import sys
+    marker = " !!UNEXPECTED_ERROR!!" if reason == "unexpected_error" else ""
+    print(
+        f"[cmd_172 actor_resolution] rejected reason={reason}{marker} "
+        f"acting_uid={acting_uid} exc_type={type(exc).__name__ if exc else '-'}",
+        file=sys.stderr, flush=True,
+    )
+
+
 def _record_service_override(method: str, path: str, service_client_id: str | None, acting_user_id: str) -> None:
     """cmd_172⑥・殿ご裁可の条件②: 名乗り上書き機構と同一PR/同一リリースで導入する
     記録機構。代理の名乗りは性質上「誰がやったか」を分かりにくくする方向へ働く
@@ -148,9 +189,11 @@ def get_actor_id(
     #   c) 判定できなかった (Calendar 未応答・実在しない uid 等の例外) → 拒否 (403)
     try:
         role = get_actor_role_strict(str(acting_uid), client=client)
-    except Exception:
+    except Exception as e:
+        _log_actor_resolution_rejected(_classify_actor_resolution_failure(e), str(acting_uid), e)
         raise HTTPException(status_code=403, detail="Acting user could not be resolved")
     if role == "admin":
+        _log_actor_resolution_rejected("admin_resolved", str(acting_uid))
         raise HTTPException(status_code=403, detail="Acting as an admin-resolved user is forbidden")
     _record_service_override(
         method=request.method,
