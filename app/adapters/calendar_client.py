@@ -113,6 +113,17 @@ class CalendarClient:
             calendar_uid = _to_calendar_uid(actor_user_id)
             if calendar_uid is not None:
                 h["X-Actor-User-Id"] = str(calendar_uid)
+        # cmd_172⑦ (軍師QC172A-4是正・addendum5④): 外部の道具(Casper等)の
+        # サービス資格(typ="service")経由と判明した呼出には自動化の印を付与する。
+        # ★body側(patch_taskのpayload等)には付与しない——bodyは口ごとに個別に
+        # 組み立てられ共通の一箇所を通らないため足し忘れが生じうる。_headers()は
+        # 全送信(61箇所)が通る唯一の出口であり、ここに載せれば載せ忘れが構造的に
+        # 起こらない。語彙は独自語を作らず Calendar 側既存の「システム操作」を
+        # そのまま用いる。★ヘッダ名・値の正式フォーマットはニブ陣(Calendar担当)
+        # との協議事項として残る暫定実装。
+        from app.request_context import is_service_call
+        if is_service_call():
+            h["X-Score-Action-Source"] = "システム操作"
         return h
 
     def _request_with_retry(self, method: str, url: str, **kwargs) -> httpx.Response:

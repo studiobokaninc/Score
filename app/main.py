@@ -67,6 +67,36 @@ async def _auth_redirect_handler(request: Request, exc: _HTTPExc):
         headers=getattr(exc, "headers", None) or {},
     )
 
+# cmd_172⑦: 自動化印(Calendar送信ヘッダ)判定用ミドルウェア。app.deps.get_actor_id
+# と同じ typ="service" 判別をリクエスト先頭で行い、CalendarClient._headers()
+# (単一choke point)がリクエスト全体を通じて参照できる contextvar に格納する。
+# ★観測用の印にすぎず認可判断には使わない(get_actor_id が別途厳密に再検証する)。
+from starlette.middleware.base import BaseHTTPMiddleware
+
+
+class _ServiceCallContextMiddleware(BaseHTTPMiddleware):
+    async def dispatch(self, request: Request, call_next):
+        from app.request_context import set_service_call
+        from app.auth import verify_service_jwt
+
+        auth = request.headers.get("authorization")
+        if not auth:
+            score_token = request.cookies.get("score_token")
+            auth = f"Bearer {score_token}" if score_token else None
+        is_service = False
+        if auth and auth.startswith("Bearer "):
+            token = auth[len("Bearer "):]
+            try:
+                payload = verify_service_jwt(token)
+                is_service = payload.get("typ") == "service"
+            except Exception:
+                is_service = False
+        set_service_call(is_service)
+        return await call_next(request)
+
+
+app.add_middleware(_ServiceCallContextMiddleware)
+
 # static asset mount (/static/*) — sidemenu ロゴ等の画像配信用
 from fastapi.staticfiles import StaticFiles
 from pathlib import Path as _Path

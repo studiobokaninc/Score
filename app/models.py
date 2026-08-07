@@ -95,3 +95,19 @@ class TimecardLog(Base):
     next_priority = Column(Text, nullable=True)            # 翌日の優先
     raw_json = Column(Text, nullable=True)                 # 元 body 全体 (保険)
     created_at = Column(DateTime, default=datetime.utcnow)
+
+
+class ServiceActorOverrideLog(Base):
+    """cmd_172 (2026-08-07・殿ご裁可の条件②): 外部の道具(Casper等)のサービス資格
+    (typ="service" JWT)が X-Score-Acting-User-Id で操作者本人のuidを名乗り、
+    その名乗りが actor として採用された記録。代理の名乗りは性質上『誰がやったか』
+    を分かりにくくする方向へ働く機構であるため、上書き機構本体(app.deps.get_actor_id)
+    と同一PR/同一リリースで導入する(軍師OBS172A-1)。"""
+    __tablename__ = "service_actor_override_logs"
+
+    id = Column(Integer, primary_key=True, index=True)
+    created_at = Column(DateTime, default=datetime.utcnow, index=True)
+    method = Column(String, nullable=False)
+    endpoint = Column(String, nullable=False, index=True)       # request.url.path (対象entityのidを含む例: /api/bff/tasks/1234)
+    service_client_id = Column(String, nullable=True)           # サービスJWTの cid クレーム(無ければ"service")
+    acting_user_id = Column(String, nullable=False, index=True)  # 名乗り採用された actor_id (Calendar実uid)
