@@ -31,6 +31,7 @@ from app.routers import (
     pages_routine,
     pages_notif_settings,
     sse_notifications,
+    usage_summary,
 )
 
 app = FastAPI(title="Score BE", version="0.1.0")
@@ -97,6 +98,42 @@ class _ServiceCallContextMiddleware(BaseHTTPMiddleware):
 
 app.add_middleware(_ServiceCallContextMiddleware)
 
+# cmd_187 (2026-08-27・殿ご裁可): Score利用ログ基盤・簡易版の唯一の捕捉点。
+# 正本(score_usage_log_design_plan_simple_20260827.md)§4のとおり
+# _ServiceCallContextMiddleware とは別・同格の新規middlewareとする。
+# ★user_idはapp.deps.get_actor_id側が同一requestのrequest.state.actor_idへ
+# 書き残した値を読むのみ(このmiddleware自身はCalendarへの解決要求を一切
+# 行わない・get_actor_idが既に行った解決の結果を再利用するのみ=二重の
+# Calendar呼出を避ける)。get_actor_idが呼ばれなかった経路(未認証・
+# ヘルスチェック等)ではNULLのまま記録し、§5の読む口でnon_human枠へ回る。
+import time as _time
+
+
+class _UsageLogMiddleware(BaseHTTPMiddleware):
+    async def dispatch(self, request: Request, call_next):
+        start = _time.monotonic()
+        response = await call_next(request)
+        try:
+            from app.usage_log import record_usage_event
+            from datetime import datetime as _dt
+
+            duration_ms = int((_time.monotonic() - start) * 1000)
+            record_usage_event(
+                occurred_at=_dt.utcnow(),
+                user_id=getattr(request.state, "actor_id", None),
+                http_method=request.method,
+                path=request.url.path,
+                status_code=response.status_code,
+                duration_ms=duration_ms,
+            )
+        except Exception as e:
+            import sys as _sys
+            print(f"[usage_log] middleware failed: {e}", file=_sys.stderr, flush=True)
+        return response
+
+
+app.add_middleware(_UsageLogMiddleware)
+
 # static asset mount (/static/*) — sidemenu ロゴ等の画像配信用
 from fastapi.staticfiles import StaticFiles
 from pathlib import Path as _Path
@@ -135,6 +172,14 @@ def serve_sw_at_root():
 # 起動時に DB table を auto-create (alembic migration を待たず)
 from app.database import Base, engine
 Base.metadata.create_all(bind=engine)
+
+# cmd_187: usage_events は既存score.dbとは別ファイル(score_usage_simple.db)の
+# ため、既存Base(score.db向け)とは別にUsageLogBase.metadata.create_allを呼ぶ。
+# alembicは使わない(正本§6・殿の手数最少の理由は同節参照)。
+from app.usage_log import UsageLogBase, usage_log_engine, cleanup_old_usage_events
+UsageLogBase.metadata.create_all(bind=usage_log_engine)
+# §5「保存期間」: 別プロセス/cronを設けず起動時に1回だけ古い行を消す。
+cleanup_old_usage_events()
 
 # 殿御命 2026-06-09: 既存 SQLite への列追加 (create_all は既存テーブルを ALTER せぬため idempotent migration)
 def _ensure_columns():
@@ -179,6 +224,7 @@ app.include_router(pages_director_qc_viewer.router)
 app.include_router(pages_routine.router)
 app.include_router(pages_notif_settings.router)
 app.include_router(sse_notifications.router)
+app.include_router(usage_summary.router)
 
 
 @app.get("/api/health")

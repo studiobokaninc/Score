@@ -173,6 +173,11 @@ def get_actor_id(
                 raise
         if actor_id is None:
             raise HTTPException(status_code=403, detail="User not found in Calendar")
+        # cmd_187: 利用ログmiddleware(app.usage_log)が同一requestの後処理で
+        # 読む側チャンネル。ここでの解決結果を横流しするだけで、Calendarへの
+        # 追加呼出は発生させない(request.state.actor_idは観測用の副産物に
+        # すぎず、認可判断には一切使わない=本関数の戻り値・例外挙動は不変)。
+        request.state.actor_id = str(actor_id)
         return str(actor_id)
 
     # cmd_172①2)〜3): サービス種別JWT に限り、名乗り(ACTING_USER_ID_HEADER)を
@@ -201,6 +206,8 @@ def get_actor_id(
         service_client_id=payload.get("cid"),
         acting_user_id=str(acting_uid),
     )
+    # cmd_187: 利用ログmiddleware向けの副産物(認可判断には使わない)。
+    request.state.actor_id = str(acting_uid)
     return str(acting_uid)
 
 

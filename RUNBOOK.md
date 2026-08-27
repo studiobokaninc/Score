@@ -487,6 +487,59 @@ kill <PID>
 
 ---
 
+## ⑨ 利用ログ機構(usage_events)
+
+Score全体の利用状況(いつ・誰が・何をしたか)を記録する簡易な仕組み。既存の
+`score.db` とは別ファイル(`score_usage_simple.db`)に、リクエスト単位で1行ずつ
+記録する。表は1つ(`usage_events`)、捕捉点はmiddleware1箇所(`app/main.py` の
+`_UsageLogMiddleware`)、読ませる口は1本(`GET /api/audit/usage-summary`)。
+
+### pull後の手順(2手のみ)
+
+```bash
+# ① 最新コードを取得
+git pull
+
+# ② Score プロセスを再起動する
+```
+
+**★★重要**: `.py` を直しただけでは反映されない。起動中の uvicorn プロセスは
+pull前の旧コードのまま動き続ける。①だけで終わらせず、必ず②(プロセス
+再起動)まで行うこと(過去2度、再起動漏れで反映されなかった前例あり)。
+再起動コマンドは「② 起動順序」節を参照。
+
+再起動すると、起動時の `UsageLogBase.metadata.create_all(bind=usage_log_engine)`
+により `usage_events` テーブルが自動生成される(alembic不要・存在すれば何もしない
+ため冪等)。同時に起動時チェックとして90日より古い行が1回だけ削除される
+(`cleanup_old_usage_events()`)。別プロセス・cronは不要。
+
+### `score_usage_simple.db` の扱い
+
+- `.gitignore` の `*.db` パターンに掛かるため、git には含まれない(commitされない)。
+- pullでこのファイルが消えたり上書きされたりすることはない(pullはリポジトリ内の
+  追跡対象ファイルのみを更新するため)。
+
+### 読ませる口
+
+```
+GET /api/audit/usage-summary?cycle_date=YYYY-MM-DD
+Authorization: Bearer <サービストークン>
+```
+
+利用者ごとの件数・最初の刻・最後の刻(+ name・実際に集計した窓)を返す。
+認証は既存のサービス資格の仕組み(`app/deps.py` の `get_actor_id`)にそのまま
+合わせており、新しい鍵種別は無い。`user_id` を解決できない呼出(自動処理・
+未認証等)は `by_user` に混ぜず `non_human` として別枠で返す。日付の区切りは
+**暦日(UTCの00:00〜23:59)**であり、Score自身の内部判定(朝5時JST境)とは
+異なる点はエンドポイントのdocstringにも明記済(`app/routers/usage_summary.py`)。
+
+### 見積り・保存期間
+
+1日あたり330〜1,100行(11名×30〜100件/日)を想定、年間約6MB〜120MBほど。
+90日より古い行はプロセス起動のたびに自動で削除される。
+
+---
+
 ## 付録: エンドポイント一覧（実装確認済）
 
 `GET /api/health` — ヘルスチェック（認証不要）  
@@ -516,3 +569,4 @@ kill <PID>
 `PATCH /api/bff/troubles/{id}/resolve` — トラブル解決  
 `POST /api/bff/messages` — メッセージ送信  
 `PATCH /api/bff/notifications/{id}/read` — 通知既読  
+`GET /api/audit/usage-summary` — 利用ログ集計(⑨参照・サービス資格Bearer必須)  
