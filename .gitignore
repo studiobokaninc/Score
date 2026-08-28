@@ -16,6 +16,9 @@ app/data/score_mock_state.yaml
 *.key
 *credentials*
 
+# TLS証明書・秘密鍵 (mkcert生成物、2026-08-28追加)
+certs/
+
 # noise files
 =2.8.0
 =*
