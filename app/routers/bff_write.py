@@ -662,6 +662,7 @@ async def post_asset_upload(
     version: Optional[str] = Form(None),
     submission_type: Optional[str] = Form(None),   # 殿御命 2026-06-03: 'qc' | 'review'
     mentions: Optional[str] = Form(None),           # 殿御命 2026-06-03: カンマ区切り uid/email
+    memo: Optional[str] = Form(None),               # cmd_234: 提出メッセージへ添える一言 (任意・改行可)
     actor_id: str = Depends(get_actor_id),
 ):
     """QC/review asset upload (殿御命 2026-06-01)
@@ -918,6 +919,7 @@ async def post_asset_upload(
         return uids
 
     mention_uids = _resolve_uids(mentions)
+    memo = (memo or "").strip()
 
     if is_qc_review:
         # 殿御命 2026-06-09 (案A): mention された user に『この依頼 1 件限定』で Approve/Retake を委任 (DB 記録)。
@@ -1093,6 +1095,10 @@ async def post_asset_upload(
                     ]
                 if mention_text:
                     lines.append(mention_text)
+                # cmd_234 (2026-09-10): #asset-name-memo に書かれた一言を提出メッセージへ
+                # 追記する (post_qc_notify_existing の comment[:200] 追記と同一作法に揃える)。
+                if memo:
+                    lines.append("補足: " + memo[:200])
                 if qc_link:
                     # 殿御命 2026-06-04: 本文末尾は URL のみ (Score 側 JS で button 化)
                     lines.append("")
