@@ -298,10 +298,11 @@
         <!-- @ mention autocomplete dropdown -->
         <div id="mention-dropdown" class="hidden absolute bottom-20 left-4 right-4 border border-slate-200 rounded-2xl shadow-2xl z-50 max-h-48 overflow-y-auto" style="background-color: white;"></div>
         <div class="flex gap-3">
-          <input type="text" id="mainInput" placeholder="メッセージを入力... (@ で mention)"
+          <textarea id="mainInput" rows="1" placeholder="メッセージを入力... (@ で mention・Shift+Enterで改行)"
             oninput="handleMentionInput(event)"
             onkeydown="handleMentionKeydown(event)"
-            class="flex-1 bg-white/60 border border-white/60 rounded-2xl px-4 py-3 text-sm focus:outline-none focus:border-indigo-300">
+            class="flex-1 bg-white/60 border border-white/60 rounded-2xl px-4 py-3 text-sm focus:outline-none focus:border-indigo-300 resize-none"
+            style="overflow-y: hidden;"></textarea>
           <button onclick="sendMessage()" class="bg-indigo-600 text-white rounded-2xl px-4 py-3 font-bold text-sm hover:bg-indigo-700 transition-all">送信</button>
         </div>
       </div>
@@ -1033,8 +1034,23 @@ function _getActiveParticipants() {
     .map(s => s.replace(/\s+(PM|Director|担当)$/i, ''))
     .filter(Boolean);
 }
+// 殿御命 2026-09-10 (cmd_233⑧): 入力欄を書いた分だけ5行まで自動で伸び縮みさせ、
+// 5行超は内側スクロールに留める(外へ溢れさせない)。
+function _autoResizeTextarea(el, maxLines) {
+  el.style.height = 'auto';
+  const cs = getComputedStyle(el);
+  let lineHeight = parseFloat(cs.lineHeight);
+  if (!lineHeight || isNaN(lineHeight)) lineHeight = (parseFloat(cs.fontSize) || 14) * 1.4;
+  const paddingV = (parseFloat(cs.paddingTop) || 0) + (parseFloat(cs.paddingBottom) || 0);
+  const borderV = (parseFloat(cs.borderTopWidth) || 0) + (parseFloat(cs.borderBottomWidth) || 0);
+  const maxHeight = lineHeight * maxLines + paddingV + borderV;
+  const needed = el.scrollHeight;
+  el.style.height = Math.min(needed, maxHeight) + 'px';
+  el.style.overflowY = needed > maxHeight ? 'auto' : 'hidden';
+}
 function handleMentionInput(ev) {
   const input = ev.target;
+  _autoResizeTextarea(input, 5);
   const cursor = input.selectionStart;
   const text = input.value.substring(0, cursor);
   const lastAt = text.lastIndexOf('@');
@@ -1085,6 +1101,8 @@ function handleMentionKeydown(ev) {
       const first = dropdown.querySelector('div');
       if (first) { first.click(); ev.preventDefault(); return; }
     }
+    // 殿御命 2026-09-10 (cmd_233⑧): Shift+Enter は改行(既定動作のまま送信しない)
+    if (ev.shiftKey) return;
     sendMessage();
     ev.preventDefault();
     return;
@@ -1105,6 +1123,7 @@ function insertMention(name) {
   const newPos = lastAt + name.length + 2;
   input.focus();
   input.setSelectionRange(newPos, newPos);
+  _autoResizeTextarea(input, 5);
   document.getElementById('mention-dropdown').classList.add('hidden');
 }
 // メッセージ中の @mention を強調 (HTML render 時)
@@ -1129,10 +1148,11 @@ async function sendMessage() {
       <div class="flex justify-end" id="${bubbleId}">
         <div class="max-w-sm">
           <div class="text-[10px] text-slate-400 text-right mb-1">{{ user.name or 'Me' }} · ${now} <span class="dm-send-status text-indigo-400">送信中…</span></div>
-          <div class="bg-indigo-50 border border-indigo-100 p-3 bubble-right text-sm text-slate-700">${_highlightMentions(msg)}</div>
+          <div class="bg-indigo-50 border border-indigo-100 p-3 bubble-right text-sm text-slate-700 whitespace-pre-wrap">${_highlightMentions(msg)}</div>
         </div>
       </div>`;
     input.value = '';
+    _autoResizeTextarea(input, 5);
     document.getElementById('mention-dropdown').classList.add('hidden');
     area.scrollTop = area.scrollHeight;
     try {
@@ -1161,10 +1181,11 @@ async function sendMessage() {
     <div class="flex justify-end">
       <div class="max-w-sm">
         <div class="text-[10px] text-slate-400 text-right mb-1">{{ user.name or 'Me' }} · ${now}</div>
-        <div class="bg-indigo-50 border border-indigo-100 p-3 bubble-right text-sm text-slate-700">${_highlightMentions(msg)}</div>
+        <div class="bg-indigo-50 border border-indigo-100 p-3 bubble-right text-sm text-slate-700 whitespace-pre-wrap">${_highlightMentions(msg)}</div>
       </div>
     </div>`;
   input.value = '';
+  _autoResizeTextarea(input, 5);
   document.getElementById('mention-dropdown').classList.add('hidden');
   area.scrollTop = area.scrollHeight;
   if (mentions.length > 0) {
