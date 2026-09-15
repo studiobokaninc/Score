@@ -336,11 +336,16 @@
       <!-- ヘッダー行 -->
       <div class="flex items-center justify-between">
         <h2 class="text-lg font-bold text-slate-800">🎬 アセット履歴 ({{ asset_list|length if asset_list else 0 }} 件)</h2>
+        {# 殿御命 2026-09-15 (cmd_249⑥): 表示サイズ切替 (縦2列=大/4列=小) #}
+        <button type="button" onclick="toggleAssetGridSize()" id="asset-grid-size-btn" title="表示サイズ切替"
+          class="flex items-center gap-1.5 bg-white/60 hover:bg-white/80 border border-white/60 rounded-xl px-3 py-1.5 text-xs font-bold text-slate-600 transition-colors">
+          <span id="asset-grid-size-icon">🔲</span><span id="asset-grid-size-label">大 (2列)</span>
+        </button>
       </div>
 
       {# 殿御命 2026-06-03: アセット履歴 = 実 asset (asset_list) で表示・mock task card は廃止 #}
       {% if asset_list %}
-      <div class="grid grid-cols-2 gap-4">
+      <div class="grid grid-cols-2 gap-4" id="asset-history-grid">
         {% set _names = {28:'Ryoji Bokan',52:'田中 太郎 (PM)',53:'山田 博 (Director)',54:'加藤 健司 (Lighting Lead)',55:'佐藤 花子 (Compositor)',56:'鈴木 一郎 (Compositor)',100:'Score Service'} %}
         {% for a in asset_list %}
         {% set _basename = (a.file_path or '').split('/')[-1] %}
@@ -435,6 +440,38 @@
         <p class="text-xs text-slate-400 mt-1">上の「📤 QC/レビューデータ提出」から upload してください</p>
       </div>
       {% endif %}
+
+      <script>
+      // 殿御命 2026-09-15 (cmd_249⑥): アセット履歴 表示サイズ切替 (縦2列=大/4列=小)
+      window.toggleAssetGridSize = function() {
+        const grid = document.getElementById('asset-history-grid');
+        if (!grid) return;
+        const icon = document.getElementById('asset-grid-size-icon');
+        const label = document.getElementById('asset-grid-size-label');
+        const isLarge = grid.classList.contains('grid-cols-2');
+        if (isLarge) {
+          grid.classList.remove('grid-cols-2');
+          grid.classList.add('grid-cols-4');
+          if (icon) icon.textContent = '▦';
+          if (label) label.textContent = '小 (4列)';
+        } else {
+          grid.classList.remove('grid-cols-4');
+          grid.classList.add('grid-cols-2');
+          if (icon) icon.textContent = '🔲';
+          if (label) label.textContent = '大 (2列)';
+        }
+        try { localStorage.setItem('score_asset_grid_size', isLarge ? 'small' : 'large'); } catch (_e) {}
+      };
+      document.addEventListener('DOMContentLoaded', function() {
+        try {
+          const saved = localStorage.getItem('score_asset_grid_size');
+          const grid = document.getElementById('asset-history-grid');
+          if (saved === 'small' && grid && grid.classList.contains('grid-cols-2')) {
+            window.toggleAssetGridSize();
+          }
+        } catch (_e) {}
+      });
+      </script>
 
       {# 旧 mock task card 構造 (Tasks 工程別表示) は将来 cmd で integrate・現状非表示 #}
       <div class="grid grid-cols-2 gap-6 hidden">
@@ -999,22 +1036,16 @@
       }
       uploadBtn.disabled = true;
       statusEl.textContent = '⏳ アップロード中...';
-      // 殿御命 2026-06-03: file 名 = {project}_{seq}_{shot}_{task}_{version}_{memo}.{ext}
-      const _sanitize = (s) => (s || '').toString().trim().replace(/[^a-zA-Z0-9_\-]/g, '_').replace(/_+/g, '_').replace(/^_|_$/g, '');
-      const _proj = _sanitize(document.getElementById('asset-project').value) || 'proj';
-      const _seq = _sanitize(document.getElementById('asset-seq').value) || 'seq';
-      const _shot = _sanitize(document.getElementById('asset-shot').value) || 'shot';
-      const _task = _sanitize(document.getElementById('asset-task').value) || 'task';
-      const _ver = _sanitize(document.getElementById('asset-version').value) || 'v001';
+      // 殿御命 2026-09-15 (cmd_249⑤・2026-06-03 命名規則を置換): file 名 = アップロード時のファイル名 + "_" + バージョン名
+      // ただしファイル名に既にバージョン名が含まれていれば二重付与せずアップロード名のまま
       const _memoEl = document.getElementById('asset-name-memo');
       const _memoRaw = ((_memoEl || {}).value || '').trim();
-      const _memo = _sanitize(_memoRaw);
+      const _ver = (document.getElementById('asset-version').value || '').trim() || 'v001';
       const _origName = f.name || 'upload.bin';
       const _dot = _origName.lastIndexOf('.');
+      const _base = _dot > 0 ? _origName.substring(0, _dot) : _origName;
       const _ext = _dot > 0 ? _origName.substring(_dot) : '';
-      const _parts = [_proj, _seq, _shot, _task, _ver];
-      if (_memo) _parts.push(_memo);
-      const _newName = _parts.join('_') + _ext;
+      const _newName = _base.indexOf(_ver) !== -1 ? _origName : (_base + '_' + _ver + _ext);
       const _renamed = new File([f], _newName, { type: f.type });
       const fd = new FormData();
       fd.append('file', _renamed);
@@ -1045,7 +1076,7 @@
       const v = document.getElementById('asset-version').value.trim();
       if (v) fd.append('version', v);
       // cmd_234 (2026-09-10): メモ欄の生の文章 (改行・日本語含む) を提出メッセージへ渡す。
-      // ファイル名用の _memo (サニタイズ済) とは別物 — 混同しない。
+      // (cmd_249⑤で filename 側は「アップロード名+バージョン」方式へ変更・メモはファイル名に使わぬ)
       if (_memoRaw) fd.append('memo', _memoRaw);
       try {
         const resp = await fetch('/api/bff/assets', { method: 'POST', credentials: 'include', body: fd });

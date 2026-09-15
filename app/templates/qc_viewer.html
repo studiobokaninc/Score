@@ -94,10 +94,10 @@
               {% if _ext0 in ['png','jpg','jpeg','webp','gif'] %}
                 <img src="{{ _url0 }}" alt="{{ _bn0 }}" class="max-w-full max-h-[60vh] object-contain">
               {% elif _ext0 in ['mp4','webm','m4v'] %}
-                <video src="{{ _url0 }}" controls autoplay class="max-w-full max-h-[60vh]"></video>
+                <video src="{{ _url0 }}" controls autoplay loop class="max-w-full max-h-[60vh]"></video>
               {% elif _ext0 == 'mov' %}
                 <div class="relative w-full flex flex-col items-center justify-center">
-                  <video src="{{ _url0 }}" controls autoplay class="max-w-full max-h-[60vh]"
+                  <video src="{{ _url0 }}" controls autoplay loop class="max-w-full max-h-[60vh]"
                          onerror="this.style.display='none';this.nextElementSibling.style.display='flex'"></video>
                   <div style="display:none" class="flex-col items-center text-white text-center p-6 gap-3">
                     <div class="text-5xl">🎬</div>
@@ -118,10 +118,17 @@
             <div class="px-4 py-2 bg-slate-800 text-slate-300 text-xs font-mono flex items-center justify-between">
               {# 殿御命 2026-06-05: _a0 (asset_id 指定優先) を反映 #}
               <span id="player-meta">{% if asset_list %}{{ _a0.version or '?' }} — {{ (_a0.file_path or '').split('/')[-1] }}{% else %}提出物なし{% endif %}</span>
-              {% if asset_list %}
-              <a id="player-download" href="{{ _a0.download_url }}" download
-                 class="bg-indigo-600 hover:bg-indigo-700 text-white px-3 py-1 rounded-lg">⬇️ ダウンロード</a>
-              {% endif %}
+              <div class="flex items-center gap-3">
+                {# 殿御命 2026-09-15 (cmd_249②): ループ再生 チェックボックス・既定ON #}
+                <label class="flex items-center gap-1.5 cursor-pointer select-none hover:text-white transition-colors">
+                  <input type="checkbox" id="loop-toggle" checked onchange="toggleLoopNormal(this.checked)" class="accent-indigo-500">
+                  🔁 ループ再生
+                </label>
+                {% if asset_list %}
+                <a id="player-download" href="{{ _a0.download_url }}" download
+                   class="bg-indigo-600 hover:bg-indigo-700 text-white px-3 py-1 rounded-lg">⬇️ ダウンロード</a>
+                {% endif %}
+              </div>
             </div>
           </div>
         </div>
@@ -168,9 +175,9 @@
                 {% if _extL in ['png','jpg','jpeg','webp','gif'] %}
                   <img src="{{ _urlL }}" alt="{{ _bnL }}" class="max-w-full max-h-full object-contain">
                 {% elif _extL in ['mp4','webm','m4v'] %}
-                  <video src="{{ _urlL }}" controls class="max-w-full max-h-full"></video>
+                  <video src="{{ _urlL }}" controls loop class="max-w-full max-h-full"></video>
                 {% elif _extL == 'mov' %}
-                  <video src="{{ _urlL }}" controls class="max-w-full max-h-full"
+                  <video src="{{ _urlL }}" controls loop class="max-w-full max-h-full"
                          onerror="this.style.display='none';this.nextElementSibling.style.display='flex'"></video>
                   <div style="display:none" class="flex-col items-center text-white text-center p-4 gap-2">
                     <div class="text-3xl">🎬</div>
@@ -192,9 +199,9 @@
                 {% if _extR in ['png','jpg','jpeg','webp','gif'] %}
                   <img src="{{ _urlR }}" alt="{{ _bnR }}" class="max-w-full max-h-full object-contain">
                 {% elif _extR in ['mp4','webm','m4v'] %}
-                  <video src="{{ _urlR }}" controls class="max-w-full max-h-full"></video>
+                  <video src="{{ _urlR }}" controls loop class="max-w-full max-h-full"></video>
                 {% elif _extR == 'mov' %}
-                  <video src="{{ _urlR }}" controls class="max-w-full max-h-full"
+                  <video src="{{ _urlR }}" controls loop class="max-w-full max-h-full"
                          onerror="this.style.display='none';this.nextElementSibling.style.display='flex'"></video>
                   <div style="display:none" class="flex-col items-center text-white text-center p-4 gap-2">
                     <div class="text-3xl">🎬</div>
@@ -318,6 +325,8 @@
               class="flex-1 accent-indigo-500 cursor-pointer">
             <span id="sync-time" class="text-white text-xs font-mono whitespace-nowrap">00:00 / 04:10</span>
             <button onclick="alert('🔊 ボリュームコントロール (準備中)')" title="音量" class="text-white/70 hover:text-white text-lg">🔊</button>
+            {# 殿御命 2026-09-15 (cmd_249③): 比較モード ループ再生 アイコン・既定ON #}
+            <button onclick="toggleLoopCompare()" id="compare-loop-btn" title="ループ再生: ON" aria-pressed="true" class="text-white text-lg">🔁</button>
           </div>
         </div>
 
@@ -358,6 +367,32 @@
           _qcVideos().forEach(v => { try { v.currentTime = Number(sec); } catch(_){} });
           _qcUpdateUI();
         }
+        // 殿御命 2026-09-15 (cmd_249②③): ループ再生 既定ON・normal/compare 共有state
+        window._qcLoopEnabled = true;
+        function _qcApplyLoop() {
+          _qcVideos().forEach(v => { v.loop = window._qcLoopEnabled; });
+        }
+        function _qcSyncLoopUI() {
+          const cb = document.getElementById('loop-toggle');
+          if (cb) cb.checked = window._qcLoopEnabled;
+          const iconBtn = document.getElementById('compare-loop-btn');
+          if (iconBtn) {
+            iconBtn.textContent = window._qcLoopEnabled ? '🔁' : '➡️';
+            iconBtn.title = window._qcLoopEnabled ? 'ループ再生: ON' : 'ループ再生: OFF';
+            iconBtn.setAttribute('aria-pressed', window._qcLoopEnabled ? 'true' : 'false');
+            iconBtn.classList.toggle('opacity-50', !window._qcLoopEnabled);
+          }
+        }
+        function toggleLoopNormal(checked) {
+          window._qcLoopEnabled = checked;
+          _qcSyncLoopUI();
+          _qcApplyLoop();
+        }
+        function toggleLoopCompare() {
+          window._qcLoopEnabled = !window._qcLoopEnabled;
+          _qcSyncLoopUI();
+          _qcApplyLoop();
+        }
         function _qcAttach() {
           _qcVideos().forEach(v => {
             if (v._qcAttached) return;
@@ -376,6 +411,7 @@
               ['play-btn-left','play-btn-right'].forEach(id => { const el = document.getElementById(id); if (el) el.textContent = '▶'; });
             });
           });
+          _qcApplyLoop();
           _qcUpdateUI();
         }
         document.addEventListener('DOMContentLoaded', _qcAttach);
@@ -413,22 +449,6 @@
           } else {
             (document.exitFullscreen || document.webkitExitFullscreen || document.mozCancelFullScreen).call(document);
           }
-        }
-        function updateCompareAsset(val) {
-          const meta = {
-            'Animation_v04': {status: 'Approved', cls: 'bg-emerald-500'},
-            'Lighting_v04': {status: 'Approved', cls: 'bg-emerald-500'},
-            'FX_v04': {status: 'Reviewing', cls: 'bg-amber-500'},
-            'MattePaint_v04': {status: 'Retake', cls: 'bg-rose-500'},
-            'Composite_v04': {status: 'Reviewing', cls: 'bg-amber-500'},
-            'Composite_v03': {status: 'Retake', cls: 'bg-rose-500'},
-            'Composite_v02': {status: 'Approved', cls: 'bg-emerald-500'},
-            'Composite_v01': {status: 'Approved', cls: 'bg-emerald-500'},
-          }[val] || {status: '-', cls: 'bg-slate-500'};
-          document.getElementById('compare-left-name').textContent = val;
-          const st = document.getElementById('compare-left-status');
-          st.textContent = meta.status;
-          st.className = meta.cls + ' text-white text-xs font-bold px-3 py-1 rounded-full';
         }
         </script>
 
