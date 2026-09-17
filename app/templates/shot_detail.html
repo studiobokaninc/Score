@@ -51,14 +51,28 @@
         {% set _thread_label = _shot_code ~ ' 関係者 thread' %}
         {% set _thread_desc = 'この SHOT の関係者全員が話せる thread' %}
       {% endif %}
-      <a
-        href="/messages?thread={{ _thread_key }}"
-        class="flex items-center gap-2 bg-white/40 backdrop-blur-sm border border-white/60 rounded-2xl px-4 py-2 text-slate-600 hover:text-indigo-500 hover:bg-white/40 transition-all shadow"
-        title="{{ _thread_desc }}"
-      >
-        <span class="text-xl">💬</span>
-        <span class="text-sm font-medium">{{ _thread_label }}</span>
-      </a>
+      <div class="flex items-center gap-2">
+        {# cmd_252 (2026-09-17・殿御命): Asset Upload 新設枠ボタン — task thread のすぐ左。
+           既存アセット履歴(通知+検分あり)とは完全に別の軽い枠(通知・検分なし)。
+           ショット単位で独立した枠として見えるよう shot_id で scope する。 #}
+        <button
+          type="button"
+          onclick="openAssetUploadModal()"
+          class="flex items-center gap-2 bg-white/40 backdrop-blur-sm border border-white/60 rounded-2xl px-4 py-2 text-slate-600 hover:text-indigo-500 hover:bg-white/40 transition-all shadow"
+          title="この SHOT の Asset Upload (通知・検分なし・上げる/並べる/閲覧/DLのみ)"
+        >
+          <span class="text-xl">📁</span>
+          <span class="text-sm font-medium">Asset Upload</span>
+        </button>
+        <a
+          href="/messages?thread={{ _thread_key }}"
+          class="flex items-center gap-2 bg-white/40 backdrop-blur-sm border border-white/60 rounded-2xl px-4 py-2 text-slate-600 hover:text-indigo-500 hover:bg-white/40 transition-all shadow"
+          title="{{ _thread_desc }}"
+        >
+          <span class="text-xl">💬</span>
+          <span class="text-sm font-medium">{{ _thread_label }}</span>
+        </a>
+      </div>
     </div>
   </header>
 
@@ -834,6 +848,39 @@
   </div>
 </div>
 
+{# cmd_252 (2026-09-17・殿御命): Asset Upload 新設枠モーダル。既存の QC/Review 提出
+   (asset-upload-form・uploadAsset()) や既存アセット履歴(asset-history-grid)とは完全に
+   別物 — 通知・検分の仕組みを一切呼ばない。上げる/並べる/閲覧する/ダウンロードするだけ。
+   ショット単位 (shot_id) で独立した一覧として scope する。 #}
+<div id="modal-asset-upload" class="fixed inset-0 bg-black/50 backdrop-blur-sm flex items-center justify-center z-50 hidden">
+  <div class="bg-slate-800/90 backdrop-blur-xl border border-white/60 rounded-3xl shadow-xl p-6 w-[34rem] max-h-[85vh] flex flex-col">
+    <div class="flex items-center justify-between mb-3 shrink-0">
+      <p class="text-lg font-black text-white">📁 Asset Upload</p>
+      <button onclick="closeAssetUploadModal()" class="text-white/50 hover:text-white text-2xl leading-none">×</button>
+    </div>
+    <p class="text-[11px] text-white/40 mb-3 shrink-0">通知・検分なし — 上げる/並べる/閲覧する/ダウンロードするだけの枠です。</p>
+
+    <div class="shrink-0 mb-4">
+      <label class="block cursor-pointer w-full text-center py-3 px-3 bg-indigo-500/20 hover:bg-indigo-500/30 border-2 border-dashed border-indigo-300/60 text-indigo-100 rounded-xl text-sm font-bold transition-all">
+        <input type="file" id="asset-upload-new-file-input" class="hidden" onchange="handleAssetUploadNewFileChange()">
+        <span id="asset-upload-new-file-label">📁 ファイル選択 (txt/画像/動画/PDF等)</span>
+      </label>
+      <button type="button" id="asset-upload-new-btn" onclick="submitAssetUploadNew()" disabled
+              class="mt-2 w-full py-2 bg-indigo-600 hover:bg-indigo-700 disabled:bg-slate-500 text-white font-bold rounded-xl text-sm transition-all">
+        アップロード
+      </button>
+      <div id="asset-upload-new-status" class="text-[11px] text-white/60 mt-1"></div>
+    </div>
+
+    <div class="border-t border-white/20 pt-3 flex-1 overflow-y-auto">
+      <h4 class="text-[10px] font-black text-white/50 uppercase tracking-widest mb-2">一覧</h4>
+      <ul id="asset-upload-new-list" class="space-y-1.5">
+        <li class="text-[11px] text-white/40">読込中...</li>
+      </ul>
+    </div>
+  </div>
+</div>
+
 {# cmd_151 (2026-07-30・殿御命): QC_FB詳細 — director_retake_input.html を iframe でそのまま
    埋め込み、同等の入力(マーカー/コメント/全体方針/優先度/期日/参考素材添付)をこの画面から
    行えるようにする。新規の別実装は作らない。認可は既存 /api/bff/retakes の
@@ -1301,6 +1348,122 @@
       }
     });
   }
+</script>
+
+<script>
+  // cmd_252 (2026-09-17・殿御命): Asset Upload 新設枠 — 既存の uploadAsset()/openQCNotifyModal()
+  // (QC/Review 提出・通知+検分あり) とは完全に独立。/api/bff/asset_uploads の
+  // みを叩き、通知・検分系 API (/api/bff/assets, /api/bff/qc/notify_existing 等) は
+  // 一切呼び出さない。ショット単位 (shot_id) で一覧を scope する。
+  (function() {
+    const _shotId = {{ shot_id|default(none)|tojson }};
+    const _taskId = {{ task_id|default(none)|tojson }};
+    const _projectId = {{ (project_id or 0)|tojson }};
+
+    window.openAssetUploadModal = function() {
+      document.getElementById('modal-asset-upload').classList.remove('hidden');
+      _resetAssetUploadNewForm();
+      _loadAssetUploadNewList();
+    };
+    window.closeAssetUploadModal = function() {
+      document.getElementById('modal-asset-upload').classList.add('hidden');
+    };
+
+    function _resetAssetUploadNewForm() {
+      const fi = document.getElementById('asset-upload-new-file-input');
+      const lbl = document.getElementById('asset-upload-new-file-label');
+      const btn = document.getElementById('asset-upload-new-btn');
+      const st = document.getElementById('asset-upload-new-status');
+      if (fi) fi.value = '';
+      if (lbl) lbl.textContent = '📁 ファイル選択 (txt/画像/動画/PDF等)';
+      if (btn) btn.disabled = true;
+      if (st) st.textContent = '';
+    }
+
+    window.handleAssetUploadNewFileChange = function() {
+      const fi = document.getElementById('asset-upload-new-file-input');
+      const lbl = document.getElementById('asset-upload-new-file-label');
+      const btn = document.getElementById('asset-upload-new-btn');
+      const f = fi.files[0];
+      if (f) {
+        lbl.textContent = '📄 ' + f.name;
+        btn.disabled = false;
+      } else {
+        lbl.textContent = '📁 ファイル選択 (txt/画像/動画/PDF等)';
+        btn.disabled = true;
+      }
+    };
+
+    window.submitAssetUploadNew = async function() {
+      const fi = document.getElementById('asset-upload-new-file-input');
+      const btn = document.getElementById('asset-upload-new-btn');
+      const st = document.getElementById('asset-upload-new-status');
+      const f = fi.files[0];
+      if (!f || !_shotId) return;
+      const MAX_BYTES = 500 * 1024 * 1024;
+      if (f.size > MAX_BYTES) {
+        st.textContent = '❌ ファイル ' + Math.round(f.size / 1024 / 1024) + 'MB は上限超過 (500MB max)';
+        return;
+      }
+      btn.disabled = true;
+      st.textContent = '⏳ アップロード中...';
+      const fd = new FormData();
+      fd.append('file', f);
+      fd.append('shot_id', _shotId);
+      if (_taskId) fd.append('task_id', _taskId);
+      if (_projectId) fd.append('project_id', _projectId);
+      try {
+        const resp = await fetch('/api/bff/asset_uploads', { method: 'POST', credentials: 'include', body: fd });
+        if (!resp.ok) throw new Error('HTTP ' + resp.status);
+        st.textContent = '✅ アップロード完了';
+        _resetAssetUploadNewForm();
+        _loadAssetUploadNewList();
+      } catch (e) {
+        st.textContent = '❌ エラー: ' + e.message;
+        btn.disabled = false;
+      }
+    };
+
+    function _fmtSize(bytes) {
+      if (!bytes) return '?';
+      if (bytes < 1024 * 1024) return Math.round(bytes / 1024) + 'KB';
+      return (bytes / 1024 / 1024).toFixed(1) + 'MB';
+    }
+
+    async function _loadAssetUploadNewList() {
+      const listEl = document.getElementById('asset-upload-new-list');
+      if (!listEl || !_shotId) return;
+      listEl.innerHTML = '<li class="text-[11px] text-white/40">読込中...</li>';
+      try {
+        const resp = await fetch('/api/bff/asset_uploads?shot_id=' + encodeURIComponent(_shotId), { credentials: 'include' });
+        if (!resp.ok) throw new Error('HTTP ' + resp.status);
+        const items = await resp.json();
+        if (!items.length) {
+          listEl.innerHTML = '<li class="text-[11px] text-white/40">まだアップロードされたアセットはありません</li>';
+          return;
+        }
+        listEl.innerHTML = items.map(function(it) {
+          const _created = (it.created_at || '').slice(0, 16).replace('T', ' ');
+          return '' +
+            '<li class="flex items-center justify-between gap-2 text-[11px] bg-white/10 rounded-lg px-2 py-1.5">' +
+              '<span class="text-white/90 truncate flex-1" title="' + _escHtml(it.filename) + '">' + _escHtml(it.filename) + '</span>' +
+              '<span class="text-white/40 shrink-0">' + _fmtSize(it.size_bytes) + '</span>' +
+              '<span class="text-white/40 shrink-0">' + _created + '</span>' +
+              '<a href="' + it.view_url + '" target="_blank" rel="noopener" class="shrink-0 text-indigo-300 hover:text-indigo-200 font-bold">👁</a>' +
+              '<a href="' + it.download_url + '" class="shrink-0 text-indigo-300 hover:text-indigo-200 font-bold">⬇</a>' +
+            '</li>';
+        }).join('');
+      } catch (e) {
+        listEl.innerHTML = '<li class="text-[11px] text-rose-300">❌ 読込失敗: ' + _escHtml(e.message) + '</li>';
+      }
+    }
+
+    function _escHtml(s) {
+      const d = document.createElement('div');
+      d.textContent = s == null ? '' : String(s);
+      return d.innerHTML;
+    }
+  })();
 </script>
 
 <script>

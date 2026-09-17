@@ -32,6 +32,7 @@ from app.routers import (
     pages_notif_settings,
     sse_notifications,
     usage_summary,
+    bff_asset_uploads,
 )
 
 app = FastAPI(title="Score BE", version="0.1.0")
@@ -225,6 +226,7 @@ app.include_router(pages_routine.router)
 app.include_router(pages_notif_settings.router)
 app.include_router(sse_notifications.router)
 app.include_router(usage_summary.router)
+app.include_router(bff_asset_uploads.router)
 
 
 @app.get("/api/health")

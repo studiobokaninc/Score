@@ -97,6 +97,25 @@ class TimecardLog(Base):
     created_at = Column(DateTime, default=datetime.utcnow)
 
 
+class UploadedAsset(Base):
+    """cmd_252 (2026-09-17・殿御命): Asset Upload 新設枠。既存アセット履歴(Calendar経由・
+    通知+検分あり)とはデータ・表示とも完全に別。通知・検分の仕組みを一切挟まず、
+    上げる/並べる/閲覧する/ダウンロードするだけの軽い枠として、Score自身のDB
+    (外部Calendarとは別)にのみ記録する。カット(shot)単位で独立した枠として見える。"""
+    __tablename__ = "uploaded_assets"
+
+    id = Column(Integer, primary_key=True, index=True)
+    shot_id = Column(Integer, nullable=False, index=True)
+    task_id = Column(Integer, nullable=True, index=True)
+    project_id = Column(Integer, nullable=True, index=True)
+    filename = Column(String, nullable=False)
+    stored_filename = Column(String, nullable=False)
+    content_type = Column(String, nullable=True)
+    size_bytes = Column(Integer, nullable=True)
+    uploaded_by = Column(String, nullable=True)
+    created_at = Column(DateTime, default=datetime.utcnow, index=True)
+
+
 class ServiceActorOverrideLog(Base):
     """cmd_172 (2026-08-07・殿ご裁可の条件②): 外部の道具(Casper等)のサービス資格
     (typ="service" JWT)が X-Score-Acting-User-Id で操作者本人のuidを名乗り、
