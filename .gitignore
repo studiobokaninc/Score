@@ -31,5 +31,9 @@ certs/
 # user upload 画像 (avatar 等・mock 実体保存)
 uploads/
 
+# Asset Upload 新設枠 (cmd_252) の実体保存先 (subtask_258a: uploads/ が
+# root所有で書込不可のため uploads/ の外側に配置)
+asset_uploads/
+
 # 検証用スクショ (殿 login テスト等)
 tutorial/test_*.png

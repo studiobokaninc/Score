@@ -9,6 +9,7 @@ from pathlib import Path as _Path
 
 from fastapi import APIRouter, Depends, HTTPException, Path, UploadFile, File, Form
 from fastapi.responses import FileResponse, JSONResponse
+from sqlalchemy.exc import OperationalError
 from sqlalchemy.orm import Session
 from typing import Optional
 
@@ -29,9 +30,25 @@ async def post_asset_upload_new(
     shot_id: int = Form(...),
     task_id: Optional[int] = Form(None),
     project_id: Optional[int] = Form(None),
+    shot_code: Optional[str] = Form(None),
     actor_id: str = Depends(get_actor_id),
     db: Session = Depends(get_db),
 ):
+    # subtask_258c (cmd_258・殿御下命21:03最終版・21:22/21:24追補是正): カットの無い
+    # タスクはアップロードそのものを許可しない。画面側の disabled だけでは直POST
+    # で回避されるため、受け口側でも理由付きで弾く(fail-closed)。
+    # ★真因是正: 数値 shot_id は Calendar 側で信頼できず (task/3636 のように実際は
+    # カットが有るのに shot_id=0 で返る事が判明済・pages_project_detail.py の既知の
+    # 綻びと同型)、文字列 shot_code (shotID) の方が実際の紐付きを反映する
+    # (pages_shot.py が同一の Calendar 応答から shot_code を導出済・追加の
+    # Calendar 呼出は本ファイルの設計 (cmd_252: Calendar API 呼出を一切行わない)
+    # に反するため行わない)。ゆえに shot_id・shot_code のいずれかが真であれば
+    # 「カット有り」と扱う。
+    if not shot_id and not (shot_code or "").strip():
+        raise HTTPException(
+            status_code=400,
+            detail="このタスクにはカットが無いためアップロードできません",
+        )
     content = await file.read()
     if len(content) > _MAX_BYTES:
         raise HTTPException(status_code=413, detail=f"File too large: {len(content)//1024//1024}MB > 500MB")
@@ -48,11 +65,48 @@ async def post_asset_upload_new(
         size_bytes=len(content),
         uploaded_by=actor_id,
     )
-    db.add(row)
-    db.flush()  # id 採番 (保存ファイル名に使う)
-    stored_filename = save_upload(row.id, _filename, content)
+    import sys as _sys
+    try:
+        db.add(row)
+        db.flush()  # id 採番 (保存ファイル名に使う)
+    except OperationalError as e:
+        # subtask_258a・追加是正: db.flush() (INSERT) の時点で score.db 自体が
+        # 書込不可 (要対応#263: score.db が root所有mode644でuvicorn実行ユーザ
+        # bokanから書込めぬ) だと、従来はここが try/except の外にあり素の
+        # Internal Server Error (詳細なし・実質「反応なし」) のまま画面へ
+        # 抜けていた。save_upload() 側の握り潰し対策だけでは塞げていなかった
+        # 穴 (実測で確認: INSERT時点で OperationalError('attempt to write a
+        # readonly database') が発生し save_upload() へ到達すらしない)。
+        db.rollback()
+        print(f"[asset_uploads] db insert failed: {e!r}", file=_sys.stderr, flush=True)
+        raise HTTPException(
+            status_code=500,
+            detail="データベースへの書込みに失敗しました(サーバ側DBが読み取り専用です)。管理者へご連絡ください。",
+        )
+    try:
+        stored_filename = save_upload(row.id, _filename, content)
+    except OSError as e:
+        # 保存先ディレクトリの権限不足等で書込めない場合、従来は
+        # 素の Internal Server Error (詳細なし) のみが返り、画面側には
+        # "HTTP 500" としか表示されず実質「反応なし」に近い握り潰しになって
+        # いた。ここで明示的に捕捉し、原因を握り潰さず利用者へ伝わる
+        # detail を返す。
+        db.rollback()
+        print(f"[asset_uploads] save_upload failed for row.id={row.id}: {e!r}", file=_sys.stderr, flush=True)
+        raise HTTPException(
+            status_code=500,
+            detail="ファイルの保存に失敗しました(サーバ側ストレージへ書込めません)。管理者へご連絡ください。",
+        )
     row.stored_filename = stored_filename
-    db.commit()
+    try:
+        db.commit()
+    except OperationalError as e:
+        db.rollback()
+        print(f"[asset_uploads] db commit failed: {e!r}", file=_sys.stderr, flush=True)
+        raise HTTPException(
+            status_code=500,
+            detail="データベースへの書込みに失敗しました(サーバ側DBが読み取り専用です)。管理者へご連絡ください。",
+        )
     db.refresh(row)
     return JSONResponse(content={
         "id": row.id,
@@ -69,15 +123,17 @@ async def post_asset_upload_new(
 @router.get("/api/bff/asset_uploads")
 def get_asset_uploads_new(
     shot_id: int,
+    task_id: Optional[int] = None,
     actor_id: str = Depends(get_actor_id),
     db: Session = Depends(get_db),
 ):
-    rows = (
-        db.query(UploadedAsset)
-        .filter(UploadedAsset.shot_id == shot_id)
-        .order_by(UploadedAsset.created_at.desc())
-        .all()
-    )
+    # subtask_258c: shot_id==0 は「shotが無い」印であって特定のshotを指さぬため、
+    # shot_id==0 の時に限り task_id でも絞り込む(案件跨ぎの見え方混線を防ぐ)。
+    # shot_idがある場合の既存の振る舞い(shot単位で絞る)は変えない。
+    query = db.query(UploadedAsset).filter(UploadedAsset.shot_id == shot_id)
+    if shot_id == 0 and task_id is not None:
+        query = query.filter(UploadedAsset.task_id == task_id)
+    rows = query.order_by(UploadedAsset.created_at.desc()).all()
     return JSONResponse(content=[
         {
             "id": r.id,

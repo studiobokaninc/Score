@@ -4,7 +4,13 @@
 import os
 from pathlib import Path
 
-_UPLOADS_DIR = Path(__file__).parent.parent.parent / "uploads" / "asset_uploads"
+# subtask_258a (2026-09-18): 当初は uploads/asset_uploads だったが、uploads/ は
+# root 所有 (mode 755) のため uvicorn 実行ユーザ(bokan)からはサブディレクトリを
+# 新設できず PermissionError (要対応#263と同根)。chown には sudo が要り
+# サーバの実行ユーザの権限では直せぬため、uploads/ の外側 (score リポジトリ直下・
+# bokan 所有で書込可) に置き場所を変えて回避する。既存 uploads/originals
+# (別用途・別ディレクトリ) には一切影響しない。
+_UPLOADS_DIR = Path(__file__).parent.parent.parent / "asset_uploads"
 
 
 def save_upload(record_id: int, filename: str, content: bytes) -> str:
