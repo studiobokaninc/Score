@@ -1361,12 +1361,6 @@
     const _shotId = {{ shot_id|default(none)|tojson }};
     const _taskId = {{ task_id|default(none)|tojson }};
     const _projectId = {{ (project_id or 0)|tojson }};
-    // subtask_258c 真因是正: 数値 shot_id は Calendar 側で信頼できず(task/3636の
-    // ように実際はカットが有るのにshot_id=0で返る事が判明済)、pages_shot.pyが
-    // 同じCalendar応答から導出済の文字列 shot_code (shotID) の方を正とし、
-    // いずれかが真であれば「カット有り」と扱う(画面側・受け口側を同じ拠り所へ揃える)。
-    const _shotCode = {{ shot_code|default(none)|tojson }};
-    const _hasCut = !!(_shotId || _shotCode);
 
     window.openAssetUploadModal = function() {
       document.getElementById('modal-asset-upload').classList.remove('hidden');
@@ -1377,23 +1371,14 @@
       document.getElementById('modal-asset-upload').classList.add('hidden');
     };
 
-    // cmd_258 殿御下命(21:03最終版): カットの無いタスク(shot_id が 0 or null)は
-    // アセットのアップロードそのものを許可しない。理由は画面に必ず見せる
-    // (黙って無反応にするのは元の御不満と同じ形になるため禁)。
-    const _NO_SHOT_REASON = 'このタスクにはカットが無いためアップロードできません';
+    // cmd_258 殿御下命(23:07最終版): カット(shot)の有無による拒否は撤回済
+    // (判別の単位はタスク)。入力は常に有効。
 
     function _resetAssetUploadNewForm() {
       const fi = document.getElementById('asset-upload-new-file-input');
       const lbl = document.getElementById('asset-upload-new-file-label');
       const btn = document.getElementById('asset-upload-new-btn');
       const st = document.getElementById('asset-upload-new-status');
-      if (!_hasCut) {
-        if (fi) { fi.value = ''; fi.disabled = true; }
-        if (lbl) lbl.textContent = '🚫 ' + _NO_SHOT_REASON;
-        if (btn) btn.disabled = true;
-        if (st) { st.textContent = '⚠️ ' + _NO_SHOT_REASON; st.className = 'text-[11px] text-amber-300 font-bold mt-1'; }
-        return;
-      }
       if (fi) { fi.value = ''; fi.disabled = false; }
       if (lbl) lbl.textContent = '📁 ファイル選択 (txt/画像/動画/PDF等)';
       if (btn) btn.disabled = true;
@@ -1401,7 +1386,6 @@
     }
 
     window.handleAssetUploadNewFileChange = function() {
-      if (!_hasCut) return;  // shotless: 入力自体を disabled にしている (defense in depth)
       const fi = document.getElementById('asset-upload-new-file-input');
       const lbl = document.getElementById('asset-upload-new-file-label');
       const btn = document.getElementById('asset-upload-new-btn');
@@ -1420,13 +1404,7 @@
       const btn = document.getElementById('asset-upload-new-btn');
       const st = document.getElementById('asset-upload-new-status');
       const f = fi.files[0];
-      // cmd_258 殿御下命(21:03最終版・真因是正): shot_id・shot_code のいずれも
-      // 無い (shotless task) はアップロード不可 — 0を通す旧是正(258b)はここでは
-      // 撤回する。数値shot_idのみでの判定は行わない(_hasCut参照)。
-      if (!f || !_hasCut) {
-        if (!_hasCut && st) { st.className = 'text-[11px] text-amber-300 font-bold mt-1'; st.textContent = '⚠️ ' + _NO_SHOT_REASON; }
-        return;
-      }
+      if (!f) return;
       const MAX_BYTES = 500 * 1024 * 1024;
       if (f.size > MAX_BYTES) {
         st.textContent = '❌ ファイル ' + Math.round(f.size / 1024 / 1024) + 'MB は上限超過 (500MB max)';
@@ -1437,7 +1415,6 @@
       const fd = new FormData();
       fd.append('file', f);
       fd.append('shot_id', _shotId);
-      if (_shotCode) fd.append('shot_code', _shotCode);
       if (_taskId) fd.append('task_id', _taskId);
       if (_projectId) fd.append('project_id', _projectId);
       try {

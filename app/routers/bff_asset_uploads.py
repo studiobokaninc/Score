@@ -30,25 +30,13 @@ async def post_asset_upload_new(
     shot_id: int = Form(...),
     task_id: Optional[int] = Form(None),
     project_id: Optional[int] = Form(None),
-    shot_code: Optional[str] = Form(None),
     actor_id: str = Depends(get_actor_id),
     db: Session = Depends(get_db),
 ):
-    # subtask_258c (cmd_258・殿御下命21:03最終版・21:22/21:24追補是正): カットの無い
-    # タスクはアップロードそのものを許可しない。画面側の disabled だけでは直POST
-    # で回避されるため、受け口側でも理由付きで弾く(fail-closed)。
-    # ★真因是正: 数値 shot_id は Calendar 側で信頼できず (task/3636 のように実際は
-    # カットが有るのに shot_id=0 で返る事が判明済・pages_project_detail.py の既知の
-    # 綻びと同型)、文字列 shot_code (shotID) の方が実際の紐付きを反映する
-    # (pages_shot.py が同一の Calendar 応答から shot_code を導出済・追加の
-    # Calendar 呼出は本ファイルの設計 (cmd_252: Calendar API 呼出を一切行わない)
-    # に反するため行わない)。ゆえに shot_id・shot_code のいずれかが真であれば
-    # 「カット有り」と扱う。
-    if not shot_id and not (shot_code or "").strip():
-        raise HTTPException(
-            status_code=400,
-            detail="このタスクにはカットが無いためアップロードできません",
-        )
+    # cmd_258 殿御下命(23:07最終版): 21:03の定め(カットの無いタスクは拒否)は撤回。
+    # 判別の単位はカットではなくタスクであり(殿「タスクがあればアップできる
+    # ように」)、shot_id/shot_code の有無による拒否は行わない。案件跨ぎ混線の
+    # 歯止め(shot_id==0時のtask_id絞り)は一覧側(get_asset_uploads_new)で維持。
     content = await file.read()
     if len(content) > _MAX_BYTES:
         raise HTTPException(status_code=413, detail=f"File too large: {len(content)//1024//1024}MB > 500MB")
