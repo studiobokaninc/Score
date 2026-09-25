@@ -13,6 +13,7 @@ from sqlalchemy.exc import OperationalError
 from sqlalchemy.orm import Session
 from typing import Optional
 
+from app.adapters.calendar_factory import get_calendar_client
 from app.deps import get_actor_id, get_db
 from app.models import UploadedAsset
 from app.helpers.asset_uploads_store import save_upload, resolve_path
@@ -139,13 +140,37 @@ def get_asset_uploads_new(
     ])
 
 
-def _get_row_or_404(asset_upload_id: int, db: Session) -> UploadedAsset:
+def _actor_can_access_shot(shot_id: int, actor_id: str) -> bool:
+    """#276是正——入った者の権限で分かつ。
+    Score の役職(director/pm/lead)はアカウント固定値ではなく案件(project_id)
+    ごとに解決される作りであり、director/pm/lead 以外は一様に "user" を返す
+    ため、役職名では「その案件の一般利用者」と「無関係な他人」を区別できない
+    (score-san-ken-tougou-shuusei-keikakusho-2026-09-25 1-4節②)。ゆえに役職
+    判定は使わず、Calendar 側 GET /api/me/shots/{id} (get_shot_detail) の
+    project member 限定応答(非member は403・taskのassigneeでもmember登録が
+    無ければ同様に403・pages_qc.py で実機確認済のパターンに倣う)にそのまま乗る。
+    404(shot不在)・403(非member、raise_for_status経由の例外)いずれも
+    「見せない」で扱う(同計画書1-3節)。"""
+    client = get_calendar_client()
+    try:
+        shot_dict = client.get_shot_detail(shot_id, actor_user_id=actor_id) or {}
+    except Exception:
+        shot_dict = {}
+    return bool(shot_dict)
+
+
+def _get_row_or_404(asset_upload_id: int, db: Session, actor_id: str) -> UploadedAsset:
     row = db.query(UploadedAsset).filter(UploadedAsset.id == asset_upload_id).first()
     if row is None:
         raise HTTPException(status_code=404, detail="asset_upload not found")
     path = resolve_path(row.stored_filename)
     if path is None:
         raise HTTPException(status_code=404, detail="stored file missing")
+    # shot_id==0 は「shotに紐付かない」ことを表す正当な値で、関係者限定を確実に
+    # 効かせられる実機確認済の代替手段が現時点のコードベースに見当たらず未解決
+    # (同計画書1-4節①)。この場合分けは意図的に埋めずそのまま残す。
+    if row.shot_id != 0 and not _actor_can_access_shot(row.shot_id, actor_id):
+        raise HTTPException(status_code=403, detail="この案件の関係者ではないため閲覧できません")
     return row
 
 
@@ -156,7 +181,7 @@ def get_asset_upload_file(
     db: Session = Depends(get_db),
 ):
     """閲覧用 (inline・img/video タグの src 等から直接参照)。"""
-    row = _get_row_or_404(asset_upload_id, db)
+    row = _get_row_or_404(asset_upload_id, db, actor_id)
     path = resolve_path(row.stored_filename)
     return FileResponse(path=str(path), media_type=row.content_type or "application/octet-stream")
 
@@ -168,7 +193,7 @@ def get_asset_upload_download(
     db: Session = Depends(get_db),
 ):
     """ダウンロード用 (元ファイル名で Content-Disposition attachment)。"""
-    row = _get_row_or_404(asset_upload_id, db)
+    row = _get_row_or_404(asset_upload_id, db, actor_id)
     path = resolve_path(row.stored_filename)
     return FileResponse(
         path=str(path),
