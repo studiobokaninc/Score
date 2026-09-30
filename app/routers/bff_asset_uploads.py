@@ -159,6 +159,35 @@ def _actor_can_access_shot(shot_id: int, actor_id: str) -> bool:
     return bool(shot_dict)
 
 
+def _resolve_shot_id_via_task(task_id: int, actor_id: str) -> Optional[int]:
+    """#283是正——shot_id==0の行をtask_id経由でCalendar側の実shot_idへ引き当てる
+    (score_get_task_member_check_investigation_20260925.md)。get_task自体が
+    member限定で応ずるかは未実証・無条件応答寄りと見立てられているが、実際の
+    関所はここでは置かず、引き当てた実shot_idを_actor_can_access_shot
+    (get_shot_detail・member限定実証済)へそのまま橋渡しする(get_taskは
+    「shot_idの引き当て役」に留める)ことで安全側に倒す。
+    引き当て不能(404/例外/shot_id欠落・0/None)の場合はNoneを返し、
+    呼び出し側は従来どおり未解決のまま通す(繕わない・#283計画書の指図どおり)。
+
+    ★向きのある危うさ(2026-09-30・QC279C-1是正・計画書1-4節にも追記済):
+    現状は get_task が無条件応答(member限定を課していない)と見立てられて
+    おり、実際の関門は橋渡し先の _actor_can_access_shot 側にあるため塞がって
+    いる。だが将来 get_task 自体が member 限定へ締まると、逆にこの橋渡しは
+    緩む——get_task が非member呼び出しを例外で拒むようになった瞬間、その
+    例外が「引き当て不能」(本来は task_id がshot非紐づき等の正当な未解決)
+    と区別なく扱われ、_actor_can_access_shot による関係者限定チェックそのもの
+    に到達せず通してしまう。上流(get_task)を安全側へ締めるほど下流(本関数)
+    が緩むという逆説的な性質であり、get_task の認可仕様を変える際は本関数の
+    見直しとセットで行うこと。"""
+    client = get_calendar_client()
+    try:
+        task_dict = client.get_task(task_id, actor_user_id=actor_id) or {}
+    except Exception:
+        return None
+    shot_id = task_dict.get("shot_id")
+    return shot_id if shot_id else None
+
+
 def _get_row_or_404(asset_upload_id: int, db: Session, actor_id: str) -> UploadedAsset:
     row = db.query(UploadedAsset).filter(UploadedAsset.id == asset_upload_id).first()
     if row is None:
@@ -166,11 +195,30 @@ def _get_row_or_404(asset_upload_id: int, db: Session, actor_id: str) -> Uploade
     path = resolve_path(row.stored_filename)
     if path is None:
         raise HTTPException(status_code=404, detail="stored file missing")
-    # shot_id==0 は「shotに紐付かない」ことを表す正当な値で、関係者限定を確実に
-    # 効かせられる実機確認済の代替手段が現時点のコードベースに見当たらず未解決
-    # (同計画書1-4節①)。この場合分けは意図的に埋めずそのまま残す。
-    if row.shot_id != 0 and not _actor_can_access_shot(row.shot_id, actor_id):
-        raise HTTPException(status_code=403, detail="この案件の関係者ではないため閲覧できません")
+    if row.shot_id != 0:
+        if not _actor_can_access_shot(row.shot_id, actor_id):
+            raise HTTPException(status_code=403, detail="この案件の関係者ではないため閲覧できません")
+    elif row.task_id is not None:
+        # shot_id==0だがtask_idがある行——#283是正: task_id→実shot_id→既存の
+        # member限定ゲートへ橋渡しする。引き当てられた場合のみ判定し、
+        # 引き当て不能な場合(task_idがshot非紐づき等)は従来どおり未解決のまま
+        # 通す(残る穴はtask_idが無い行・taskがshot非紐づきの行・project単位の
+        # member判定手段がScoreに無い点——計画書#283節に記載済・意図的に未解決)。
+        resolved_shot_id = _resolve_shot_id_via_task(row.task_id, actor_id)
+        if resolved_shot_id is not None:
+            if not _actor_can_access_shot(resolved_shot_id, actor_id):
+                raise HTTPException(status_code=403, detail="この案件の関係者ではないため閲覧できません")
+        else:
+            # ADV279C-2是正(2026-09-30): 引き当て不能で未解決のまま通した
+            # 事実は従来一切記録が残らず「通った事すら見えぬ」状態だった。
+            # 認可チェック自体は変えず(繕わない・#283計画書の指図どおり)、
+            # 可視化のみをstderrへ残す。
+            import sys as _sys3
+            print(
+                f"[asset_uploads #283] unresolved passthrough: "
+                f"asset_upload_id={asset_upload_id} task_id={row.task_id} actor_id={actor_id}",
+                file=_sys3.stderr, flush=True,
+            )
     return row
 
 

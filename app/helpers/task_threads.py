@@ -7,11 +7,22 @@
 bff_write.py参照)。このテーブルへの読み書き失敗が、通知送信という既存の重要機能
 (cmd_149/151)を巻き込んで500にしてはならない — 失敗時は「これまで通り毎回
 post_dm_threadする」旧動作にfallbackする。"""
+import json
 import sys
 from datetime import datetime
+from pathlib import Path
 
 from app.database import SessionLocal
 from app.models import TaskThread
+
+# cmd_279丁 (2026-09-30・QC279D-1(二)是正): 衝突スキップの可視化ログ置き場。
+# score.db(SQLite)へ新規テーブルを足す案は退けた — 現況、このdev機の score.db が
+# root所有で非root(通常の起動ユーザー)から書込不可であることを実機確認した
+# (uploads/ が root所有で書込不可だった旨と同種・app.gitignore の asset_uploads/
+# 註記(subtask_258a)参照)。Base.metadata.create_all は app.main import時に毎回
+# 走るため、新規テーブルを1つ足しただけで score.db を触るあらゆる試験が
+# 一斉に壊れる(実機確認済)。DBへ触れぬ単純な追記専用ファイルで代替する。
+_COLLISION_LOG_PATH = Path(__file__).resolve().parent.parent / "data" / "task_thread_collision_log.jsonl"
 
 
 def build_thread_title(proj_name, seq_code, shot_code, task_type, task_id=None) -> str:
@@ -70,10 +81,82 @@ def get_all_task_threads() -> dict:
         return {}
 
 
+def _log_collision_skip(task_id, thread_id, bound_task_id) -> None:
+    """QC279D-1(二) (cmd_279丁・2026-09-30): 書込スキップがstderrへ出るだけでは
+    「どれだけ混じっておるか」を誰も数えられない。追記専用のJSONLファイルへ
+    1件1行で残す(集計は get_task_thread_collision_stats 参照)。この可視化記録
+    自体の失敗が本来のスキップ判断(=フォールバック継続)を妨げてはならない
+    ため、fail-softする。"""
+    try:
+        _COLLISION_LOG_PATH.parent.mkdir(parents=True, exist_ok=True)
+        record = {
+            "ts": datetime.utcnow().isoformat(),
+            "task_id": str(task_id),
+            "thread_id": str(thread_id),
+            "bound_task_id": str(bound_task_id),
+        }
+        with _COLLISION_LOG_PATH.open("a", encoding="utf-8") as f:
+            f.write(json.dumps(record, ensure_ascii=False) + "\n")
+    except Exception as e:
+        print(f"[task_threads] collision log write failed: {e}", file=sys.stderr)
+
+
+def get_task_thread_collision_stats() -> dict | None:
+    """QC279D-1(二): 見える化用ヘルパー。累計件数と対象task_id一覧を返す。
+    ログファイルが未生成(=スキップ0件)の場合は0件として返す。読み取り自体が
+    失敗した場合のみNoneを返す(『0件』と『集計不能』を取り違えぬよう区別する)。
+    ★件数をどこかへ言上する前に、この帳面が試験由来の噪(isolated_collision_log
+    未使用の試験が本物のファイルへ書き込んでしまった記録)を含んでいないことを
+    一度確かめよ(cmd_279丁2・2026-09-30の教訓。過去の混入分は
+    task_thread_collision_log_test_noise_20260930.jsonl へ退避済み)。"""
+    if not _COLLISION_LOG_PATH.exists():
+        return {"count": 0, "task_ids": []}
+    try:
+        task_ids = set()
+        count = 0
+        with _COLLISION_LOG_PATH.open("r", encoding="utf-8") as f:
+            for line in f:
+                line = line.strip()
+                if not line:
+                    continue
+                record = json.loads(line)
+                count += 1
+                task_ids.add(record["task_id"])
+        return {"count": count, "task_ids": sorted(task_ids)}
+    except Exception as e:
+        print(f"[task_threads] get_task_thread_collision_stats skip: {e}", file=sys.stderr)
+        return None
+
+
 def _set_task_thread(task_id, thread_id, title=None) -> None:
     try:
         db = SessionLocal()
         try:
+            # cmd_279乙/丁 (2026-09-30): 外部Calendar API(post_dm_thread)がtask_id単位で
+            # 重複排除している保証はない(本ファイル冒頭docstring参照)。参加者
+            # (participant_ids)の顔ぶれが同一な別taskへ、外部側が既存threadを使い
+            # 回して返す実例を確認済(dev DB: thread_id=10000007がtask_id 3255/
+            # 3256/3282/3327の4件に跨っていた)。この thread_id が既に「別の」
+            # task_id で使用済みなら、正本表へこのtask専用のthreadとして書き込む
+            # こと自体が「無関係な案件が一本のスレッドを分け合う」新規発生を生む
+            # ため、新規行はもちろん既存行の上書きでも同じ門番を通し、
+            # 書き込まずスキップする(通知送信自体は継続・次回も毎回
+            # post_dm_thread する旧動作にfallbackするだけで安全)。ADV279D-2:
+            # 従前はこの門番が新規行の作成時にしか掛かっておらず、既存行の
+            # 更新経路だけが素通りしていたため、両経路とも同じチェックを
+            # 通すよう揃えた。
+            dup = db.query(TaskThread).filter(
+                TaskThread.thread_id == str(thread_id),
+                TaskThread.task_id != str(task_id),
+            ).first()
+            if dup:
+                print(
+                    f"[task_threads] _set_task_thread skip: thread_id={thread_id} "
+                    f"already bound to task_id={dup.task_id} (task_id={task_id} not persisted)",
+                    file=sys.stderr,
+                )
+                _log_collision_skip(task_id, thread_id, dup.task_id)
+                return
             row = db.query(TaskThread).filter(TaskThread.task_id == str(task_id)).first()
             if row:
                 row.thread_id = str(thread_id)

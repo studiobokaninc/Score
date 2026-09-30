@@ -35,5 +35,8 @@ uploads/
 # root所有で書込不可のため uploads/ の外側に配置)
 asset_uploads/
 
+# task_threads 衝突スキップの可視化ログ (cmd_279丁・QC279D-1(二)・実行時生成)
+app/data/task_thread_collision_log.jsonl
+
 # 検証用スクショ (殿 login テスト等)
 tutorial/test_*.png
