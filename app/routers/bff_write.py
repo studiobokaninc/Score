@@ -386,6 +386,11 @@ async def post_retakes(request: Request, actor_id: str = Depends(get_actor_id)):
         import os as _os
         public_base = _os.environ.get("SCORE_PUBLIC_URL", "").rstrip("/")
         qc_path = f"/retake_view/{shot_id}/{task_id}" if (shot_id is not None and task_id) else f"/qc/{shot_id}"
+        # この Retake が特定の版 (asset_id) から発令されたものなら、通知リンクも
+        # その版を指すようにする (retake_view 側の asset_id 絞り込みと対になる・
+        # 未指定時は従来通り無クエリ)。
+        if asset_id is not None and qc_path.startswith("/retake_view/"):
+            qc_path = f"{qc_path}?asset_id={asset_id}"
         qc_link = (public_base + qc_path) if public_base else qc_path
 
         # body 構築

@@ -433,7 +433,7 @@
              同様に <span role="button"> + location 遷移で実装する。 #}
           {% if a.id in (retake_asset_ids|default([])) %}
           <span role="button" tabindex="0"
-                onclick="event.stopPropagation();event.preventDefault();window.location.href='/retake_view/{{ _asset_shot_id }}/{{ a.task_id }}';"
+                onclick="event.stopPropagation();event.preventDefault();window.location.href='/retake_view/{{ _asset_shot_id }}/{{ a.task_id }}?asset_id={{ a.id }}';"
                 class="absolute top-2 left-2 bg-indigo-500/90 hover:bg-indigo-600 text-white text-[10px] font-bold rounded-lg px-2 py-1 shadow z-10 cursor-pointer">
             🔁 Retake確認
           </span>

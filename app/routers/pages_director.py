@@ -183,10 +183,17 @@ def get_retake_view(
     request: Request,
     shot_id: int,
     task_id: int,
+    asset_id: int | None = None,
     actor_id: str = Depends(get_actor_id),
 ):
     """殿御命 2026-06-05 (②採択): Retake 内容 view-only page
-    SHOT thread 最新 Retake 内容 parse + 添付素材表示 + task thread link"""
+    SHOT thread 最新 Retake 内容 parse + 添付素材表示 + task thread link
+
+    従来は shot_id/task_id 一致の Retake meta を submitted_at 降順で並べ「直近1件のみ」
+    を採っており、どの版 (asset) から遷移しても常に最後の版の Retake が表示される
+    不具合があった。asset_id (クエリ引数、未指定なら従来通り最新1件) で絞り込める
+    ようにし、指定された版に紐づく meta が無い場合は黙って他の版へ逃がさず
+    「この版の記録は残っておりません」を表示する。"""
     role = get_actor_role(actor_id)
     client = get_calendar_client()
     try:
@@ -240,10 +247,20 @@ def get_retake_view(
             task_name = t_raw.get("name") or task_type
         except Exception: pass
 
-    # 最新 retake meta を /tmp/score_retake_refs/ から検索 (task_id 一致)
+    # retake meta を /tmp/score_retake_refs/ から検索 (task_id/shot_id 一致)
+    # asset_id 指定時はその版の meta のみを候補とする (未指定なら従来通り
+    # 全候補の中から最新1件 — 旧リンク・テストの挙動を変えない)。
     import json as _json_m
     from pathlib import Path as _Path
+
+    def _to_int_safe(v):
+        try:
+            return int(v) if v not in (None, "", "None") else None
+        except (TypeError, ValueError):
+            return None
+
     latest_meta = None
+    version_record_missing = False
     refs_root = _Path("/tmp/score_retake_refs")
     if refs_root.exists():
         candidates = []
@@ -254,6 +271,15 @@ def get_retake_view(
                     if str(m.get("task_id")) == str(task_id) and str(m.get("shot_id")) == str(shot_id):
                         candidates.append((m.get("submitted_at",""), m, d))
                 except Exception: pass
+        if asset_id is not None:
+            matched = [c for c in candidates if _to_int_safe(c[1].get("asset_id")) == asset_id]
+            if matched:
+                candidates = matched
+            else:
+                # 指定版の記録が無い: 黙って他の版 (例えば最新) へ逃がさず、
+                # 「この版の記録は残っておりません」を表示する。
+                candidates = []
+                version_record_missing = True
         if candidates:
             candidates.sort(key=lambda x: x[0], reverse=True)
             latest_meta = candidates[0][1]
@@ -275,6 +301,19 @@ def get_retake_view(
                 except Exception: pass
 
     # 殿御命 2026-06-05: 対象 asset 取得 (qc_viewer 同様の latest mp4 / 最新 asset)
+    # latest_meta が特定の版 (asset_id) を持つ場合は「task の最新 asset」を
+    # 別途取り直すのではなく、その下げ戻しの meta.json が持つ asset_id から引く。
+    # asset_id を持たぬ旧い meta (latest_meta はあるが asset_id フィールド無し) の場合は
+    # 従来通り「task の最新 asset」にフォールバックする (既存挙動・既存テスト維持)。
+    target_meta_asset_id = _to_int_safe(latest_meta.get("asset_id")) if latest_meta else None
+
+    def _pick_target_asset(assets_for_task):
+        if not assets_for_task:
+            return None
+        if target_meta_asset_id is not None:
+            return next((a for a in assets_for_task if a.get("id") == target_meta_asset_id), None)
+        return assets_for_task[0]
+
     target_asset = None
     target_url = ""
     try:
@@ -282,8 +321,8 @@ def get_retake_view(
             shot_dict = client.get_shot_detail(int(shot_id), actor_user_id=actor_id) or {}
             assets_for_task = [a for a in (shot_dict.get("asset_list") or []) if isinstance(a, dict) and a.get("task_id") == task_id]
             assets_for_task.sort(key=lambda a: (a.get("created_at") or ""), reverse=True)
-            if assets_for_task:
-                target_asset = assets_for_task[0]
+            target_asset = _pick_target_asset(assets_for_task)
+            if target_asset:
                 _bn = (target_asset.get("file_path") or "").split("/")[-1]
                 if _bn:
                     target_url = f"http://192.168.44.253:8001/static/assets/{_bn}"
@@ -297,8 +336,8 @@ def get_retake_view(
             assets_for_task = list(client.get_assets_by_task(int(task_id), actor_user_id=actor_id) or [])
             assets_for_task = [a for a in assets_for_task if isinstance(a, dict)]
             assets_for_task.sort(key=lambda a: (a.get("created_at") or ""), reverse=True)
-            if assets_for_task:
-                target_asset = assets_for_task[0]
+            target_asset = _pick_target_asset(assets_for_task)
+            if target_asset:
                 _bn = (target_asset.get("file_path") or "").split("/")[-1]
                 if _bn:
                     target_url = f"http://192.168.44.253:8001/static/assets/{_bn}"
@@ -324,5 +363,7 @@ def get_retake_view(
             "task_thread_id": task_thread_id,
             "target_asset": target_asset,
             "target_url": target_url,
+            "requested_asset_id": asset_id,
+            "version_record_missing": version_record_missing,
         },
     )
