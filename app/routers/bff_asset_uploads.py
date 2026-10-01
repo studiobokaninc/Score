@@ -14,7 +14,7 @@ from sqlalchemy.orm import Session
 from typing import Optional
 
 from app.adapters.calendar_factory import get_calendar_client
-from app.deps import get_actor_id, get_db
+from app.deps import get_actor_id, get_actor_project_role, get_db
 from app.models import UploadedAsset
 from app.helpers.asset_uploads_store import save_upload, resolve_path
 
@@ -188,6 +188,29 @@ def _resolve_shot_id_via_task(task_id: int, actor_id: str) -> Optional[int]:
     return shot_id if shot_id else None
 
 
+def _actor_can_access_project(project_id: int, actor_id: str) -> bool:
+    """QC283B-1是正(2026-10-01)——shot/task経由で引き当てられぬがproject_idは
+    持っておる行向けの関所。#279e(_actor_can_read_attendance)が組んだのと同じ
+    道具(get_my_projects+get_actor_project_role)に乗せる。studio全体のadmin、
+    その案件のdirector/pm/lead(auto-membership)、または明示的team member
+    登録(get_my_projects)のいずれかであれば見せる(get_shot_detailのmember限定
+    応答と同じ粒度に寄せた安全側の判定)。"""
+    client = get_calendar_client()
+    if get_actor_project_role(actor_id, project_id, client=client) in ("admin", "director", "pm", "lead"):
+        return True
+    try:
+        projects = client.get_my_projects(actor_user_id=actor_id) or []
+    except Exception:
+        projects = []
+    if isinstance(projects, dict):
+        projects = projects.get("projects", [])
+    for proj in projects:
+        pid = proj.get("id") if isinstance(proj, dict) else None
+        if pid is not None and int(pid) == int(project_id):
+            return True
+    return False
+
+
 def _get_row_or_404(asset_upload_id: int, db: Session, actor_id: str) -> UploadedAsset:
     row = db.query(UploadedAsset).filter(UploadedAsset.id == asset_upload_id).first()
     if row is None:
@@ -198,27 +221,37 @@ def _get_row_or_404(asset_upload_id: int, db: Session, actor_id: str) -> Uploade
     if row.shot_id != 0:
         if not _actor_can_access_shot(row.shot_id, actor_id):
             raise HTTPException(status_code=403, detail="この案件の関係者ではないため閲覧できません")
-    elif row.task_id is not None:
-        # shot_id==0だがtask_idがある行——#283是正: task_id→実shot_id→既存の
-        # member限定ゲートへ橋渡しする。引き当てられた場合のみ判定し、
-        # 引き当て不能な場合(task_idがshot非紐づき等)は従来どおり未解決のまま
-        # 通す(残る穴はtask_idが無い行・taskがshot非紐づきの行・project単位の
-        # member判定手段がScoreに無い点——計画書#283節に記載済・意図的に未解決)。
+        return row
+
+    # shot_id==0——#283是正: task_idがあればまず実shot_idへの橋渡しを試みる。
+    resolved_shot_id = None
+    if row.task_id is not None:
         resolved_shot_id = _resolve_shot_id_via_task(row.task_id, actor_id)
-        if resolved_shot_id is not None:
-            if not _actor_can_access_shot(resolved_shot_id, actor_id):
-                raise HTTPException(status_code=403, detail="この案件の関係者ではないため閲覧できません")
-        else:
-            # ADV279C-2是正(2026-09-30): 引き当て不能で未解決のまま通した
-            # 事実は従来一切記録が残らず「通った事すら見えぬ」状態だった。
-            # 認可チェック自体は変えず(繕わない・#283計画書の指図どおり)、
-            # 可視化のみをstderrへ残す。
-            import sys as _sys3
-            print(
-                f"[asset_uploads #283] unresolved passthrough: "
-                f"asset_upload_id={asset_upload_id} task_id={row.task_id} actor_id={actor_id}",
-                file=_sys3.stderr, flush=True,
-            )
+    if resolved_shot_id is not None:
+        if not _actor_can_access_shot(resolved_shot_id, actor_id):
+            raise HTTPException(status_code=403, detail="この案件の関係者ではないため閲覧できません")
+        return row
+
+    # task_idが無い、またはtask→shotの橋渡しが不能——QC283B-1是正: project_idが
+    # あれば#279eと同じ関所(_actor_can_access_project)で判ずる。これにより
+    # 「task_idが無い行」「taskがshotに紐づかぬ行」の双方がproject_id単位で
+    # 塞がる(project単位のmember判定手段がScoreに無い点も同じ土台で解消)。
+    if row.project_id is not None:
+        if not _actor_can_access_project(row.project_id, actor_id):
+            raise HTTPException(status_code=403, detail="この案件の関係者ではないため閲覧できません")
+        return row
+
+    # project_idもtask_idも無い(またはtask_idはあるが橋渡し不能でproject_idも
+    # 無い)行——判定材料そのものが無く意図的に未解決のまま通す(繕わない・
+    # #283計画書の指図どおり・計画書記載の残る穴)。ADV279C-2是正(2026-09-30)
+    # を踏襲し、通った事実だけはstderrへ残す。
+    import sys as _sys3
+    print(
+        f"[asset_uploads #283] unresolved passthrough: "
+        f"asset_upload_id={asset_upload_id} task_id={row.task_id} "
+        f"project_id={row.project_id} actor_id={actor_id}",
+        file=_sys3.stderr, flush=True,
+    )
     return row
 
 
