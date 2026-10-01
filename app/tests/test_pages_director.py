@@ -160,3 +160,25 @@ class TestRetakeViewAssetIdVersionSelection:
         assert resp.status_code == 200
         assert "old_v001.mov" in resp.text
         assert "new_v002.mov" not in resp.text
+
+    def test_asset_id_with_no_matching_record_does_not_leak_latest_asset(self, client_fixture, monkeypatch, two_version_metas):
+        """指定した版 (asset_id=999) に記録が無い場合、文面は「この版の記録は
+        残っておりません」と正直に言う一方で、隣に出す素材が task 全体の最新
+        asset (id=200・new_v002.mov) にすり替わってはならない (meta の無い版を
+        指しても、その版自身の素材のみを探す。無ければ何も出さない)。"""
+        monkeypatch.setattr("app.routers.pages_director.get_actor_role", lambda actor_id: "director")
+        mock_inst = self._base_mock()
+        mock_inst.get_shot_detail.return_value = {
+            "asset_list": [
+                {"id": 100, "task_id": 321, "version": "v001",
+                 "file_path": "/data/assets/old_v001.mov", "created_at": "2026-10-01T09:00:00"},
+                {"id": 200, "task_id": 321, "version": "v002",
+                 "file_path": "/data/assets/new_v002.mov", "created_at": "2026-10-01T11:00:00"},
+            ]
+        }
+        with patch("app.routers.pages_director.get_calendar_client", return_value=mock_inst):
+            resp = client_fixture.get("/retake_view/7/321?asset_id=999", headers={"Authorization": "Bearer test-token"})
+        assert resp.status_code == 200
+        assert "この版の Retake 記録は残っておりません" in resp.text
+        assert "new_v002.mov" not in resp.text
+        assert "old_v001.mov" not in resp.text

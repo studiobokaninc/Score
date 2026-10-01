@@ -305,7 +305,13 @@ def get_retake_view(
     # 別途取り直すのではなく、その下げ戻しの meta.json が持つ asset_id から引く。
     # asset_id を持たぬ旧い meta (latest_meta はあるが asset_id フィールド無し) の場合は
     # 従来通り「task の最新 asset」にフォールバックする (既存挙動・既存テスト維持)。
-    target_meta_asset_id = _to_int_safe(latest_meta.get("asset_id")) if latest_meta else None
+    # クエリの asset_id が指定され、かつその版の meta が見つからなかった場合
+    # (version_record_missing) は latest_meta が None になるため上のフォールバックに
+    # 落ちると「文の側(記録なし)」と「絵の側(最新版の素材)」が食い違う。
+    # これを避けるため、指定 asset_id があれば常にそれを優先する。
+    target_meta_asset_id = asset_id if asset_id is not None else (
+        _to_int_safe(latest_meta.get("asset_id")) if latest_meta else None
+    )
 
     def _pick_target_asset(assets_for_task):
         if not assets_for_task:
