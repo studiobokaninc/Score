@@ -26,3 +26,22 @@ def save_upload(record_id: int, filename: str, content: bytes) -> str:
 def resolve_path(stored_filename: str) -> Path | None:
     p = _UPLOADS_DIR / stored_filename
     return p if p.is_file() else None
+
+
+_ORIG_PREFIX = "original__"
+
+
+def save_upload_original(record_id: int, filename: str, content: bytes) -> str:
+    """cmd_323: 変換前の原本を、変換後(閲覧用)とは別名で同じ保管場所へ残す。"""
+    return save_upload(record_id, _ORIG_PREFIX + (filename or "upload.bin"), content)
+
+
+def find_upload_original(record_id: int):
+    """cmd_323: 原本が保管されていればそのパスと元のファイル名を返す。無ければ None。"""
+    if not _UPLOADS_DIR.is_dir():
+        return None
+    matches = sorted(_UPLOADS_DIR.glob(f"{int(record_id)}_{_ORIG_PREFIX}*"))
+    if not matches:
+        return None
+    p = matches[0]
+    return p, p.name[len(f"{int(record_id)}_{_ORIG_PREFIX}"):]

@@ -16,7 +16,8 @@ from typing import Optional
 from app.adapters.calendar_factory import get_calendar_client
 from app.deps import get_actor_id, get_actor_project_role, get_db
 from app.models import UploadedAsset
-from app.helpers.asset_uploads_store import save_upload, resolve_path
+from app.helpers.asset_uploads_store import save_upload, resolve_path, save_upload_original, find_upload_original
+from app.helpers.video_codec import looks_like_video, prepare_video_for_browser
 
 router = APIRouter()
 
@@ -43,6 +44,22 @@ async def post_asset_upload_new(
         raise HTTPException(status_code=413, detail=f"File too large: {len(content)//1024//1024}MB > 500MB")
     _filename = file.filename or "upload.bin"
     _content_type = file.content_type or "application/octet-stream"
+
+    # cmd_323: 動画は中身を見て、画面で映らぬ形なら H.264 の .mp4 へ変えて持つ。
+    # 原本は asset_originals に残し(ダウンロードは原本)、失敗時は原本のまま上げて知らせる。
+    _original_content = content
+    _original_filename = _filename
+    _video_notice = None
+    _converted = False
+    if looks_like_video(_filename, _content_type):
+        from starlette.concurrency import run_in_threadpool
+        _vr = await run_in_threadpool(prepare_video_for_browser, content, _filename, _content_type)
+        if _vr["converted"]:
+            content, _filename, _content_type = _vr["content"], _vr["filename"], _vr["content_type"]
+            _video_notice = _vr["notice"]
+            _converted = True
+        elif _vr["error"]:
+            _video_notice = "この動画は画面で再生できない形式の可能性があります(自動変換に失敗)。H.264 で書き出し直すか、ダウンロードしてご覧ください。"
 
     row = UploadedAsset(
         shot_id=shot_id,
@@ -87,6 +104,12 @@ async def post_asset_upload_new(
             detail="ファイルの保存に失敗しました(サーバ側ストレージへ書込めません)。管理者へご連絡ください。",
         )
     row.stored_filename = stored_filename
+    if _converted:
+        try:
+            save_upload_original(row.id, _original_filename, _original_content)
+        except OSError as e:
+            # 原本の保管に失敗しても閲覧用は上がっている。握り潰さず記録だけ残す。
+            print(f"[asset_uploads] original save failed for row.id={row.id}: {e!r}", file=_sys.stderr, flush=True)
     try:
         db.commit()
     except OperationalError as e:
@@ -106,6 +129,7 @@ async def post_asset_upload_new(
         "size_bytes": row.size_bytes,
         "uploaded_by": row.uploaded_by,
         "created_at": row.created_at.isoformat() if row.created_at else None,
+        "video_notice": _video_notice,
     })
 
 
@@ -276,6 +300,15 @@ def get_asset_upload_download(
     """ダウンロード用 (元ファイル名で Content-Disposition attachment)。"""
     row = _get_row_or_404(asset_upload_id, db, actor_id)
     path = resolve_path(row.stored_filename)
+    # cmd_323: 変換を経た動画は、ダウンロードには従来どおり原本を返す
+    orig = find_upload_original(row.id)
+    if orig is not None:
+        import mimetypes
+        return FileResponse(
+            path=str(orig[0]),
+            media_type=mimetypes.guess_type(orig[1])[0] or "application/octet-stream",
+            filename=orig[1],
+        )
     return FileResponse(
         path=str(path),
         media_type=row.content_type or "application/octet-stream",

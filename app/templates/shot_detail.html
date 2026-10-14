@@ -1132,9 +1132,16 @@
         if (!resp.ok) throw new Error('HTTP ' + resp.status);
         const data = await resp.json();
         statusEl.innerHTML = '✅ アップロード完了 (id=' + (data.id || '?') + ') — 画面更新中...';
+        // cmd_323: 動画を自動変換した/できなかった旨を知らせる(読める間だけ reload を遅らせる)
+        if (data.video_notice) {
+          const _n = document.createElement('div');
+          _n.style.cssText = 'color:#fbbf24;font-size:12px;margin-top:4px';
+          _n.textContent = '📢 ' + data.video_notice;
+          statusEl.appendChild(_n);
+        }
         uploadBtn.disabled = false;
         // 殿御命 2026-06-03: upload 後 提出済成果物 + アセット履歴 + サムネ 更新のため reload
-        setTimeout(function() { window.location.reload(); }, 600);
+        setTimeout(function() { window.location.reload(); }, data.video_notice ? 5000 : 600);
       } catch (e) {
         statusEl.innerHTML = '❌ エラー: ' + e.message;
         uploadBtn.disabled = false;
@@ -1430,8 +1437,10 @@
           throw new Error(detail);
         }
         st.className = 'text-[11px] text-white/60 mt-1';
-        st.textContent = '✅ アップロード完了';
+        let _okData = null;
+        try { _okData = await resp.json(); } catch (_e) { /* 本文なしでも成功扱い */ }
         _resetAssetUploadNewForm();
+        st.textContent = '✅ アップロード完了' + (_okData && _okData.video_notice ? ' 📢 ' + _okData.video_notice : '');
         _loadAssetUploadNewList();
       } catch (e) {
         st.className = 'text-[11px] text-rose-300 font-bold mt-1';

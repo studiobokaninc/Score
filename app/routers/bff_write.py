@@ -12,6 +12,7 @@ from app.adapters.calendar_factory import get_calendar_client
 from app.deps import get_actor_id, get_actor_project_role
 from app.helpers.task_status import NEW_TASK_STATUSES, OLD_TO_NEW_STATUS, COMPLETED_STATUSES, status_label
 from app.qc_delegation import is_qc_delegated
+from app.helpers.video_codec import looks_like_video, prepare_video_for_browser
 
 # 殿御命 2026-06-04 cmd_477: Web Push subscription store (簡易 file-based)
 _PUSH_STORE = _Path("/tmp/score_push_subs.json")
@@ -685,43 +686,25 @@ async def post_asset_upload(
     _original_content = content
     _original_filename = _filename
     _needs_original_preserve = False
-    # .mov → .mp4 自動トランスコード (cmd_059)
-    if _filename.lower().endswith('.mov') or _content_type == 'video/quicktime':
-        import subprocess as _sp, tempfile as _tf
-        _needs_original_preserve = True
-        try:
-            import imageio_ffmpeg as _iff
-            _ffmpeg_exe = _iff.get_ffmpeg_exe()
-        except Exception:
-            _ffmpeg_exe = 'ffmpeg'  # fallback: system ffmpeg
-        _tmp_in = _tf.NamedTemporaryFile(suffix='.mov', delete=False)
-        _tmp_out = _tmp_in.name[:-4] + '.mp4'
-        try:
-            _tmp_in.write(content)
-            _tmp_in.close()
-            _proc = _sp.run(
-                [_ffmpeg_exe, '-y', '-i', _tmp_in.name,
-                 '-c:v', 'libx264', '-c:a', 'aac', '-movflags', '+faststart',
-                 _tmp_out],
-                capture_output=True, timeout=300,
-            )
-            if _proc.returncode == 0 and _os.path.exists(_tmp_out):
-                with open(_tmp_out, 'rb') as _f:
-                    content = _f.read()
-                _filename = (_filename[:-4] if _filename.lower().endswith('.mov') else _filename) + '.mp4'
-                _content_type = 'video/mp4'
-            else:
-                _err = _proc.stderr.decode('utf-8', errors='replace')[:300]
-                raise HTTPException(status_code=422, detail=f".mov→.mp4 変換失敗: {_err}")
-        except FileNotFoundError:
-            raise HTTPException(status_code=503, detail="ffmpeg 未インストール — imageio-ffmpeg が requirements.txt に追加済のため docker.exe restart で自動解決します")
-        finally:
-            if _os.path.exists(_tmp_in.name):
-                _os.unlink(_tmp_in.name)
-            if _os.path.exists(_tmp_out):
-                _os.unlink(_tmp_out)
+    # cmd_323: 動画は拡張子ではなく中身(映像コーデック)で判じ、画面で映らぬ形は H.264 へ変換する。
+    # (.mov は従来どおり必ず .mp4 へ・H.264 の物は詰め替えのみ。原本は save_original で保持)
+    _video_notice = None
+    if looks_like_video(_filename, _content_type):
+        from starlette.concurrency import run_in_threadpool as _rtp
+        _vr = await _rtp(prepare_video_for_browser, content, _filename, _content_type)
+        if _vr["converted"]:
+            _needs_original_preserve = True
+            content, _filename, _content_type = _vr["content"], _vr["filename"], _vr["content_type"]
+            _video_notice = _vr["notice"]
+        elif _vr["error"]:
+            if _filename.lower().endswith('.mov') or _content_type == 'video/quicktime':
+                if "ffmpeg 未インストール" in _vr["error"]:
+                    raise HTTPException(status_code=503, detail="ffmpeg 未インストール — imageio-ffmpeg が requirements.txt に追加済のため docker.exe restart で自動解決します")
+                raise HTTPException(status_code=422, detail=f".mov→.mp4 変換失敗: {_vr['error']}")
+            # .mov 以外は拒否せず原本のまま上げ、画面で映らぬ旨を知らせる
+            _video_notice = "この動画は画面で再生できない形式の可能性があります(自動変換に失敗)。H.264 で書き出し直すか、ダウンロードしてご覧ください。"
     # .exr → プレビューPNG 単純変換 (cmd_068・殿御命: トーンマップ不要・単純変換のみ)
-    elif _filename.lower().endswith('.exr') or _content_type in ('image/x-exr', 'image/aces'):
+    if _filename.lower().endswith('.exr') or _content_type in ('image/x-exr', 'image/aces'):
         import tempfile as _tf
         _needs_original_preserve = True
         _tmp_in = _tf.NamedTemporaryFile(suffix='.exr', delete=False)
@@ -1159,6 +1142,8 @@ async def post_asset_upload(
                 result = {**result, "review_thread_id": thread_id, "shot_thread_participants": participants, "push_result": push_result, "sse_result": sse_result, "skipped_by_pref": skipped_by_pref}
         except Exception as e:
             result = {**result, "review_thread_error": str(e)}
+    if _video_notice and isinstance(result, dict):
+        result = {**result, "video_notice": _video_notice}  # cmd_323: 変換した/できなかった旨を画面へ知らせる
     return JSONResponse(content=result, headers={"X-Actor-User-Id": actor_id})
 
 

@@ -914,6 +914,22 @@
       const row = document.getElementById('asset-row-' + assetId);
       if (row) row.classList.add('bg-indigo-100','ring-2','ring-indigo-400');
     }
+
+    // cmd_323 案D: 動画が再生できなかった時、黒い枠のままにせず原因と DL を示す(保険)。
+    // error は bubble しないため capture で拾う。サムネイル(muted/preload=metadata)は対象外。
+    document.addEventListener('error', function (ev) {
+      const v = ev.target;
+      if (!v || v.tagName !== 'VIDEO' || v.dataset.errShown) return;
+      if (v.hasAttribute('muted') && v.getAttribute('preload') === 'metadata') return;
+      v.dataset.errShown = '1';
+      const dl = document.getElementById('player-download');
+      const href = (dl && dl.getAttribute('href')) || v.currentSrc || v.getAttribute('src') || '#';
+      const box = document.createElement('div');
+      box.setAttribute('data-video-error', '1');
+      box.style.cssText = 'display:flex;flex-direction:column;align-items:center;color:#fff;text-align:center;padding:1.5rem;gap:.5rem';
+      box.innerHTML = '<div style="font-size:2.5rem">🎬</div><p style="color:#fbbf24;font-weight:700;font-size:.9rem">⚠️ この動画はブラウザで再生できない形式です</p><p style="font-size:.75rem;opacity:.7">ダウンロードしてご覧ください(H.264 で書き出し直すと画面で再生できます)</p><a href="' + href + '" download style="margin-top:.5rem;background:#4f46e5;color:#fff;padding:.4rem 1rem;border-radius:.75rem;font-size:.8rem;text-decoration:none">⬇️ ダウンロード</a>';
+      v.replaceWith(box);
+    }, true);
   </script>
 
 </div>
