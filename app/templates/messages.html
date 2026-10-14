@@ -1081,7 +1081,7 @@ function handleMentionInput(ev) {
     `<div class="px-4 py-2 cursor-pointer hover:bg-indigo-50 text-sm flex items-center gap-2" data-mention-idx="${i}" style="background-color: white;">
       <span class="w-6 h-6 rounded-full ${u.color} text-white flex items-center justify-center text-xs font-bold shrink-0">${_escapeHtml(u.initial)}</span>
       <div class="min-w-0">
-        <span class="font-bold text-slate-700 block" translate="no">${_escapeHtml(u.name)}</span>
+        <span class="font-bold block" style="color:#0f172a;" translate="no">${_escapeHtml(u.name)}</span>
         ${u.email ? `<span class="text-[10px] text-slate-400 truncate block" translate="no">${_escapeHtml(u.email)}</span>` : ''}
       </div>
     </div>`

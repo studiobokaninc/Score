@@ -108,3 +108,14 @@ html:not(.dark) [class*="shadow-xl"], html:not(.dark) [class*="shadow-2xl"], htm
 html.dark [class*="shadow-xl"], html.dark [class*="shadow-2xl"], html.dark [class*="shadow-lg"] {
   box-shadow: 0 20px 44px -14px rgba(2, 6, 20, 0.75), 0 6px 14px -8px rgba(2, 6, 20, 0.6) !important;
 }
+
+/* cmd_324: 淡色テーマで入力欄が白文字のまま白っぽい地に載り読めない件の是正。
+   shot_detail の QC依頼/トラブル報告/変更申請モーダルの入力欄は text-white + bg-white/40 だが、
+   上の html:not(.dark) [class*="bg-white"] 規則で地が白寄りの半透明に上書きされるため、
+   淡色テーマでは文字を濃色にする(暗色テーマは dark.css 側で従来どおり明色・変更なし)。 */
+html:not(.dark) textarea[class*="text-white"],
+html:not(.dark) input[class*="text-white"],
+html:not(.dark) select[class*="text-white"],
+html:not(.dark) select[class*="text-white"] option { color: #0f172a !important; }
+html:not(.dark) textarea[class*="text-white"]::placeholder,
+html:not(.dark) input[class*="text-white"]::placeholder { color: #475569 !important; }
