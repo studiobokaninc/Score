@@ -92,8 +92,23 @@ class TestMessagesTemplateStatic:
         assert "let _openRealThreadSeq = 0;" in s
         assert "const _mySeq = ++_openRealThreadSeq;" in s
         assert s.count("_mySeq !== _openRealThreadSeq") >= 3
-        # 見出し・本文・送信先(dmMode)の更新はすべて、最後に開いた要求だけが行う
-        assert s.index("_mySeq !== _openRealThreadSeq") < s.index("dmMode = { threadId: t.thread_id")
+        # 本文の更新は、最後に開いた要求だけが行う
+        assert s.index("_mySeq !== _openRealThreadSeq") < s.index("area.innerHTML = (messages || [])")
+
+    def test_open_real_thread_switches_dm_mode_before_fetch(self):
+        # cmd_325b: 送信先(dmMode)は本文の読込(await fetch)より前に新threadへ切り替える
+        s = self._src()
+        body = s[s.index("async function openRealThread"):]
+        assert body.index("dmMode = { threadId: t.thread_id") < body.index("await fetch(")
+        assert s.count("dmMode = { threadId: t.thread_id") == 1
+
+    def test_dm_mode_declared_before_show_thread_and_cleared_by_it(self):
+        # cmd_325b: 見本thread表示で実threadの送信先を持ち越さぬ。宣言は初期描画の showThread より前(TDZ回避)
+        s = self._src()
+        assert s.count("let dmMode = null;") == 1
+        assert s.index("let dmMode = null;") < s.index("function showThread(")
+        sh = s[s.index("function showThread("):]
+        assert "dmMode = null;" in sh[:sh.index("const row = ")]
 
     def test_demo_threads_only_in_demo_mode(self):
         s = self._src()

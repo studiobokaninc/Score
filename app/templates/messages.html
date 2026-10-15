@@ -538,6 +538,8 @@ const threads = {
 };
 
 let activeThread = null;
+// cmd_325b: 実threadの送信先。宣言を showThread(初期描画で呼ばれる)より前に置く(TDZ回避)
+let dmMode = null;
 
 // 殿御命 2026-06-08: msg 送信者アバター (名前から決定的に配色したイニシャル円)
 function _avatarChip(name, size) {
@@ -765,6 +767,7 @@ function showThread(id) {
     if (prevRow) prevRow.classList.remove('bg-indigo-50', 'border-l-4', 'border-indigo-400');
   }
   activeThread = id;
+  dmMode = null;  // cmd_325b: 見本threadを開いたら実threadの送信先を持ち越さぬ
   const row = document.getElementById('row-' + id);
   if (row) row.classList.add('bg-indigo-50', 'border-l-4', 'border-indigo-400');
 
@@ -847,6 +850,10 @@ async function openRealThread(threadId) {
   const parts = t.participants || [];
   const names = parts.map(p => p.name).filter(n => n && n !== 'Me');
   const isMulti = parts.length > 2;
+  // cmd_325b: 送信先(dmMode)は本文の読込より前に新threadへ切り替える。読込中(await fetch中)に
+  // 送信しても、前に開いていたthreadへ届かぬようにする。
+  dmMode = { threadId: t.thread_id, userName: names.length ? names.join(', ') : ('thread ' + t.thread_id) };
+  activeThread = null;
   // header
   // cmd_156③ (2026-07-31・殿御命): スレッドのタイトルを上(#conv-title)に置き、
   // メンバー表示の詳細(「👥 N名 thread」・宛先名の列挙)は出さない。#conv-membersは
@@ -872,7 +879,6 @@ async function openRealThread(threadId) {
   }
   // body 殿御命 2026-06-05 (nibu Phase 2): 全件取得 EP に切替
   const area = document.getElementById('conv-messages');
-  const nameLine = names.length ? names.join(', ') : ('thread ' + t.thread_id);
   area.innerHTML = '<div class="text-center text-slate-400 text-xs py-8">📥 メッセージ取得中...</div>';
   try {
     const resp = await fetch('/api/bff/dm/threads/' + t.thread_id + '/messages', { credentials: 'include' });
@@ -914,9 +920,7 @@ async function openRealThread(threadId) {
   const rowEl = document.querySelector(`[data-real-thread-row="${t.thread_id}"]`);
   if (rowEl) rowEl.classList.add('bg-indigo-50', 'border-l-4', 'border-indigo-400');
   _recalcDmUnread();
-  // dmMode を thread mode に切替 (sendMessage 用)
-  dmMode = { threadId: t.thread_id, userName: nameLine };
-  activeThread = null;
+  // dmMode の切替は関数冒頭(cmd_325b)で済ませてある
 }
 function _escapeHtml(s) {
   return String(s).replace(/[&<>"']/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
@@ -987,7 +991,6 @@ function _recalcDmUnread() {
 }
 _recalcDmUnread();
 
-let dmMode = null;
 const dmAvatarMap = {
   yamada: { char: '山', bg: 'bg-purple-600' },
   tanaka: { char: '田', bg: 'bg-emerald-600' },
