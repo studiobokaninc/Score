@@ -139,9 +139,10 @@
           <button onclick="window._closeThreadDrawer()" style="background:none;border:none;font-size:24px;color:#64748b;cursor:pointer;line-height:1;padding:0 4px;">×</button>
         </div>
         <div id="score-drawer-messages" style="flex:1;overflow-y:auto;padding:16px 20px;display:flex;flex-direction:column;gap:12px;"></div>
-        <div style="padding:12px 20px;border-top:1px solid rgba(255,255,255,0.6);background:rgba(255,255,255,0.3);">
+        <div style="position:relative;padding:12px 20px;border-top:1px solid rgba(255,255,255,0.6);background:rgba(255,255,255,0.3);">
+          <div id="score-drawer-mention-dropdown" style="display:none;position:absolute;left:20px;right:20px;bottom:100%;max-height:176px;overflow-y:auto;background-color:white;border:1px solid #e2e8f0;border-radius:12px;box-shadow:0 8px 24px rgba(0,0,0,0.2);z-index:10;"></div>
           <div style="display:flex;gap:8px;">
-            <input id="score-drawer-input" type="text" placeholder="メッセージを入力 (Enter で送信)" style="flex:1;background:rgba(255,255,255,0.6);border:1px solid rgba(255,255,255,0.6);border-radius:12px;padding:10px 14px;font-size:13px;outline:none;">
+            <input id="score-drawer-input" type="text" placeholder="メッセージを入力 (Enter で送信)" style="flex:1;background:rgba(255,255,255,0.6);border:1px solid rgba(255,255,255,0.6);border-radius:12px;padding:10px 14px;font-size:13px;outline:none;color:#0f172a !important;">
             <button onclick="window._drawerSendMessage()" style="background:#6366f1;color:white;border:none;border-radius:12px;padding:10px 16px;font-weight:bold;font-size:13px;cursor:pointer;">送信</button>
           </div>
         </div>
@@ -151,8 +152,66 @@
     _drawerEl = wrap;
     // Enter で送信
     const inp = document.getElementById('score-drawer-input');
-    if (inp) inp.addEventListener('keydown', (e) => { if (e.key === 'Enter') { e.preventDefault(); window._drawerSendMessage(); } });
+    if (inp) {
+      // cmd_326c: /messages 画面と同じ @メンション候補をドロワーの入力欄にも付ける
+      inp.addEventListener('input', _drawerMentionInput);
+      inp.addEventListener('keydown', (e) => {
+        const dd = document.getElementById('score-drawer-mention-dropdown');
+        const open = dd && dd.style.display !== 'none';
+        if (e.key === 'Escape' && open) { dd.style.display = 'none'; e.stopPropagation(); return; }
+        if (e.key === 'Enter') {
+          e.preventDefault();
+          if (open) { const first = dd.querySelector('[data-mention-idx]'); if (first) { first.click(); return; } }
+          window._drawerSendMessage();
+        }
+      });
+    }
     return wrap;
+  }
+
+  // ===== cmd_326c: ドロワー入力欄の @メンション候補 (messages.html / shot_detail.html と同じ /api/bff/users) =====
+  let _drawerMentionUsers = null;
+  async function _getDrawerMentionUsers() {
+    if (_drawerMentionUsers) return _drawerMentionUsers;
+    try {
+      const r = await fetch('/api/bff/users', { credentials: 'include' });
+      if (!r.ok) throw new Error('HTTP ' + r.status);
+      const users = await r.json();
+      _drawerMentionUsers = users.map(u => ({ name: u.name || u.email || ('user_' + u.id), email: u.email || '' }));
+    } catch (e) {
+      return [];  // 失敗は保持しない(次の入力で再取得)
+    }
+    return _drawerMentionUsers;
+  }
+  async function _drawerMentionInput(ev) {
+    const inp = ev.target;
+    const dd = document.getElementById('score-drawer-mention-dropdown');
+    if (!dd) return;
+    const text = inp.value.substring(0, inp.selectionStart);
+    const lastAt = text.lastIndexOf('@');
+    if (lastAt < 0 || /\s/.test(text.substring(lastAt + 1))) { dd.style.display = 'none'; return; }
+    const query = text.substring(lastAt + 1).toLowerCase();
+    const users = await _getDrawerMentionUsers();
+    const cands = users.filter(u => u.name.toLowerCase().includes(query) || u.email.toLowerCase().includes(query)).slice(0, 8);
+    if (cands.length === 0) { dd.style.display = 'none'; return; }
+    // 候補の地は常に白、文字色は inline の濃色で固定(暗色テーマの上書きで白地白文字になるのを防ぐ)
+    dd.innerHTML = cands.map((u, i) =>
+      `<div data-mention-idx="${i}" style="padding:8px 12px;cursor:pointer;font-size:13px;background-color:white;"><span style="font-weight:bold;color:#0f172a;" translate="no">${_esc(u.name)}</span>${u.email ? ` <span style="font-size:10px;color:#64748b;" translate="no">${_esc(u.email)}</span>` : ''}</div>`
+    ).join('');
+    dd.querySelectorAll('[data-mention-idx]').forEach(el => {
+      el.addEventListener('click', () => {
+        const name = cands[parseInt(el.dataset.mentionIdx, 10)].name;
+        const cur = inp.selectionStart;
+        const at = inp.value.lastIndexOf('@', cur - 1);
+        if (at < 0) return;
+        inp.value = inp.value.substring(0, at) + '@' + name + ' ' + inp.value.substring(cur);
+        const pos = at + name.length + 2;
+        inp.focus();
+        inp.setSelectionRange(pos, pos);
+        dd.style.display = 'none';
+      });
+    });
+    dd.style.display = 'block';
   }
 
   window._openThreadDrawer = async function(threadId) {
@@ -163,6 +222,7 @@
     document.getElementById('score-drawer-messages').innerHTML = '<p style="text-align:center;color:#94a3b8;font-size:12px;margin-top:24px;">📥 読込中...</p>';
     document.getElementById('score-drawer-fullview').href = '/messages?thread=' + threadId;
     window._drawerCurrentThread = threadId;
+    { const _dd = document.getElementById('score-drawer-mention-dropdown'); if (_dd) _dd.style.display = 'none'; }
     try {
       // thread meta (participants)
       const metaResp = await fetch('/api/bff/dm/threads_meta', { credentials: 'include' });
