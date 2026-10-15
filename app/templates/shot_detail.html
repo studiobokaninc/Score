@@ -46,6 +46,11 @@
         {% set _thread_key = task_thread_id if task_thread_id else ('task' ~ task_id) %}
         {% set _thread_label = _shot_code ~ ' ' ~ task_name ~ ' task thread' %}
         {% set _thread_desc = 'この task の thread (assignee + Lead/Director/PM 自動含)' %}
+        {# cmd_325a: 他taskと共用のthreadなら明示(共用threadには他taskの会話も載る) #}
+        {% if task_thread_shared_with %}
+          {% set _thread_label = _thread_label ~ '(他' ~ (task_thread_shared_with|length) ~ '件のtaskと共用)' %}
+          {% set _thread_desc = 'この thread は他のtask(' ~ (task_thread_shared_with|join(', ')) ~ ')と共用です。他taskの会話も含まれます' %}
+        {% endif %}
       {% else %}
         {% set _thread_key = _shot_code.lower().replace('_', '') %}
         {% set _thread_label = _shot_code ~ ' 関係者 thread' %}

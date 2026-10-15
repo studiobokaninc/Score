@@ -117,10 +117,14 @@ def get_messages(request: Request, thread: str | None = None, actor_id: str = De
     # thread_id で逆引きして各threadに付与する。宛先の顔ぶれではなくタイトルで見分けが
     # 付くようにするための情報源(既存の宛先組合せthreadにはタイトルが無いため、その場合は
     # 従来通り名前へfallbackする — 捏造値は入れない)。
-    from app.helpers.task_threads import get_all_task_threads
+    from app.helpers.task_threads import get_all_task_threads, get_all_thread_sharing
     _thread_titles = get_all_task_threads()
+    # cmd_325a (2026-10-15): 複数taskが共用するthreadは画面に明示する(他taskの会話が
+    # 同居している事を伏せたまま『このtaskのthread』として見せぬため)。
+    _thread_sharing = get_all_thread_sharing()
     for t in calendar_dm_threads:
         t["title"] = _thread_titles.get(str(t.get("thread_id")))
+        t["shared_task_ids"] = _thread_sharing.get(str(t.get("thread_id"))) or []
 
     shot_group_threads = []
     dm_oneonone_threads = []
@@ -148,6 +152,7 @@ def get_messages(request: Request, thread: str | None = None, actor_id: str = De
                 "last_message": t.get("last_message") or "",
                 "updated_at": t.get("updated_at") or "",
                 "title": t.get("title"),
+                "shared_task_ids": t.get("shared_task_ids") or [],
             }
             for t in calendar_dm_threads
         ]

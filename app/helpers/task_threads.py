@@ -128,6 +128,51 @@ def get_task_thread_collision_stats() -> dict | None:
         return None
 
 
+def get_all_thread_sharing() -> dict:
+    """cmd_325a (2026-10-15): thread_id(str) → そのthreadを共用する task_id(str)の昇順リスト。
+    2件以上のtaskが同じthreadを使う場合のみ返す。外部Calendar(post_dm_thread)は参加者の
+    顔ぶれが同じなら別taskでも同じthreadを返すため、1task=1threadの前提は成り立たず、
+    『タスクのthreadを開いたら他タスクの会話も載っている』状態になる。共用の事実は
+    ①task_threads の行 ②cmd_279の門番が保存を見送った記録(JSONL)の両方から拾う
+    (門番に弾かれたtaskは行が無いが、画面は返ってきた共用threadを開くため)。
+    取得失敗時は空dict(=共用の注記が出ないだけで画面は従来通り)。"""
+    by_thread: dict = {}
+    try:
+        db = SessionLocal()
+        try:
+            for row in db.query(TaskThread).all():
+                by_thread.setdefault(str(row.thread_id), set()).add(str(row.task_id))
+        finally:
+            db.close()
+    except Exception as e:
+        print(f"[task_threads] get_all_thread_sharing db skip: {e}", file=sys.stderr)
+    try:
+        if _COLLISION_LOG_PATH.exists():
+            with _COLLISION_LOG_PATH.open("r", encoding="utf-8") as f:
+                for line in f:
+                    line = line.strip()
+                    if not line:
+                        continue
+                    rec = json.loads(line)
+                    ids = by_thread.setdefault(str(rec["thread_id"]), set())
+                    ids.add(str(rec["task_id"]))
+                    ids.add(str(rec["bound_task_id"]))
+    except Exception as e:
+        print(f"[task_threads] get_all_thread_sharing log skip: {e}", file=sys.stderr)
+
+    def _key(x):
+        return (0, int(x), x) if x.isdigit() else (1, 0, x)
+
+    return {tid: sorted(ids, key=_key) for tid, ids in by_thread.items() if len(ids) > 1}
+
+
+def get_thread_sharing(thread_id) -> list:
+    """thread_id を共用する task_id の一覧(共用でなければ空list)。"""
+    if thread_id is None:
+        return []
+    return get_all_thread_sharing().get(str(thread_id), [])
+
+
 def _set_task_thread(task_id, thread_id, title=None) -> None:
     try:
         db = SessionLocal()

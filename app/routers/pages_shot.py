@@ -425,10 +425,19 @@ def get_task_detail(
         except Exception:
             task_thread_id = None
 
+    # cmd_325a (2026-10-15): このtaskのthreadを他taskと共用していれば、その task_id 一覧を
+    # 渡して💬釦に明示する(共用threadには他taskの会話も載るため)。
+    try:
+        from app.helpers.task_threads import get_thread_sharing
+        task_thread_shared_with = [t for t in get_thread_sharing(task_thread_id) if t != str(task_id)]
+    except Exception:
+        task_thread_shared_with = []
+
     return _templates.TemplateResponse(
         request=request,
         name="shot_detail.html",
         context={
+            "task_thread_shared_with": task_thread_shared_with,
             "tasks": _isolated_tasks,          # asset history: アイソレーション 単独タスクのみ
             "upstream_tasks": upstream_tasks,  # upstream 可視化: 全工程 (context 保持)
             "shot_id": found_shot_id,

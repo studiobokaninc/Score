@@ -292,6 +292,9 @@
         </div>
       </div>
 
+      {# cmd_325a (2026-10-15): 複数taskが共用するthreadでは、他taskの会話が同居している旨を明示 #}
+      <div id="conv-shared-banner" class="hidden px-6 py-2 text-xs font-bold border-b border-amber-300" style="background-color:#fef3c7;color:#78350f;"></div>
+
       <div id="conv-messages" class="flex-1 overflow-y-auto p-6 msg-area space-y-4"></div>
 
       <div class="border-t border-white/40 p-4 bg-white/20 shrink-0 relative">
@@ -312,6 +315,12 @@
 </div>
 
 <script>
+// cmd_325a (2026-10-15): 見本thread(下の threads)を引いてよいのは demo_mode のときだけ。
+const _DEMO_MODE = {{ 'true' if demo_mode else 'false' }};
+// 連続して別threadを開いた時、遅れて返った前のthreadの応答が後から開いたthreadの見出しの下を
+// 上書きし、さらに送信先(dmMode)まで取り違える不具合の手当て。最後に開いた要求だけが
+// 画面と送信先を更新する(openRealThread 参照)。
+let _openRealThreadSeq = 0;
 const threads = {
   // ===== SHOT 全体 thread =====
   shot001: {
@@ -711,12 +720,20 @@ function deleteThread(id, ev) {
         return;
       }
       // 旧 mock thread (demo_mode 互換)
-      if (typeof threads !== 'undefined' && threads[targetThread]) {
+      // cmd_325a (2026-10-15): ここで引く threads は画面に直書きの見本データ(SHOT_001 等の架空会話)。
+      // 実運用(demo_mode=false)で ?thread=shot001 を開くと、実在の別案件の SHOT_001 でも
+      // 架空の会話が出て『対象と違う内容』になるため、demo_mode のときだけ引く。
+      if (_DEMO_MODE && typeof threads !== 'undefined' && threads[targetThread]) {
         if (targetThread.startsWith('task')) switchTab('shot');
         else if (targetThread.startsWith('shot')) switchTab('shot');
         else if (targetThread.startsWith('dm') || targetThread.startsWith('dyn_')) switchTab('dm');
         else if (targetThread === 'system_notice' || targetThread === 'morning') switchTab('notice');
         showThread(targetThread);
+      } else if (!_DEMO_MODE && /^shot/.test(targetThread)) {
+        // cmd_325a: SHOT単位の実threadは Score に無い(上の見本は出さぬ)。案内のみ。
+        switchTab('shot');
+        const area = document.getElementById('conv-messages');
+        if (area) area.innerHTML = '<div class="text-center text-amber-700 py-12 px-6"><p class="text-3xl mb-2">💬</p><p class="text-sm font-bold">この SHOT 単位の thread はありません</p><p class="text-xs text-amber-600 mt-2">左の一覧から thread を選択してください(タスク画面の 💬 から開くと、そのタスクの thread が出ます)</p></div>';
       } else if (targetThread.startsWith('task')) {
         // cmd_059②-再: task.thread_id 未設定タスクの仮キー ('task'+task_id) — mock 一覧にも
         // 存在せず、これまで無反応(サイレント no-op)だった。numeric branch と同様に案内表示する。
@@ -779,6 +796,9 @@ function showThread(id) {
   iconEl.textContent = t.icon;
   document.getElementById('conv-title').textContent = t.title;
   document.getElementById('conv-members').textContent = t.members;
+  const _sb = document.getElementById('conv-shared-banner');
+  if (_sb) { _sb.textContent = ''; _sb.classList.add('hidden'); }
+  _openRealThreadSeq++;  // cmd_325a: 取得中の実threadの応答がデモ表示を上書きせぬように
 
   const area = document.getElementById('conv-messages');
   area.innerHTML = t.messages.map(buildBubble).join('');
@@ -817,6 +837,7 @@ if (_convMembers) _convMembers.textContent = '';
 
 // 殿御命 2026-06-04: real Calendar DM thread click → 右ペイン描画 (URL 不変・リロードでは空)
 async function openRealThread(threadId) {
+  const _mySeq = ++_openRealThreadSeq;
   let dataEl = document.getElementById('real-threads-data');
   if (!dataEl) return;
   let payload = {};
@@ -837,14 +858,28 @@ async function openRealThread(threadId) {
   document.getElementById('conv-title').textContent = t.title || (names.length ? names.join(', ') : ('thread ' + t.thread_id));
   const updated = t.updated_at || '';
   document.getElementById('conv-members').textContent = updated.slice(0, 16).replace('T', ' ');
+  // cmd_325a: 共用threadなら注記(他taskの会話も載る)。共用でなければ隠す。
+  const _banner = document.getElementById('conv-shared-banner');
+  if (_banner) {
+    const _shared = t.shared_task_ids || [];
+    if (_shared.length > 1) {
+      _banner.textContent = '⚠ このthreadは複数のtask(' + _shared.map(x => 'task' + x).join(', ') + ')で共用されています。他taskの会話も含まれます。';
+      _banner.classList.remove('hidden');
+    } else {
+      _banner.textContent = '';
+      _banner.classList.add('hidden');
+    }
+  }
   // body 殿御命 2026-06-05 (nibu Phase 2): 全件取得 EP に切替
   const area = document.getElementById('conv-messages');
   const nameLine = names.length ? names.join(', ') : ('thread ' + t.thread_id);
   area.innerHTML = '<div class="text-center text-slate-400 text-xs py-8">📥 メッセージ取得中...</div>';
   try {
     const resp = await fetch('/api/bff/dm/threads/' + t.thread_id + '/messages', { credentials: 'include' });
+    if (_mySeq !== _openRealThreadSeq) return;  // cmd_325a: 後から別threadが開かれた → この応答は捨てる
     if (resp.ok) {
       const messages = await resp.json();
+      if (_mySeq !== _openRealThreadSeq) return;
       const myCuid = parseInt(document.body.dataset.myCuid || '0', 10);
       const partMap = {};
       parts.forEach(p => { if (p && p.user_id != null) partMap[parseInt(p.user_id, 10)] = p.name; });
@@ -867,6 +902,7 @@ async function openRealThread(threadId) {
       area.innerHTML = '<div class="text-center text-rose-500 text-xs py-8">メッセージ取得失敗 HTTP ' + resp.status + '</div>';
     }
   } catch (e) {
+    if (_mySeq !== _openRealThreadSeq) return;
     area.innerHTML = '<div class="text-center text-rose-500 text-xs py-8">取得例外: ' + _escapeHtml(e.message) + '</div>';
   }
   area.scrollTop = area.scrollHeight;
