@@ -138,6 +138,7 @@
           <a id="score-drawer-fullview" href="#" style="font-size:11px;color:#6366f1;text-decoration:underline;flex-shrink:0;">全画面で開く</a>
           <button onclick="window._closeThreadDrawer()" style="background:none;border:none;font-size:24px;color:#64748b;cursor:pointer;line-height:1;padding:0 4px;">×</button>
         </div>
+        <div id="score-drawer-shared-banner" style="display:none;padding:6px 20px;font-size:11px;font-weight:bold;background-color:#fef3c7;color:#78350f;border-bottom:1px solid #fcd34d;"></div>
         <div id="score-drawer-messages" style="flex:1;overflow-y:auto;padding:16px 20px;display:flex;flex-direction:column;gap:12px;"></div>
         <div style="position:relative;padding:12px 20px;border-top:1px solid rgba(255,255,255,0.6);background:rgba(255,255,255,0.3);">
           <div id="score-drawer-mention-dropdown" style="display:none;position:absolute;left:20px;right:20px;bottom:100%;max-height:176px;overflow-y:auto;background-color:white;border:1px solid #e2e8f0;border-radius:12px;box-shadow:0 8px 24px rgba(0,0,0,0.2);z-index:10;"></div>
@@ -223,6 +224,8 @@
     document.getElementById('score-drawer-fullview').href = '/messages?thread=' + threadId;
     window._drawerCurrentThread = threadId;
     { const _dd = document.getElementById('score-drawer-mention-dropdown'); if (_dd) _dd.style.display = 'none'; }
+    const sb = document.getElementById('score-drawer-shared-banner');
+    sb.textContent = ''; sb.style.display = 'none';
     try {
       // thread meta (participants)
       const metaResp = await fetch('/api/bff/dm/threads_meta', { credentials: 'include' });
@@ -232,7 +235,12 @@
         const metaData = await metaResp.json();
         const t = (metaData.threads || []).find(x => String(x.thread_id) === String(threadId));
         if (t) {
-          // 単に thread_id + updated_at しか持たぬので 別経路で詳細取れぬ → messages 取得後 sender_id で推測
+          // cmd_326e: 共用thread(複数taskが同じthreadを使う)なら注記。共用でなければ隠す。
+          const sh = t.shared_task_ids || [];
+          if (sh.length > 1) {
+            sb.textContent = '⚠ このthreadは複数のタスク(' + sh.map(x => 'task' + x).join(', ') + ')で共用されています。他タスクの会話も含まれます。';
+            sb.style.display = 'block';
+          }
         }
       }
       // messages 全件

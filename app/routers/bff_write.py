@@ -2061,14 +2061,22 @@ def get_dm_threads_meta(actor_id: str = Depends(get_actor_id)):
     (リアルタイム性重視・cache 無し pass-through)"""
     client = get_calendar_client()
     threads = []
+    # cmd_326e: 右ドロワーにも『複数のタスクで共用』注記を出すため、共用task一覧を添える(取得失敗は空)
+    try:
+        from app.helpers.task_threads import get_all_thread_sharing
+        _sharing = get_all_thread_sharing()
+    except Exception:
+        _sharing = {}
     if hasattr(client, "get_my_dm_threads"):
         try:
             raw = client.get_my_dm_threads(actor_user_id=actor_id) or []
             for t in raw:
                 if isinstance(t, dict):
+                    _tid = t.get("thread_id") or t.get("id")
                     threads.append({
-                        "thread_id": t.get("thread_id") or t.get("id"),
+                        "thread_id": _tid,
                         "updated_at": t.get("updated_at") or "",
+                        "shared_task_ids": _sharing.get(str(_tid)) or [],
                     })
         except Exception:
             pass
