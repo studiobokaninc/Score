@@ -70,6 +70,15 @@
           <p class="text-xs text-slate-500 mt-1">{{ completed_tasks }} / {{ total_tasks }} task 完了</p>
         </div>
       </div>
+      {# cmd_346: プロジェクト概要 = Calendar の「説明」。自動エスケープ + pre-wrap で改行を保つ(HTML としては解釈しない) #}
+      <div class="mt-5 pt-4 border-t border-white/60" id="project-overview">
+        <p class="text-xs text-slate-500 font-bold mb-1">プロジェクト概要</p>
+        {% if project_description %}
+        <p class="text-sm text-slate-800 whitespace-pre-wrap break-words" id="project-overview-text">{{ project_description }}</p>
+        {% else %}
+        <p class="text-sm text-slate-400 italic" id="project-overview-text">未設定</p>
+        {% endif %}
+      </div>
     </div>
 
     <!-- SEQ > SHOT > TASK 階層 (動的・Calendar /api/shots + /api/tasks 経由) -->

@@ -30,6 +30,9 @@ def get_project_detail(project_id: int, request: Request, actor_id: str = Depend
     except Exception:
         project_info = {}
 
+    # cmd_346: プロジェクト概要 = Calendar の description (編集時の「説明」)。GET のみ。
+    project_description = _resolve_project_description(client, project_id, project_info, actor_id)
+
     # 進捗 = completed task 数 / 全 task 数
     total_tasks = 0
     completed_tasks = 0
@@ -190,6 +193,7 @@ def get_project_detail(project_id: int, request: Request, actor_id: str = Depend
             "project_id": project_id,
             "project_name": project_name,
             "project_info": project_info,
+            "project_description": project_description,
             "members": members,
             "total_tasks": total_tasks,
             "completed_tasks": completed_tasks,
@@ -199,6 +203,30 @@ def get_project_detail(project_id: int, request: Request, actor_id: str = Depend
             "demo_mode": os.getenv("CALENDAR_MOCK", "0") == "1",
         },
     )
+
+
+def _clean_description(value) -> str:
+    """description を表示用の文字列へ。文字列以外・空白のみは空文字。改行は保つ(HTML 化はテンプレートで自動エスケープ)。"""
+    return value.strip() if isinstance(value, str) else ""
+
+
+def _resolve_project_description(client, project_id: int, project_info: dict, actor_id: str) -> str:
+    """Calendar のプロジェクト説明を返す(読み取りのみ)。
+
+    1) project_info (get_my_project_detail) に description が入っておればそれ。
+    2) 無ければ get_project() (GET /api/projects/{id}) へ。
+    取れぬ・空・Calendar 不通のときは空文字(画面は「未設定」を出す)。例外は外へ出さぬ。
+    """
+    desc = _clean_description(project_info.get("description") if isinstance(project_info, dict) else None)
+    if desc:
+        return desc
+    try:
+        if hasattr(client, "get_project"):
+            info = client.get_project(project_id, actor_user_id=actor_id) or {}
+            return _clean_description(info.get("description") if isinstance(info, dict) else None)
+    except Exception:
+        pass
+    return ""
 
 
 def httpx_get_users(client):
