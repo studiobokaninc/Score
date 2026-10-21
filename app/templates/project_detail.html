@@ -62,7 +62,15 @@
           {% endif %}
         </div>
         <div>
-          <p class="text-xs text-slate-500 font-bold mb-2">進捗</p>
+          {# cmd_346c: 進捗の右上に project asset ボタン(プロジェクト直下の置き場・タスクの Asset Upload と同じ作り) #}
+          <div class="flex items-start justify-between mb-2">
+            <p class="text-xs text-slate-500 font-bold">進捗</p>
+            <button type="button" id="project-asset-btn" onclick="openProjectAssetModal()"
+                    title="このプロジェクトのファイルを上げる・見る・落とす(通知・検分なし)"
+                    class="flex items-center gap-1 bg-white/60 hover:bg-white/80 border border-white/60 rounded-xl px-3 py-1 text-xs font-bold text-slate-600 hover:text-indigo-600 shadow transition-all">
+              <span>📁</span><span>project asset</span>
+            </button>
+          </div>
           <p class="text-4xl font-black text-indigo-600">{{ progress_pct }}%</p>
           <div class="bg-indigo-100 rounded-full h-2 w-full mt-2">
             <div class="bg-indigo-600 h-2 rounded-full" style="width: {{ progress_pct }}%"></div>
@@ -282,6 +290,35 @@
     </div>
   </div>
 
+  {# cmd_346c: project asset モーダル。shot_detail.html の Asset Upload モーダルと同型。
+     通知・検分は呼ばず、/api/bff/project_assets と既存の閲覧/ダウンロード口のみ使う。 #}
+  <div id="modal-project-asset" class="fixed inset-0 bg-black/50 backdrop-blur-sm flex items-center justify-center z-50 hidden">
+    <div class="bg-slate-800/90 backdrop-blur-xl border border-white/60 rounded-3xl shadow-xl p-6 w-[34rem] max-h-[85vh] flex flex-col">
+      <div class="flex items-center justify-between mb-3 shrink-0">
+        <p class="text-lg font-black text-white">📁 project asset</p>
+        <button onclick="closeProjectAssetModal()" class="text-white/50 hover:text-white text-2xl leading-none">×</button>
+      </div>
+      <p class="text-[11px] text-white/40 mb-3 shrink-0">通知・検分なし — このプロジェクト全体のファイルを上げる/並べる/閲覧する/ダウンロードするだけの枠です。</p>
+      <div class="shrink-0 mb-4">
+        <label class="block cursor-pointer w-full text-center py-3 px-3 bg-indigo-500/20 hover:bg-indigo-500/30 border-2 border-dashed border-indigo-300/60 text-indigo-100 rounded-xl text-sm font-bold transition-all">
+          <input type="file" id="project-asset-file-input" class="hidden" onchange="handleProjectAssetFileChange()">
+          <span id="project-asset-file-label">📁 ファイル選択 (txt/画像/動画/PDF等)</span>
+        </label>
+        <button type="button" id="project-asset-upload-btn" onclick="submitProjectAsset()" disabled
+                class="mt-2 w-full py-2 bg-indigo-600 hover:bg-indigo-700 disabled:bg-slate-500 text-white font-bold rounded-xl text-sm transition-all">
+          アップロード
+        </button>
+        <div id="project-asset-status" class="text-[11px] text-white/60 mt-1"></div>
+      </div>
+      <div class="border-t border-white/20 pt-3 flex-1 overflow-y-auto">
+        <h4 class="text-[10px] font-black text-white/50 uppercase tracking-widest mb-2">一覧</h4>
+        <ul id="project-asset-list" class="space-y-1.5">
+          <li class="text-[11px] text-white/40">読込中...</li>
+        </ul>
+      </div>
+    </div>
+  </div>
+
   <script>
     function openLanguageModal() {
       document.getElementById('language-modal').classList.remove('hidden');
@@ -310,6 +347,112 @@
     // 旧 alias (互換)
     function toggleSEQ(n) { toggleSeq(n); }
     function toggleShot001() { toggleShot('1'); }
+  </script>
+
+  <script>
+    // cmd_346c: project asset — /api/bff/project_assets(上げる・一覧)と既存の
+    // /api/bff/asset_uploads/{id}/file|download(閲覧・保存)のみを叩く。
+    (function() {
+      const _projectId = {{ project_id|tojson }};
+      const _LABEL = '📁 ファイル選択 (txt/画像/動画/PDF等)';
+      const _el = function(id) { return document.getElementById(id); };
+
+      window.openProjectAssetModal = function() {
+        _el('modal-project-asset').classList.remove('hidden');
+        _resetForm();
+        _loadList();
+      };
+      window.closeProjectAssetModal = function() {
+        _el('modal-project-asset').classList.add('hidden');
+      };
+
+      function _resetForm() {
+        const fi = _el('project-asset-file-input');
+        const st = _el('project-asset-status');
+        if (fi) { fi.value = ''; fi.disabled = false; }
+        _el('project-asset-file-label').textContent = _LABEL;
+        _el('project-asset-upload-btn').disabled = true;
+        if (st) { st.textContent = ''; st.className = 'text-[11px] text-white/60 mt-1'; }
+      }
+
+      window.handleProjectAssetFileChange = function() {
+        const f = _el('project-asset-file-input').files[0];
+        _el('project-asset-file-label').textContent = f ? '📄 ' + f.name : _LABEL;
+        _el('project-asset-upload-btn').disabled = !f;
+      };
+
+      window.submitProjectAsset = async function() {
+        const f = _el('project-asset-file-input').files[0];
+        const btn = _el('project-asset-upload-btn');
+        const st = _el('project-asset-status');
+        if (!f) return;
+        if (f.size > 500 * 1024 * 1024) {
+          st.textContent = '❌ ファイル ' + Math.round(f.size / 1024 / 1024) + 'MB は上限超過 (500MB max)';
+          return;
+        }
+        btn.disabled = true;
+        st.textContent = '⏳ アップロード中...';
+        const fd = new FormData();
+        fd.append('file', f);
+        fd.append('project_id', _projectId);
+        try {
+          const resp = await fetch('/api/bff/project_assets', { method: 'POST', credentials: 'include', body: fd });
+          if (!resp.ok) {
+            let detail = 'HTTP ' + resp.status;
+            try { const body = await resp.json(); if (body && body.detail) detail = body.detail; } catch (_e) {}
+            throw new Error(detail);
+          }
+          let ok = null;
+          try { ok = await resp.json(); } catch (_e) {}
+          _resetForm();
+          st.textContent = '✅ アップロード完了' + (ok && ok.video_notice ? ' 📢 ' + ok.video_notice : '');
+          _loadList();
+        } catch (e) {
+          st.className = 'text-[11px] text-rose-300 font-bold mt-1';
+          st.textContent = '❌ エラー: ' + e.message;
+          btn.disabled = false;
+        }
+      };
+
+      function _fmtSize(bytes) {
+        if (!bytes) return '?';
+        if (bytes < 1024 * 1024) return Math.round(bytes / 1024) + 'KB';
+        return (bytes / 1024 / 1024).toFixed(1) + 'MB';
+      }
+      function _esc(s) {
+        const d = document.createElement('div');
+        d.textContent = s == null ? '' : String(s);
+        return d.innerHTML;
+      }
+
+      async function _loadList() {
+        const listEl = _el('project-asset-list');
+        if (!listEl) return;
+        listEl.innerHTML = '<li class="text-[11px] text-white/40">読込中...</li>';
+        try {
+          const resp = await fetch('/api/bff/project_assets?project_id=' + encodeURIComponent(_projectId), { credentials: 'include' });
+          if (!resp.ok) throw new Error('HTTP ' + resp.status);
+          const items = await resp.json();
+          if (!items.length) {
+            listEl.innerHTML = '<li class="text-[11px] text-white/40">まだアップロードされたアセットはありません</li>';
+            return;
+          }
+          listEl.innerHTML = items.map(function(it) {
+            const created = (it.created_at || '').slice(0, 16).replace('T', ' ');
+            return '' +
+              '<li class="flex items-center justify-between gap-2 text-[11px] bg-white/10 rounded-lg px-2 py-1.5">' +
+                '<span class="text-white/90 truncate flex-1" title="' + _esc(it.filename) + '">' + _esc(it.filename) + '</span>' +
+                '<span class="text-white/40 shrink-0">' + _fmtSize(it.size_bytes) + '</span>' +
+                '<span class="text-white/40 shrink-0">' + created + '</span>' +
+                '<a href="' + it.view_url + '" target="_blank" rel="noopener" class="shrink-0 text-indigo-300 hover:text-indigo-200 font-bold">👁</a>' +
+                '<a href="' + it.download_url + '" class="shrink-0 text-indigo-300 hover:text-indigo-200 font-bold">⬇</a>' +
+              '</li>';
+          }).join('');
+        } catch (e) {
+          listEl.innerHTML = '<li class="text-[11px] text-rose-300">❌ 読込失敗: ' + _esc(e.message) + '</li>';
+        }
+      }
+    })();
   </script>
 </body>
 </html>

@@ -35,6 +35,12 @@ async def post_asset_upload_new(
     actor_id: str = Depends(get_actor_id),
     db: Session = Depends(get_db),
 ):
+    return await _store_asset_upload(file, shot_id, task_id, project_id, None, actor_id, db)
+
+
+async def _store_asset_upload(file, shot_id, task_id, project_id, scope, actor_id, db):
+    """上げる処理の本体。従来のタスク/ショット単位(scope=None)と、cmd_346c の
+    プロジェクト直下(scope='project')で共有する。保存・動画変換・エラー応答は同一。"""
     # cmd_258 殿御下命(23:07最終版): 21:03の定め(カットの無いタスクは拒否)は撤回。
     # 判別の単位はカットではなくタスクであり(殿「タスクがあればアップできる
     # ように」)、shot_id/shot_code の有無による拒否は行わない。案件跨ぎ混線の
@@ -65,6 +71,7 @@ async def post_asset_upload_new(
         shot_id=shot_id,
         task_id=task_id,
         project_id=project_id,
+        scope=scope,
         filename=_filename,
         stored_filename="",
         content_type=_content_type,
@@ -144,6 +151,9 @@ def get_asset_uploads_new(
     # shot_id==0 の時に限り task_id でも絞り込む(案件跨ぎの見え方混線を防ぐ)。
     # shot_idがある場合の既存の振る舞い(shot単位で絞る)は変えない。
     query = db.query(UploadedAsset).filter(UploadedAsset.shot_id == shot_id)
+    # cmd_346c: プロジェクト直下の置き場(scope='project')は別の口で扱う。従来の行(scope NULL)
+    # の見え方は変えぬ(shot_id==0 の一覧にプロジェクト直下の物が混ざらぬようにするのみ)。
+    query = query.filter(UploadedAsset.scope.is_(None))
     if shot_id == 0 and task_id is not None:
         query = query.filter(UploadedAsset.task_id == task_id)
     rows = query.order_by(UploadedAsset.created_at.desc()).all()
@@ -314,3 +324,51 @@ def get_asset_upload_download(
         media_type=row.content_type or "application/octet-stream",
         filename=row.filename,
     )
+
+
+# ---------------------------------------------------------------------------
+# cmd_346c (2026-10-21・殿御裁き 乙): project asset — プロジェクト直下の置き場。
+# 既存のタスク asset の作りに倣う(保存先・動画変換・閲覧/ダウンロードの経路は共有)。
+# 殿の御裁きにより、上げる口・一覧の口には既存と同じく関係者検査を置かぬ(既存の穴を
+# 広げも塞ぎもせぬ)。閲覧/ダウンロードは既存の _get_row_or_404 をそのまま通る
+# (project_id を持つ行は _actor_can_access_project の関所に乗る=既存の振る舞い)。
+# ---------------------------------------------------------------------------
+_PROJECT_SCOPE = "project"
+
+
+@router.post("/api/bff/project_assets")
+async def post_project_asset(
+    file: UploadFile = File(...),
+    project_id: int = Form(...),
+    actor_id: str = Depends(get_actor_id),
+    db: Session = Depends(get_db),
+):
+    return await _store_asset_upload(file, 0, None, project_id, _PROJECT_SCOPE, actor_id, db)
+
+
+@router.get("/api/bff/project_assets")
+def get_project_assets(
+    project_id: int,
+    actor_id: str = Depends(get_actor_id),
+    db: Session = Depends(get_db),
+):
+    rows = (
+        db.query(UploadedAsset)
+        .filter(UploadedAsset.scope == _PROJECT_SCOPE, UploadedAsset.project_id == project_id)
+        .order_by(UploadedAsset.created_at.desc())
+        .all()
+    )
+    return JSONResponse(content=[
+        {
+            "id": r.id,
+            "project_id": r.project_id,
+            "filename": r.filename,
+            "content_type": r.content_type,
+            "size_bytes": r.size_bytes,
+            "uploaded_by": r.uploaded_by,
+            "created_at": r.created_at.isoformat() if r.created_at else None,
+            "view_url": f"/api/bff/asset_uploads/{r.id}/file",
+            "download_url": f"/api/bff/asset_uploads/{r.id}/download",
+        }
+        for r in rows
+    ])

@@ -108,6 +108,9 @@ class UploadedAsset(Base):
     shot_id = Column(Integer, nullable=False, index=True)
     task_id = Column(Integer, nullable=True, index=True)
     project_id = Column(Integer, nullable=True, index=True)
+    # cmd_346c: 置き場の種別。NULL=従来のショット/タスク単位(既存行は全て NULL のまま)、
+    # 'project'=プロジェクト直下の置き場(shot_id=0・task_id=NULL・project_id=案件)。
+    scope = Column(String, nullable=True, index=True)
     filename = Column(String, nullable=False)
     stored_filename = Column(String, nullable=False)
     content_type = Column(String, nullable=True)

@@ -125,3 +125,16 @@ def test_overview_unset_when_description_not_a_string(monkeypatch):
     resp = _get_detail()
     assert resp.status_code == 200
     assert 'id="project-overview-text">未設定<' in resp.text
+
+
+def test_project_asset_button_and_modal_render(monkeypatch):
+    """cmd_346c: 進捗の枠に project asset ボタン、project_id を埋めたモーダル/スクリプトが出る。"""
+    _stub_calendar(monkeypatch, project={"description": "x"})
+    resp = _get_detail()
+    assert resp.status_code == 200
+    assert 'id="project-asset-btn"' in resp.text and "openProjectAssetModal()" in resp.text
+    assert 'id="modal-project-asset"' in resp.text
+    assert "const _projectId = 115;" in resp.text
+    assert "/api/bff/project_assets" in resp.text
+    # 進捗の見出しと同じ行(右上)にある
+    assert resp.text.index("進捗</p>") < resp.text.index('id="project-asset-btn"') < resp.text.index("task 完了")

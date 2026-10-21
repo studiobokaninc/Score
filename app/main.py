@@ -188,6 +188,8 @@ def _ensure_columns():
     _migrations = [
         ("bug_reports", "operation_log", "TEXT"),
         ("bug_reports", "user_agent", "VARCHAR"),
+        # cmd_346c: project asset の置き場印。NULL 既定の追加のみ(既存行は不変・冪等)。
+        ("uploaded_assets", "scope", "VARCHAR"),
     ]
     try:
         with engine.begin() as conn:
