@@ -70,6 +70,7 @@ def client(tmp_path, monkeypatch):
     def _db_override():
         db = MagicMock()
         db.query.return_value.filter.return_value.first.return_value = row_holder["row"]
+        db.execute.return_value = [(0, "scope")]
         yield db
 
     # resolve_path: 実ファイルを用意し FileResponse がそのまま送れるようにする
