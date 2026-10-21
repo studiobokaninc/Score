@@ -72,6 +72,19 @@ def get_all_users(
     )
 
 
+@router.get("/api/bff/dm/threads/{thread_id}/mention_candidates")
+def get_thread_mention_candidates(
+    thread_id: int,
+    actor_id: str = Depends(get_actor_id),
+):
+    """cmd_348: task thread の @候補 = そのタスクの案件にアサインされた人全員。
+    案件が引けぬ thread(一般 DM 等)は scoped=false を返し、画面は従来の全ユーザ候補のまま。"""
+    from app.helpers.thread_mention import build_mention_candidates, thread_task_ids
+
+    client = get_calendar_client()
+    return JSONResponse(content=build_mention_candidates(client, actor_id, thread_task_ids(thread_id)))
+
+
 @router.get("/api/bff/shots/{id}/tasks")
 def get_shot_tasks(
     id: int,

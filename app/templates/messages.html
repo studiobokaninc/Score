@@ -321,6 +321,7 @@ const _DEMO_MODE = {{ 'true' if demo_mode else 'false' }};
 // 上書きし、さらに送信先(dmMode)まで取り違える不具合の手当て。最後に開いた要求だけが
 // 画面と送信先を更新する(openRealThread 参照)。
 let _openRealThreadSeq = 0;
+let _scopedMentionUsers = null;  // cmd_348: 案件の者に絞った @候補(null = 全ユーザ)。宣言は初期の自動 open より前に置く
 const threads = {
   // ===== SHOT 全体 thread =====
   shot001: {
@@ -854,6 +855,7 @@ async function openRealThread(threadId) {
   // 送信しても、前に開いていたthreadへ届かぬようにする。
   dmMode = { threadId: t.thread_id, userName: names.length ? names.join(', ') : ('thread ' + t.thread_id) };
   activeThread = null;
+  _loadScopedMentionUsers(t.thread_id, _mySeq);
   // header
   // cmd_156③ (2026-07-31・殿御命): スレッドのタイトルを上(#conv-title)に置き、
   // メンバー表示の詳細(「👥 N名 thread」・宛先名の列挙)は出さない。#conv-membersは
@@ -1063,6 +1065,23 @@ const mentionUsers = [
   {% endfor %}
 ];
 
+// cmd_348: task thread を開いたら、そのタスクの案件にアサインされた人全員へ @候補を絞る。
+// 案件が引けぬ thread(一般 DM 等)・取得失敗は null のまま = 従来どおり上の全ユーザ(mentionUsers)。
+async function _loadScopedMentionUsers(threadId, seq) {
+  _scopedMentionUsers = null;
+  try {
+    const r = await fetch('/api/bff/dm/threads/' + encodeURIComponent(threadId) + '/mention_candidates', { credentials: 'include' });
+    if (!r.ok) return;
+    const d = await r.json();
+    if (seq !== _openRealThreadSeq) return;  // 後から別 thread が開かれた
+    if (d && d.scoped && Array.isArray(d.users) && d.users.length) {
+      _scopedMentionUsers = d.users.map(u => ({
+        name: u.name || u.email || ('user_' + u.id), email: u.email || '',
+        initial: (u.name || u.email || '?').slice(0, 1), color: 'bg-indigo-600'
+      }));
+    }
+  } catch (e) { /* 全ユーザ候補のまま */ }
+}
 function _getActiveParticipants() {
   // active thread の members 文字列を name list に parse (fallback用)
   if (!activeThread || !threads[activeThread]) return [];
@@ -1102,8 +1121,9 @@ function handleMentionInput(ev) {
   const query = text.substring(lastAt + 1).toLowerCase();
   // Calendar 全ユーザを優先。未取得時はスレッド参加者にフォールバック
   let candidates;
-  if (mentionUsers.length > 0) {
-    candidates = mentionUsers.filter(u =>
+  const _pool = _scopedMentionUsers || mentionUsers;
+  if (_pool.length > 0) {
+    candidates = _pool.filter(u =>
       u.name.toLowerCase().includes(query) || u.email.toLowerCase().includes(query)
     );
   } else {
@@ -1115,7 +1135,8 @@ function handleMentionInput(ev) {
     dropdown.classList.add('hidden');
     return;
   }
-  const slice = candidates.slice(0, 20);
+  // cmd_348: 案件の者に絞った候補は件数で切らぬ(一覧は内側スクロール)。全ユーザ候補のみ従来の20件上限。
+  const slice = _scopedMentionUsers ? candidates : candidates.slice(0, 20);
   dropdown.innerHTML = slice.map((u, i) =>
     `<div class="px-4 py-2 cursor-pointer hover:bg-indigo-50 text-sm flex items-center gap-2" data-mention-idx="${i}" style="background-color: white;">
       <span class="w-6 h-6 rounded-full ${u.color} text-white flex items-center justify-center text-xs font-bold shrink-0">${_escapeHtml(u.initial)}</span>
@@ -1134,6 +1155,8 @@ function handleMentionInput(ev) {
 }
 function handleMentionKeydown(ev) {
   const dropdown = document.getElementById('mention-dropdown');
+  // cmd_348: 日本語変換の確定 Enter(isComposing / keyCode 229)では候補の確定も送信もしない
+  if (ev.isComposing || ev.keyCode === 229) return;
   if (ev.key === 'Enter') {
     if (dropdown && !dropdown.classList.contains('hidden')) {
       // first match を選択

@@ -143,7 +143,7 @@
         <div style="position:relative;padding:12px 20px;border-top:1px solid rgba(255,255,255,0.6);background:rgba(255,255,255,0.3);">
           <div id="score-drawer-mention-dropdown" style="display:none;position:absolute;left:20px;right:20px;bottom:100%;max-height:176px;overflow-y:auto;background-color:white;border:1px solid #e2e8f0;border-radius:12px;box-shadow:0 8px 24px rgba(0,0,0,0.2);z-index:10;"></div>
           <div style="display:flex;gap:8px;">
-            <input id="score-drawer-input" type="text" placeholder="メッセージを入力 (Enter で送信)" style="flex:1;background:rgba(255,255,255,0.6);border:1px solid rgba(255,255,255,0.6);border-radius:12px;padding:10px 14px;font-size:13px;outline:none;color:#0f172a !important;">
+            <textarea id="score-drawer-input" rows="1" placeholder="メッセージを入力 (@ で mention・Enter で送信・Shift+Enter で改行)" style="flex:1;background:rgba(255,255,255,0.6);border:1px solid rgba(255,255,255,0.6);border-radius:12px;padding:10px 14px;font-size:13px;line-height:1.5;outline:none;color:#0f172a !important;resize:none;overflow-y:hidden;font-family:inherit;"></textarea>
             <button onclick="window._drawerSendMessage()" style="background:#6366f1;color:white;border:none;border-radius:12px;padding:10px 16px;font-weight:bold;font-size:13px;cursor:pointer;">送信</button>
           </div>
         </div>
@@ -160,29 +160,77 @@
         const dd = document.getElementById('score-drawer-mention-dropdown');
         const open = dd && dd.style.display !== 'none';
         if (e.key === 'Escape' && open) { dd.style.display = 'none'; e.stopPropagation(); return; }
-        if (e.key === 'Enter') {
+        // cmd_348: 日本語変換の確定 Enter(isComposing / keyCode 229)では何もしない(誤送信防止)
+        if (e.isComposing || e.keyCode === 229) return;
+        if (open && (e.key === 'ArrowDown' || e.key === 'ArrowUp')) {
           e.preventDefault();
-          if (open) { const first = dd.querySelector('[data-mention-idx]'); if (first) { first.click(); return; } }
+          _drawerMentionMove(dd, e.key === 'ArrowDown' ? 1 : -1);
+          return;
+        }
+        if (e.key === 'Enter') {
+          // cmd_348: Shift+Enter は改行(既定動作のまま)。候補が開いておれば Shift 無しの Enter は候補の確定。
+          if (e.shiftKey) return;
+          e.preventDefault();
+          if (open) { const cur = dd.querySelector('[data-mention-idx][data-active="1"]') || dd.querySelector('[data-mention-idx]'); if (cur) { cur.click(); return; } }
           window._drawerSendMessage();
         }
       });
+      inp.addEventListener('input', () => _drawerAutoResize(inp));
     }
     return wrap;
   }
 
-  // ===== cmd_326c: ドロワー入力欄の @メンション候補 (messages.html / shot_detail.html と同じ /api/bff/users) =====
+  // ===== cmd_326c/cmd_348: ドロワー入力欄の @メンション候補 =====
+  // cmd_348: task thread では『そのタスクの案件にアサインされた人全員』(/api/bff/dm/threads/{id}/mention_candidates)。
+  // 案件が引けぬ thread(scoped=false)や取得失敗は従来どおり Calendar 全ユーザ(/api/bff/users)へ戻す。件数の上限は設けず、一覧は内側スクロール。
   let _drawerMentionUsers = null;
+  let _drawerMentionThread = null;
+  function _mapMentionUsers(users) {
+    return users.map(u => ({ name: u.name || u.email || ('user_' + u.id), email: u.email || '' }));
+  }
   async function _getDrawerMentionUsers() {
-    if (_drawerMentionUsers) return _drawerMentionUsers;
+    const tid = window._drawerCurrentThread;
+    if (_drawerMentionUsers && _drawerMentionThread === tid) return _drawerMentionUsers;
     try {
+      if (tid) {
+        const rs = await fetch('/api/bff/dm/threads/' + encodeURIComponent(tid) + '/mention_candidates', { credentials: 'include' });
+        if (rs.ok) {
+          const d = await rs.json();
+          if (d && d.scoped && Array.isArray(d.users) && d.users.length) {
+            _drawerMentionUsers = _mapMentionUsers(d.users);
+            _drawerMentionThread = tid;
+            return _drawerMentionUsers;
+          }
+        }
+      }
       const r = await fetch('/api/bff/users', { credentials: 'include' });
       if (!r.ok) throw new Error('HTTP ' + r.status);
       const users = await r.json();
-      _drawerMentionUsers = users.map(u => ({ name: u.name || u.email || ('user_' + u.id), email: u.email || '' }));
+      _drawerMentionUsers = _mapMentionUsers(users);
+      _drawerMentionThread = tid;
     } catch (e) {
       return [];  // 失敗は保持しない(次の入力で再取得)
     }
     return _drawerMentionUsers;
+  }
+  function _drawerAutoResize(inp) {
+    inp.style.height = 'auto';
+    const lh = parseFloat(getComputedStyle(inp).lineHeight) || 20;
+    const maxH = lh * 5 + 20;
+    inp.style.height = Math.min(inp.scrollHeight, maxH) + 'px';
+    inp.style.overflowY = inp.scrollHeight > maxH ? 'auto' : 'hidden';
+  }
+  function _drawerMentionMove(dd, dir) {
+    const items = Array.from(dd.querySelectorAll('[data-mention-idx]'));
+    if (!items.length) return;
+    let i = items.findIndex(n => n.getAttribute('data-active') === '1');
+    i = i < 0 ? (dir > 0 ? 0 : items.length - 1) : (i + dir + items.length) % items.length;
+    items.forEach((n, k) => {
+      const on = k === i;
+      n.setAttribute('data-active', on ? '1' : '0');
+      n.style.backgroundColor = on ? '#e0e7ff' : 'white';
+    });
+    items[i].scrollIntoView({ block: 'nearest' });
   }
   async function _drawerMentionInput(ev) {
     const inp = ev.target;
@@ -193,13 +241,14 @@
     if (lastAt < 0 || /\s/.test(text.substring(lastAt + 1))) { dd.style.display = 'none'; return; }
     const query = text.substring(lastAt + 1).toLowerCase();
     const users = await _getDrawerMentionUsers();
-    const cands = users.filter(u => u.name.toLowerCase().includes(query) || u.email.toLowerCase().includes(query)).slice(0, 8);
+    const cands = users.filter(u => u.name.toLowerCase().includes(query) || u.email.toLowerCase().includes(query));
     if (cands.length === 0) { dd.style.display = 'none'; return; }
     // 候補の地は常に白、文字色は inline の濃色で固定(暗色テーマの上書きで白地白文字になるのを防ぐ)
     dd.innerHTML = cands.map((u, i) =>
       `<div data-mention-idx="${i}" style="padding:8px 12px;cursor:pointer;font-size:13px;background-color:white;"><span style="font-weight:bold;color:#0f172a;" translate="no">${_esc(u.name)}</span>${u.email ? ` <span style="font-size:10px;color:#64748b;" translate="no">${_esc(u.email)}</span>` : ''}</div>`
     ).join('');
     dd.querySelectorAll('[data-mention-idx]').forEach(el => {
+      el.addEventListener('mousedown', e => e.preventDefault());  // 欄の focus を失わぬ
       el.addEventListener('click', () => {
         const name = cands[parseInt(el.dataset.mentionIdx, 10)].name;
         const cur = inp.selectionStart;
@@ -210,6 +259,7 @@
         inp.focus();
         inp.setSelectionRange(pos, pos);
         dd.style.display = 'none';
+        _drawerAutoResize(inp);
       });
     });
     dd.style.display = 'block';
@@ -294,6 +344,7 @@
       });
       if (resp.ok) {
         inp.value = '';
+        inp.style.height = 'auto';
         // 再 fetch でリスト更新
         window._openThreadDrawer(window._drawerCurrentThread);
       }
