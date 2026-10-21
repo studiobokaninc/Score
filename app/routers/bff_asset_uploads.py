@@ -10,7 +10,8 @@ from pathlib import Path as _Path
 from fastapi import APIRouter, Depends, HTTPException, Path, UploadFile, File, Form
 from fastapi.responses import FileResponse, JSONResponse
 from sqlalchemy.exc import OperationalError
-from sqlalchemy.orm import Session
+from sqlalchemy import text
+from sqlalchemy.orm import Session, defer
 from typing import Optional
 
 from app.adapters.calendar_factory import get_calendar_client
@@ -38,6 +39,27 @@ async def post_asset_upload_new(
     return await _store_asset_upload(file, shot_id, task_id, project_id, None, actor_id, db)
 
 
+_PROJECT_ASSET_UNAVAILABLE = "project asset はまだ使えません(サーバ側DBの更新が済んでいないため)。管理者へご連絡ください。タスクのファイルは今まで通りお使いいただけます。"
+
+
+def _has_scope_column(db: Session) -> bool:
+    """uploaded_assets に scope 列が在るか。実 score.db が書込不可で起動時の列追加(_ensure_columns)
+    が失敗した場合、scope 列の無い DB で動く。その時も従来のタスク asset を壊さぬための見張り。"""
+    try:
+        cols = [r[1] for r in db.execute(text("PRAGMA table_info(uploaded_assets)"))]
+    except Exception:
+        return True
+    return "scope" in cols
+
+
+def _asset_query(db: Session):
+    """UploadedAsset の問い合わせ。scope 列が無い DB では scope を読まぬ(従来の形へ退く)。"""
+    q = db.query(UploadedAsset)
+    if not _has_scope_column(db):
+        q = q.options(defer(UploadedAsset.scope))
+    return q
+
+
 async def _store_asset_upload(file, shot_id, task_id, project_id, scope, actor_id, db):
     """上げる処理の本体。従来のタスク/ショット単位(scope=None)と、cmd_346c の
     プロジェクト直下(scope='project')で共有する。保存・動画変換・エラー応答は同一。"""
@@ -45,6 +67,9 @@ async def _store_asset_upload(file, shot_id, task_id, project_id, scope, actor_i
     # 判別の単位はカットではなくタスクであり(殿「タスクがあればアップできる
     # ように」)、shot_id/shot_code の有無による拒否は行わない。案件跨ぎ混線の
     # 歯止め(shot_id==0時のtask_id絞り)は一覧側(get_asset_uploads_new)で維持。
+    _scope_ok = _has_scope_column(db)
+    if scope is not None and not _scope_ok:
+        raise HTTPException(status_code=503, detail=_PROJECT_ASSET_UNAVAILABLE)
     content = await file.read()
     if len(content) > _MAX_BYTES:
         raise HTTPException(status_code=413, detail=f"File too large: {len(content)//1024//1024}MB > 500MB")
@@ -71,13 +96,14 @@ async def _store_asset_upload(file, shot_id, task_id, project_id, scope, actor_i
         shot_id=shot_id,
         task_id=task_id,
         project_id=project_id,
-        scope=scope,
         filename=_filename,
         stored_filename="",
         content_type=_content_type,
         size_bytes=len(content),
         uploaded_by=actor_id,
     )
+    if scope is not None:
+        row.scope = scope  # 従来(scope=None)は未設定のまま=INSERT に scope 列を含めぬ(列が無い DB でも通る)
     import sys as _sys
     try:
         db.add(row)
@@ -126,7 +152,10 @@ async def _store_asset_upload(file, shot_id, task_id, project_id, scope, actor_i
             status_code=500,
             detail="データベースへの書込みに失敗しました(サーバ側DBが読み取り専用です)。管理者へご連絡ください。",
         )
-    db.refresh(row)
+    if _scope_ok:
+        db.refresh(row)
+    else:
+        db.refresh(row, attribute_names=[c.key for c in UploadedAsset.__table__.columns if c.key != "scope"])
     return JSONResponse(content={
         "id": row.id,
         "shot_id": row.shot_id,
@@ -150,10 +179,11 @@ def get_asset_uploads_new(
     # subtask_258c: shot_id==0 は「shotが無い」印であって特定のshotを指さぬため、
     # shot_id==0 の時に限り task_id でも絞り込む(案件跨ぎの見え方混線を防ぐ)。
     # shot_idがある場合の既存の振る舞い(shot単位で絞る)は変えない。
-    query = db.query(UploadedAsset).filter(UploadedAsset.shot_id == shot_id)
+    query = _asset_query(db).filter(UploadedAsset.shot_id == shot_id)
     # cmd_346c: プロジェクト直下の置き場(scope='project')は別の口で扱う。従来の行(scope NULL)
     # の見え方は変えぬ(shot_id==0 の一覧にプロジェクト直下の物が混ざらぬようにするのみ)。
-    query = query.filter(UploadedAsset.scope.is_(None))
+    if _has_scope_column(db):
+        query = query.filter(UploadedAsset.scope.is_(None))
     if shot_id == 0 and task_id is not None:
         query = query.filter(UploadedAsset.task_id == task_id)
     rows = query.order_by(UploadedAsset.created_at.desc()).all()
@@ -246,7 +276,7 @@ def _actor_can_access_project(project_id: int, actor_id: str) -> bool:
 
 
 def _get_row_or_404(asset_upload_id: int, db: Session, actor_id: str) -> UploadedAsset:
-    row = db.query(UploadedAsset).filter(UploadedAsset.id == asset_upload_id).first()
+    row = _asset_query(db).filter(UploadedAsset.id == asset_upload_id).first()
     if row is None:
         raise HTTPException(status_code=404, detail="asset_upload not found")
     path = resolve_path(row.stored_filename)
@@ -352,6 +382,8 @@ def get_project_assets(
     actor_id: str = Depends(get_actor_id),
     db: Session = Depends(get_db),
 ):
+    if not _has_scope_column(db):
+        return JSONResponse(status_code=503, content={"detail": _PROJECT_ASSET_UNAVAILABLE, "unavailable": True})
     rows = (
         db.query(UploadedAsset)
         .filter(UploadedAsset.scope == _PROJECT_SCOPE, UploadedAsset.project_id == project_id)

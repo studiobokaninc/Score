@@ -191,15 +191,21 @@ def _ensure_columns():
         # cmd_346c: project asset の置き場印。NULL 既定の追加のみ(既存行は不変・冪等)。
         ("uploaded_assets", "scope", "VARCHAR"),
     ]
-    try:
-        with engine.begin() as conn:
-            for table, col, coltype in _migrations:
+    import logging as _logging
+    import sys as _sys
+    # cmd_346d: 列ごとに独立して試み、失敗は握り潰さず警告に残す(起動は止めぬ)。
+    # 実 score.db が書込不可だと ALTER が失敗する。scope 列が無い場合も asset の口は退く作りだが、
+    # 原因(権限)を管理者が拾えるよう WARNING とする。
+    for table, col, coltype in _migrations:
+        try:
+            with engine.begin() as conn:
                 existing = [r[1] for r in conn.execute(_sql_text(f"PRAGMA table_info({table})"))]
                 if col not in existing:
                     conn.execute(_sql_text(f"ALTER TABLE {table} ADD COLUMN {col} {coltype}"))
-    except Exception as _e:
-        import sys as _sys
-        print(f"[migration] skip/err: {_e}", file=_sys.stderr)
+        except Exception as _e:
+            _msg = f"[migration] 列追加に失敗 {table}.{col}: {_e!r} (DBの書込権限を確認。起動は続行)"
+            _logging.getLogger(__name__).warning(_msg)
+            print(_msg, file=_sys.stderr)
 _ensure_columns()
 
 app.include_router(bff.router, prefix="")

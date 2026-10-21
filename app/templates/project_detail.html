@@ -431,7 +431,11 @@
         listEl.innerHTML = '<li class="text-[11px] text-white/40">読込中...</li>';
         try {
           const resp = await fetch('/api/bff/project_assets?project_id=' + encodeURIComponent(_projectId), { credentials: 'include' });
-          if (!resp.ok) throw new Error('HTTP ' + resp.status);
+          if (!resp.ok) {
+            let detail = 'HTTP ' + resp.status;
+            try { const body = await resp.json(); if (body && body.detail) detail = body.detail; } catch (_e) {}
+            throw new Error(detail);
+          }
           const items = await resp.json();
           if (!items.length) {
             listEl.innerHTML = '<li class="text-[11px] text-white/40">まだアップロードされたアセットはありません</li>';
