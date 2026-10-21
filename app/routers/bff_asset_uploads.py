@@ -92,7 +92,7 @@ async def _store_asset_upload(file, shot_id, task_id, project_id, scope, actor_i
         elif _vr["error"]:
             _video_notice = "この動画は画面で再生できない形式の可能性があります(自動変換に失敗)。H.264 で書き出し直すか、ダウンロードしてご覧ください。"
 
-    row = UploadedAsset(
+    _values = dict(
         shot_id=shot_id,
         task_id=task_id,
         project_id=project_id,
@@ -102,12 +102,22 @@ async def _store_asset_upload(file, shot_id, task_id, project_id, scope, actor_i
         size_bytes=len(content),
         uploaded_by=actor_id,
     )
-    if scope is not None:
-        row.scope = scope  # 従来(scope=None)は未設定のまま=INSERT に scope 列を含めぬ(列が無い DB でも通る)
     import sys as _sys
     try:
-        db.add(row)
-        db.flush()  # id 採番 (保存ファイル名に使う)
+        if _scope_ok:
+            row = UploadedAsset(**_values)
+            if scope is not None:
+                row.scope = scope
+            db.add(row)
+            db.flush()  # id 採番 (保存ファイル名に使う)
+        else:
+            # scope 列の無い DB: ORM の INSERT は未設定の scope も NULL として含め
+            # 「no column named scope」で落ちる(QC346D-1・軍師が実測)。Core の insert で
+            # scope 抜きに発行し、採番された id で scope を読まぬ形(defer)で読み直す。
+            _res = db.execute(UploadedAsset.__table__.insert().values(**_values))
+            _new_id = _res.inserted_primary_key[0]
+            db.flush()
+            row = _asset_query(db).filter(UploadedAsset.id == _new_id).one()
     except OperationalError as e:
         # subtask_258a・追加是正: db.flush() (INSERT) の時点で score.db 自体が
         # 書込不可 (要対応#263: score.db が root所有mode644でuvicorn実行ユーザ
@@ -120,7 +130,7 @@ async def _store_asset_upload(file, shot_id, task_id, project_id, scope, actor_i
         print(f"[asset_uploads] db insert failed: {e!r}", file=_sys.stderr, flush=True)
         raise HTTPException(
             status_code=500,
-            detail="データベースへの書込みに失敗しました(サーバ側DBが読み取り専用です)。管理者へご連絡ください。",
+            detail="データベースへの書込みに失敗しました。管理者へご連絡ください(原因はサーバのログに記録されています)。",
         )
     try:
         stored_filename = save_upload(row.id, _filename, content)
@@ -150,7 +160,7 @@ async def _store_asset_upload(file, shot_id, task_id, project_id, scope, actor_i
         print(f"[asset_uploads] db commit failed: {e!r}", file=_sys.stderr, flush=True)
         raise HTTPException(
             status_code=500,
-            detail="データベースへの書込みに失敗しました(サーバ側DBが読み取り専用です)。管理者へご連絡ください。",
+            detail="データベースへの書込みに失敗しました。管理者へご連絡ください(原因はサーバのログに記録されています)。",
         )
     if _scope_ok:
         db.refresh(row)

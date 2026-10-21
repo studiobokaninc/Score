@@ -78,6 +78,10 @@ def test_task_asset_upload_and_view_still_work(ctx):
     assert r.status_code == 200, r.text
     new_id = r.json()["id"]
     assert "scope" not in _cols(engine)  # 列追加は試みぬ(読む/書く経路だけが退く)
+    with engine.begin() as conn:  # scope 抜きの INSERT で行が入り、保管名も更新されている事
+        row = conn.execute(text("SELECT filename, stored_filename, size_bytes, uploaded_by FROM uploaded_assets WHERE id=:i"),
+                           {"i": new_id}).one()
+    assert row[0] == "a.txt" and row[1] and row[2] == 5 and row[3] == "42"
     lst = c.get("/api/bff/asset_uploads", params={"shot_id": 0, "task_id": 10})
     assert lst.status_code == 200 and len(lst.json()) == 1
     f = c.get(f"/api/bff/asset_uploads/{new_id}/file")
