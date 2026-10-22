@@ -150,6 +150,7 @@ def get_shot_detail(
             "asset_list": asset_list,
             "latest_by_task": latest_by_task,
             "project_members": project_members,
+            "user_name_map": user_name_map,
         },
     )
 

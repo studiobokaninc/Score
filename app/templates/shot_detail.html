@@ -408,7 +408,7 @@
             {% set _display = _bn[_prefix|length:] if _bn.startswith(_prefix) else _bn %}
             <p class="text-xs text-slate-600 truncate font-mono" title="{{ _bn }}">{{ _display }}</p>
             <p class="text-[11px] text-slate-500 mt-1">
-              by <span translate="no" class="font-bold">{{ _names.get(a.created_by, 'user_' + (a.created_by|string)) }}</span>
+              by <span translate="no" class="font-bold">{{ (user_name_map or {}).get(a.created_by) or _names.get(a.created_by, 'user_' + (a.created_by|string)) }}</span>
               <span class="text-slate-400 mx-1">|</span>
               <span class="font-mono">{{ (a.created_at or '')[:16] }}</span>
             </p>
