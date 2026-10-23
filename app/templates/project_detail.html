@@ -155,6 +155,7 @@
     <div class="flex flex-col gap-3">
       {% for sg in seq_groups %}
       {% set _is_pm = '📋' in (sg.seq_code or '') %}
+      {% set _seq_idx = loop.index %}
       {% set _seq_hue = 'slate' if _is_pm else _seq_hues[loop.index0 % (_seq_hues|length)] %}
       {% set _sp = sg.palette or _SEQ_PAL[_seq_hue] %}
       {% set _c = {'bg': _sp.card_bg or _sp.bg, 'border': _sp.card_border or _sp.border, 'text': _sp.title, 'badge_bg': _sp.badge_bg, 'side_bar': _sp.side_bar} %}
@@ -174,8 +175,8 @@
             {% set _shotp = shot.palette %}
             {% set _shot_classes = (_shotp.bg ~ ' ' ~ _shotp.border) if _shotp and _shotp.bg else _SHOT_PAL[_seq_hue][loop.index0 % 3] %}
             <li class="{{ _shot_classes }} border rounded-xl mb-1">
-              <button onclick="toggleShot('{{ loop.index0 }}-{{ shot.shot_code | replace(' ', '_') }}')" class="w-full flex items-center gap-2 p-2 text-left text-sm hover:bg-indigo-50 rounded-xl">
-                <span id="arrow-shot-{{ loop.index0 }}-{{ shot.shot_code | replace(' ', '_') }}" class="text-slate-500 transition-transform text-xs">▶</span>
+              <button onclick="toggleShot('{{ _seq_idx }}-{{ loop.index0 }}-{{ shot.shot_code | replace(' ', '_') }}')" class="w-full flex items-center gap-2 p-2 text-left text-sm hover:bg-indigo-50 rounded-xl">
+                <span id="arrow-shot-{{ _seq_idx }}-{{ loop.index0 }}-{{ shot.shot_code | replace(' ', '_') }}" class="text-slate-500 transition-transform text-xs">▶</span>
                 <span class="font-bold text-slate-700" translate="no">{{ shot.shot_code }}</span>
                 <span class="text-xs text-slate-400">{{ shot.task_count }} tasks</span>
                 {% if shot.status %}
@@ -187,7 +188,7 @@
                 {% endif %}
                 <a href="/shot/{{ shot.id }}?project_id={{ project_id }}" class="text-xs text-indigo-500 hover:text-indigo-700 ml-2" onclick="event.stopPropagation()">→</a>
               </button>
-              <div id="shot-tasks-{{ loop.index0 }}-{{ shot.shot_code | replace(' ', '_') }}" class="hidden ml-6 mr-2 mb-2 space-y-1">
+              <div id="shot-tasks-{{ _seq_idx }}-{{ loop.index0 }}-{{ shot.shot_code | replace(' ', '_') }}" class="hidden ml-6 mr-2 mb-2 space-y-1">
                 {% if shot.tasks %}
                 {% for tk in shot.tasks %}
                 {% set _icon = '🎨' if tk.type == 'Composite' else ('💡' if tk.type in ('Lighting','Look','lighting') else ('🖼️' if tk.type == 'MattePaint' else ('✨' if tk.type in ('FX','fx') else ('📐' if tk.type == 'layout' else '🎬')))) %}
