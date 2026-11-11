@@ -893,7 +893,12 @@
       const imgExt = ['png','jpg','jpeg','webp','gif'];
       const vidExt = ['mp4','webm','m4v'];
       if (imgExt.includes(ext)) {
-        player.innerHTML = '<img src="' + url + '" alt="' + basename + '" class="max-w-full max-h-[60vh] object-contain">';
+        player.innerHTML = '';
+        const _img = document.createElement('img');
+        _img.src = url;
+        _img.alt = basename;
+        _img.className = 'max-w-full max-h-[60vh] object-contain';
+        player.appendChild(_img);
       } else if (vidExt.includes(ext)) {
         player.innerHTML = '<video src="' + url + '" controls autoplay class="max-w-full max-h-[60vh]"></video>';
       } else if (ext === 'mov') {

@@ -145,3 +145,40 @@ class TestQcViewerShowsOriginalName:
         assert r.status_code == 200
         assert "v001 — s62_c064A_primary_v01.mp4" in r.text
         assert "/api/bff/assets/342/download?task_id=4095" in r.text
+
+
+class TestConvertedOriginalDownloadName:
+    """R1: 変換済み(控え無し・原本在り)は原本の名(先頭 {id}_ 除き)で落とす。"""
+
+    def _assets(self):
+        return [{"id": 50, "task_id": 9, "version": "v001",
+                 "file_path": "uploads/shot_1_task_9_v001_clip_v001.mp4"}]
+
+    def test_no_stored_name_uses_original_file_name(self, client, isolated_db, tmp_path, monkeypatch):
+        p = tmp_path / "50_clip.mov"
+        p.write_bytes(b"mov")
+        monkeypatch.setattr("app.helpers.asset_originals.find_original", lambda _id: p)
+        with patch("app.routers.bff_write.get_calendar_client", return_value=_fake_client(self._assets())):
+            r = client.get("/api/bff/assets/50/download?task_id=9")
+        assert r.status_code == 200 and r.content == b"mov"
+        assert 'filename="clip.mov"' in r.headers["content-disposition"]
+        assert "clip.mp4" not in r.headers["content-disposition"]
+
+    def test_stored_name_still_wins_for_original(self, client, isolated_db, tmp_path, monkeypatch):
+        save_original_name(50, "my clip.mov")
+        p = tmp_path / "50_clip.mov"
+        p.write_bytes(b"mov")
+        monkeypatch.setattr("app.helpers.asset_originals.find_original", lambda _id: p)
+        with patch("app.routers.bff_write.get_calendar_client", return_value=_fake_client(self._assets())):
+            r = client.get("/api/bff/assets/50/download?task_id=9")
+        assert "my%20clip.mov" in r.headers["content-disposition"]
+
+
+class TestViewerAltNotInnerHtml:
+    """R2: 画像の alt を innerHTML の文字連結で入れない。"""
+
+    def test_select_asset_sets_alt_via_property(self):
+        here = os.path.dirname(__file__)
+        src = open(os.path.join(here, "..", "templates", "qc_viewer.html"), encoding="utf-8").read()
+        assert "alt=\"' + basename" not in src
+        assert "_img.alt = basename" in src

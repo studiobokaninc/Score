@@ -2133,7 +2133,7 @@ def get_asset_download(
     """cmd_372: QC ビューアー等の DL。元のファイル名 (控え→無ければ保存名から切り出し) で返す。
     Calendar 直配信 URL は別オリジンで <a download> の名が効かぬため、Score が中継して Content-Disposition を付ける。"""
     from fastapi.responses import FileResponse, StreamingResponse
-    from app.helpers.asset_names import attach_display_names, content_disposition
+    from app.helpers.asset_names import attach_display_names, content_disposition, get_stored_original_name
     from app.helpers.asset_originals import find_original
     if task_id is None:
         raise HTTPException(status_code=400, detail="task_id required")
@@ -2146,7 +2146,11 @@ def get_asset_download(
     name = asset["display_name"]
     original = find_original(asset_id)
     if original is not None and original.is_file():
-        return FileResponse(str(original), headers={"Content-Disposition": content_disposition(name)})
+        # 原本(.mov 等)を返す時、控えが無ければ原本の名 ("{asset_id}_" 除き) で落とす。
+        # 切り出した x.mp4 の名で中身 x.mov になる拡張子の食い違いを避ける。
+        orig_name = name if get_stored_original_name(asset_id) else (
+            original.name.split("_", 1)[1] if "_" in original.name else original.name)
+        return FileResponse(str(original), headers={"Content-Disposition": content_disposition(orig_name)})
     bn = (asset.get("file_path") or "").replace("\\", "/").split("/")[-1]
     if not bn:
         raise HTTPException(status_code=404, detail="file not found")

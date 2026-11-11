@@ -59,6 +59,21 @@ def attach_display_names(asset_list) -> None:
             a.get("file_path") or "", a.get("version"))
 
 
+def get_stored_original_name(asset_id: int) -> str | None:
+    """Score DB に控えた元の名。無い・引けぬ時は None。"""
+    try:
+        from app.database import SessionLocal
+        from app.models import AssetOriginalName
+        db = SessionLocal()
+        try:
+            row = db.get(AssetOriginalName, int(asset_id))
+            return row.original_name if row is not None and row.original_name else None
+        finally:
+            db.close()
+    except Exception:
+        return None
+
+
 def save_original_name(asset_id: int, original_name: str) -> None:
     from app.database import SessionLocal
     from app.models import AssetOriginalName
