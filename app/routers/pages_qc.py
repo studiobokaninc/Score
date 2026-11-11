@@ -161,9 +161,14 @@ def get_qc_viewer(
     # 殿御命 2026-07-06 (cmd_068②③): .exr/.mov 等変換済 asset は DL リンクを原本ファイルへ差替え
     _demo_mode = os.getenv("CALENDAR_MOCK", "0") == "1"
     from app.helpers.asset_originals import resolve_download_url
+    from app.helpers.asset_names import attach_display_names
+    attach_display_names(asset_list)  # cmd_372: 画面・DL に出す名 = 上げた時の元のファイル名
     for _a in asset_list:
         if isinstance(_a, dict):
             _a["download_url"] = resolve_download_url(_a, _demo_mode)
+            # cmd_372: DL は Score 中継 (元の名で Content-Disposition)。task_id が分かる時のみ。
+            if task_id and _a.get("id") is not None:
+                _a["download_url"] = f"/api/bff/assets/{int(_a['id'])}/download?task_id={int(task_id)}"
 
     # 殿御命 2026-06-05: project_members 取得 (mention 選択用)
     # 殿御命 2026-07-09 (cmd_076③): auto-membership 共通ヘルパーに統一

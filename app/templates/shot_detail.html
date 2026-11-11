@@ -1101,6 +1101,7 @@
       const _renamed = new File([f], _newName, { type: f.type });
       const fd = new FormData();
       fd.append('file', _renamed);
+      fd.append('original_name', _origName);  // cmd_372: 元のファイル名 (画面・DL 表示用)
       const taskId = {{ task_id|default(none)|tojson }};
       const shotId = {{ shot_id|default(none)|tojson }};
       const projectId = {{ (project_id or 0)|tojson }};

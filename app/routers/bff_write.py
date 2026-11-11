@@ -669,6 +669,7 @@ async def post_asset_upload(
     submission_type: Optional[str] = Form(None),   # 殿御命 2026-06-03: 'qc' | 'review'
     mentions: Optional[str] = Form(None),           # 殿御命 2026-06-03: カンマ区切り uid/email
     memo: Optional[str] = Form(None),               # cmd_234: 提出メッセージへ添える一言 (任意・改行可)
+    original_name: Optional[str] = Form(None),      # cmd_372: 利用者が選んだ元のファイル名 (画面/DL 表示用)
     actor_id: str = Depends(get_actor_id),
 ):
     """QC/review asset upload (殿御命 2026-06-01)
@@ -685,6 +686,7 @@ async def post_asset_upload(
     # 殿御命 2026-07-06 (cmd_068②③): 変換前の原本を保持 (DL は常に原本を返す・プレビューのみ変換後)
     _original_content = content
     _original_filename = _filename
+    _display_original_name = (original_name or "").strip() or _filename  # cmd_372: 控える元の名
     _needs_original_preserve = False
     # cmd_323: 動画は拡張子ではなく中身(映像コーデック)で判じ、画面で映らぬ形は H.264 へ変換する。
     # (.mov は従来どおり必ず .mp4 へ・H.264 の物は詰め替えのみ。原本は save_original で保持)
@@ -759,6 +761,15 @@ async def post_asset_upload(
     except Exception as _e:
         _cal_body = getattr(getattr(_e, "response", None), "text", str(_e))[:300]
         raise HTTPException(status_code=502, detail=f"Calendar /api/assets エラー: {_cal_body}")
+    # cmd_372: 上げた時の元のファイル名を asset_id に控える (QC 画面の動画名・DL 名に使う)
+    try:
+        _aid_for_name = (result.get("id") or result.get("asset_id")) if isinstance(result, dict) else None
+        if _aid_for_name is not None:
+            from app.helpers.asset_names import save_original_name as _save_orig_name
+            _save_orig_name(int(_aid_for_name), _display_original_name)
+    except Exception as _e:
+        import sys as _s_name
+        print(f"[asset_original_name] save skip: {_e}", file=_s_name.stderr)
     # 殿御命 2026-07-06 (cmd_068②③): 変換を経た asset は原本を Score ローカルに保存
     # (Calendar には変換後ファイルのみ送信されるため、DL 用の原本はここでしか保持できない)
     if _needs_original_preserve:
@@ -2109,7 +2120,61 @@ def get_asset_original(
         raise HTTPException(status_code=404, detail="original file not found")
     # 保存名は "{asset_id}_{original_filename}" — 先頭の "{asset_id}_" を除いた名で DL させる
     display_name = path.name.split("_", 1)[1] if "_" in path.name else path.name
-    return FileResponse(str(path), filename=display_name)
+    from app.helpers.asset_names import content_disposition
+    return FileResponse(str(path), headers={"Content-Disposition": content_disposition(display_name)})
+
+
+@router.get("/api/bff/assets/{asset_id}/download")
+def get_asset_download(
+    asset_id: int = Path(...),
+    task_id: Optional[int] = None,
+    actor_id: str = Depends(get_actor_id),
+):
+    """cmd_372: QC ビューアー等の DL。元のファイル名 (控え→無ければ保存名から切り出し) で返す。
+    Calendar 直配信 URL は別オリジンで <a download> の名が効かぬため、Score が中継して Content-Disposition を付ける。"""
+    from fastapi.responses import FileResponse, StreamingResponse
+    from app.helpers.asset_names import attach_display_names, content_disposition
+    from app.helpers.asset_originals import find_original
+    if task_id is None:
+        raise HTTPException(status_code=400, detail="task_id required")
+    client = get_calendar_client()
+    assets = [a for a in (client.get_assets_by_task(task_id, actor_user_id=actor_id) or []) if isinstance(a, dict)]
+    asset = next((a for a in assets if a.get("id") == asset_id), None)
+    if asset is None:
+        raise HTTPException(status_code=404, detail="asset not found")
+    attach_display_names([asset])
+    name = asset["display_name"]
+    original = find_original(asset_id)
+    if original is not None and original.is_file():
+        return FileResponse(str(original), headers={"Content-Disposition": content_disposition(name)})
+    bn = (asset.get("file_path") or "").replace("\\", "/").split("/")[-1]
+    if not bn:
+        raise HTTPException(status_code=404, detail="file not found")
+    headers = {"Content-Disposition": content_disposition(name)}
+    local = _Path(__file__).parent.parent / "static" / "assets" / bn
+    if _os.getenv("CALENDAR_MOCK", "0") == "1" or "sample_" in bn:
+        if not local.is_file():
+            raise HTTPException(status_code=404, detail="file not found")
+        return FileResponse(str(local), headers=headers)
+    import httpx
+    from urllib.parse import quote as _q
+    upstream = httpx.Client(timeout=60.0)
+    try:
+        req = upstream.build_request("GET", f"http://192.168.44.253:8001/static/assets/{_q(bn)}")
+        resp = upstream.send(req, stream=True)
+    except Exception:
+        upstream.close()
+        raise HTTPException(status_code=502, detail="Calendar からの取得に失敗")
+    if resp.status_code != 200:
+        resp.close(); upstream.close()
+        raise HTTPException(status_code=404, detail="file not found")
+
+    def _iter():
+        try:
+            yield from resp.iter_bytes()
+        finally:
+            resp.close(); upstream.close()
+    return StreamingResponse(_iter(), media_type=resp.headers.get("content-type", "application/octet-stream"), headers=headers)
 
 
 @router.post("/api/bff/me/avatar")

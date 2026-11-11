@@ -133,3 +133,14 @@ class ServiceActorOverrideLog(Base):
     endpoint = Column(String, nullable=False, index=True)       # request.url.path (対象entityのidを含む例: /api/bff/tasks/1234)
     service_client_id = Column(String, nullable=True)           # サービスJWTの cid クレーム(無ければ"service")
     acting_user_id = Column(String, nullable=False, index=True)  # 名乗り採用された actor_id (Calendar実uid)
+
+
+class AssetOriginalName(Base):
+    """cmd_372: QC/review に上げた動画等の「上げた時の元のファイル名」。
+    Calendar は保存名を shot_{S}_task_{T}_{version}_{アップロード名} に改め、画面側 JS も
+    アップロード名へ _{version} を足すため、元の名は Calendar 側に残らぬ。Score 側で asset_id 単位に控える。"""
+    __tablename__ = "asset_original_names"
+
+    asset_id = Column(Integer, primary_key=True)
+    original_name = Column(String, nullable=False)
+    created_at = Column(DateTime, default=datetime.utcnow)
