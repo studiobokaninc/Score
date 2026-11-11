@@ -166,17 +166,17 @@
           <span class="ml-auto flex items-center gap-2">
             <span class="text-xs font-black bg-white/90 border border-slate-300 text-slate-900 rounded-full px-2.5 py-1 shadow-sm">🎬 {{ sg.shot_count }} SHOT</span>
             <span class="text-xs font-black bg-white/90 border border-slate-300 text-slate-900 rounded-full px-2.5 py-1 shadow-sm">📋 {{ _task_total }} task</span>
-            <span id="arrow-{{ loop.index }}" class="{{ _c.text }} transition-transform text-lg ml-1">▶</span>
+            <span id="arrow-{{ loop.index }}" data-acc-arrow="seq-{{ loop.index }}" class="{{ _c.text }} transition-transform text-lg ml-1">▶</span>
           </span>
         </button>
-        <div id="seq-{{ loop.index }}" class="hidden px-4 pb-4">
+        <div id="seq-{{ loop.index }}" data-acc-panel="seq-{{ loop.index }}" class="hidden px-4 pb-4">
           <ul class="space-y-1">
             {% for shot in sg.shots %}
             {% set _shotp = shot.palette %}
             {% set _shot_classes = (_shotp.bg ~ ' ' ~ _shotp.border) if _shotp and _shotp.bg else _SHOT_PAL[_seq_hue][loop.index0 % 3] %}
             <li class="{{ _shot_classes }} border rounded-xl mb-1">
               <button onclick="toggleShot('{{ _seq_idx }}-{{ loop.index0 }}-{{ shot.shot_code | replace(' ', '_') }}')" class="w-full flex items-center gap-2 p-2 text-left text-sm hover:bg-indigo-50 rounded-xl">
-                <span id="arrow-shot-{{ _seq_idx }}-{{ loop.index0 }}-{{ shot.shot_code | replace(' ', '_') }}" class="text-slate-500 transition-transform text-xs">▶</span>
+                <span id="arrow-shot-{{ _seq_idx }}-{{ loop.index0 }}-{{ shot.shot_code | replace(' ', '_') }}" data-acc-arrow="shot-{{ _seq_idx }}-{{ loop.index0 }}-{{ shot.shot_code | replace(' ', '_') }}" class="text-slate-500 transition-transform text-xs">▶</span>
                 <span class="font-bold text-slate-700" translate="no">{{ shot.shot_code }}</span>
                 <span class="text-xs text-slate-400">{{ shot.task_count }} tasks</span>
                 {% if shot.status %}
@@ -188,7 +188,7 @@
                 {% endif %}
                 <a href="/shot/{{ shot.id }}?project_id={{ project_id }}" class="text-xs text-indigo-500 hover:text-indigo-700 ml-2" onclick="event.stopPropagation()">→</a>
               </button>
-              <div id="shot-tasks-{{ _seq_idx }}-{{ loop.index0 }}-{{ shot.shot_code | replace(' ', '_') }}" class="hidden ml-6 mr-2 mb-2 space-y-1">
+              <div id="shot-tasks-{{ _seq_idx }}-{{ loop.index0 }}-{{ shot.shot_code | replace(' ', '_') }}" data-acc-panel="shot-{{ _seq_idx }}-{{ loop.index0 }}-{{ shot.shot_code | replace(' ', '_') }}" class="hidden ml-6 mr-2 mb-2 space-y-1">
                 {% if shot.tasks %}
                 {% for tk in shot.tasks %}
                 {% set _icon = '🎨' if tk.type == 'Composite' else ('💡' if tk.type in ('Lighting','Look','lighting') else ('🖼️' if tk.type == 'MattePaint' else ('✨' if tk.type in ('FX','fx') else ('📐' if tk.type == 'layout' else '🎬')))) %}
@@ -268,9 +268,11 @@
   </div>
 
   <!-- Fixed back button -->
-  <a href="/projects" class="fixed bottom-8 right-8 bg-indigo-600 text-white rounded-full px-6 py-3 shadow-xl font-bold hover:bg-indigo-700 transition-colors">
-    プロジェクト一覧
-  </a>
+  <div class="fixed bottom-8 right-8 z-40 flex items-center gap-2">
+    <button type="button" id="btn-expand-all" onclick="setAllAccordions(true)" class="bg-indigo-600 text-white rounded-full px-5 py-3 shadow-xl font-bold hover:bg-indigo-700 transition-colors">全部展開</button>
+    <button type="button" id="btn-collapse-all" onclick="setAllAccordions(false)" class="bg-indigo-600 text-white rounded-full px-5 py-3 shadow-xl font-bold hover:bg-indigo-700 transition-colors">全部収納</button>
+    <a id="btn-export-csv" href="/project_detail/{{ project_id }}/export.csv" class="bg-emerald-600 text-white rounded-full px-5 py-3 shadow-xl font-bold hover:bg-emerald-700 transition-colors">CSV 書き出し</a>
+  </div>
 
   <!-- mini-footer -->
   <footer class="fixed bottom-0 left-0 right-0 bg-white/60 backdrop-blur-md border-t border-white/60 flex items-center justify-end px-6 py-1.5 z-30">
@@ -344,6 +346,16 @@
       if (!content) return;
       content.classList.toggle('hidden');
       if (arrow) arrow.classList.toggle('rotate-90');
+    }
+    // 全部展開 / 全部収納: 開閉は hidden クラスと矢印の rotate-90 の二つだけが状態(保存機構なし)ゆえ、
+    // 全パネルを data-acc-panel で拾い、対の矢印 (data-acc-arrow) と揃えて設定する。
+    function setAllAccordions(open) {
+      document.querySelectorAll('[data-acc-panel]').forEach(function (panel) {
+        panel.classList.toggle('hidden', !open);
+      });
+      document.querySelectorAll('[data-acc-arrow]').forEach(function (arrow) {
+        arrow.classList.toggle('rotate-90', open);
+      });
     }
     // 旧 alias (互換)
     function toggleSEQ(n) { toggleSeq(n); }

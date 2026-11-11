@@ -1,5 +1,8 @@
+import csv
+import io
 import os
-from fastapi import APIRouter, Depends, Request
+from urllib.parse import quote
+from fastapi import APIRouter, Depends, Request, Response
 from fastapi.templating import Jinja2Templates
 from app.deps import get_actor_id, get_actor_role
 from app.helpers.project_resolver import resolve_project_name, resolve_project_members
@@ -7,6 +10,7 @@ from app.adapters.calendar_factory import get_calendar_client
 from app.helpers.task_status import attach_status_meta
 
 router = APIRouter()
+_NO_SHOT_LABEL = "📋 (SHOT 紐付けなし)"
 _templates = Jinja2Templates(directory="app/templates")
 
 
@@ -79,7 +83,55 @@ def get_project_detail(project_id: int, request: Request, actor_id: str = Depend
     except Exception:
         members = []
 
-    # SEQ > SHOT > TASK 階層構築 (動的) — task 主軸構築
+    seq_groups_list = _build_seq_groups(client, project_id, actor_id, all_proj_tasks, uid_to_name)
+
+    from app.helpers.colors import (
+        get_project_palette, get_task_type_palette,
+        get_seq_palette, get_shot_palette,
+    )
+    project_palette = get_project_palette(project_id)
+    # decorate seq groups with seq_palette, shots with shot_palette, tasks with type palette
+    for seq_idx, sg in enumerate(seq_groups_list):
+        # project-level (PM/管理) seq is rendered separately — keep neutral slate
+        is_pm = "📋" in (sg.get("seq_code") or "")
+        sg["palette"] = (
+            {"key": "slate", "card_bg": "bg-slate-50", "card_border": "border-slate-300",
+             "title": "text-slate-700", "side_bar": "bg-slate-400",
+             "badge_bg": "bg-slate-600", "badge_text": "text-white"}
+            if is_pm else get_seq_palette(project_id, seq_idx)
+        )
+        for shot_idx, shot in enumerate(sg.get("shots", [])):
+            shot["palette"] = (
+                {"key": "slate", "shade": 100, "bg": "bg-slate-100",
+                 "border": "border-slate-300", "title": "text-slate-700"}
+                if is_pm else get_shot_palette(project_id, seq_idx, shot_idx)
+            )
+            for tk in shot.get("tasks", []):
+                tk["palette"] = get_task_type_palette(tk.get("type"))
+            shot["tasks"] = attach_status_meta(shot.get("tasks", []), client)  # cmd_075
+
+    return _templates.TemplateResponse(
+        request=request, name="project_detail.html",
+        context={
+            "role": role,
+            "active": "project",
+            "project_id": project_id,
+            "project_name": project_name,
+            "project_info": project_info,
+            "project_description": project_description,
+            "members": members,
+            "total_tasks": total_tasks,
+            "completed_tasks": completed_tasks,
+            "progress_pct": progress_pct,
+            "seq_groups": seq_groups_list,
+            "project_palette": project_palette,
+            "demo_mode": os.getenv("CALENDAR_MOCK", "0") == "1",
+        },
+    )
+
+
+def _build_seq_groups(client, project_id: int, actor_id: str, all_proj_tasks: list, uid_to_name: dict) -> list:
+    """SEQ > SHOT > TASK 階層構築 (動的) — task 主軸構築。画面と CSV 書き出しで共用する。"""
     # 判明:
     #  (a) Calendar task の shot 紐付けは整数 shot_id ではなく 文字列 shotID (shot_code) 経由
     #  (b) shot table に存在しないが task の shotID で参照されてる shot もある(例: c10)
@@ -159,49 +211,59 @@ def get_project_detail(project_id: int, request: Request, actor_id: str = Depend
             })
     except Exception:
         seq_groups_list = []
+    return seq_groups_list
 
-    from app.helpers.colors import (
-        get_project_palette, get_task_type_palette,
-        get_seq_palette, get_shot_palette,
-    )
-    project_palette = get_project_palette(project_id)
-    # decorate seq groups with seq_palette, shots with shot_palette, tasks with type palette
-    for seq_idx, sg in enumerate(seq_groups_list):
-        # project-level (PM/管理) seq is rendered separately — keep neutral slate
-        is_pm = "📋" in (sg.get("seq_code") or "")
-        sg["palette"] = (
-            {"key": "slate", "card_bg": "bg-slate-50", "card_border": "border-slate-300",
-             "title": "text-slate-700", "side_bar": "bg-slate-400",
-             "badge_bg": "bg-slate-600", "badge_text": "text-white"}
-            if is_pm else get_seq_palette(project_id, seq_idx)
-        )
-        for shot_idx, shot in enumerate(sg.get("shots", [])):
-            shot["palette"] = (
-                {"key": "slate", "shade": 100, "bg": "bg-slate-100",
-                 "border": "border-slate-300", "title": "text-slate-700"}
-                if is_pm else get_shot_palette(project_id, seq_idx, shot_idx)
-            )
-            for tk in shot.get("tasks", []):
-                tk["palette"] = get_task_type_palette(tk.get("type"))
-            shot["tasks"] = attach_status_meta(shot.get("tasks", []), client)  # cmd_075
 
-    return _templates.TemplateResponse(
-        request=request, name="project_detail.html",
-        context={
-            "role": role,
-            "active": "project",
-            "project_id": project_id,
-            "project_name": project_name,
-            "project_info": project_info,
-            "project_description": project_description,
-            "members": members,
-            "total_tasks": total_tasks,
-            "completed_tasks": completed_tasks,
-            "progress_pct": progress_pct,
-            "seq_groups": seq_groups_list,
-            "project_palette": project_palette,
-            "demo_mode": os.getenv("CALENDAR_MOCK", "0") == "1",
-        },
+def _csv_safe(value) -> str:
+    """CSV の式注入対策: 先頭が = + - @ タブ CR の文字列には ' を前置する。"""
+    text = "" if value is None else str(value)
+    if text and text[0] in ("=", "+", "-", "@", "\t", "\r"):
+        return "'" + text
+    return text
+
+
+@router.get("/project_detail/{project_id}/export.csv")
+def export_project_detail_csv(project_id: int, actor_id: str = Depends(get_actor_id)):
+    """project_detail の一覧を CSV で返す(画面と同じ取得元・同じ権限)。
+
+    列: ショット(SEQ)・カット(SHOT)・工程(task 名)・ステータス・担当者。
+    SHOT 紐付けなしの task は カット列を空欄にする。UTF-8 BOM 付き(Excel で化けぬ)。
+    """
+    client = get_calendar_client()
+    try:
+        all_proj_tasks = client.get_tasks_by_project(project_id, actor_user_id=actor_id) or []
+    except Exception:
+        all_proj_tasks = []
+    uid_to_name: dict = {}
+    try:
+        for u in httpx_get_users(client):
+            uid = u.get("id") or u.get("user_id")
+            if uid is not None:
+                uid_to_name[uid] = u.get("name") or u.get("full_name") or u.get("username") or f"user_{uid}"
+    except Exception:
+        uid_to_name = {}
+
+    seq_groups_list = _build_seq_groups(client, project_id, actor_id, all_proj_tasks, uid_to_name)
+    buf = io.StringIO(newline="")
+    writer = csv.writer(buf, lineterminator="\r\n")
+    writer.writerow(["ショット", "カット", "工程", "ステータス", "担当者"])
+    for sg in seq_groups_list:
+        for shot in sg.get("shots", []):
+            tasks = attach_status_meta(shot.get("tasks", []), client)
+            shotless = shot.get("shot_code") == _NO_SHOT_LABEL
+            for tk in tasks:
+                writer.writerow([
+                    _csv_safe(sg.get("seq_code")),
+                    "" if shotless else _csv_safe(shot.get("shot_code")),
+                    _csv_safe(tk.get("name") or tk.get("type")),
+                    _csv_safe(tk.get("status_label") or tk.get("status")),
+                    _csv_safe(tk.get("assigned_user_name")),
+                ])
+    filename = f"project_{project_id}_tasks.csv"
+    return Response(
+        content="\ufeff" + buf.getvalue(),
+        media_type="text/csv; charset=utf-8",
+        headers={"Content-Disposition": f"attachment; filename=\"{filename}\"; filename*=UTF-8''{quote(filename)}"},
     )
 
 
