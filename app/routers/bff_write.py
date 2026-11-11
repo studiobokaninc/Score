@@ -686,7 +686,7 @@ async def post_asset_upload(
     # 殿御命 2026-07-06 (cmd_068②③): 変換前の原本を保持 (DL は常に原本を返す・プレビューのみ変換後)
     _original_content = content
     _original_filename = _filename
-    _display_original_name = (original_name or "").strip() or _filename  # cmd_372: 控える元の名
+    _display_original_name = (original_name or "").strip()  # cmd_372: 控える元の名 (未指定の旧クライアントは控えず、保存名からの切り出しに任せる)
     _needs_original_preserve = False
     # cmd_323: 動画は拡張子ではなく中身(映像コーデック)で判じ、画面で映らぬ形は H.264 へ変換する。
     # (.mov は従来どおり必ず .mp4 へ・H.264 の物は詰め替えのみ。原本は save_original で保持)
@@ -764,7 +764,7 @@ async def post_asset_upload(
     # cmd_372: 上げた時の元のファイル名を asset_id に控える (QC 画面の動画名・DL 名に使う)
     try:
         _aid_for_name = (result.get("id") or result.get("asset_id")) if isinstance(result, dict) else None
-        if _aid_for_name is not None:
+        if _aid_for_name is not None and _display_original_name:
             from app.helpers.asset_names import save_original_name as _save_orig_name
             _save_orig_name(int(_aid_for_name), _display_original_name)
     except Exception as _e:
