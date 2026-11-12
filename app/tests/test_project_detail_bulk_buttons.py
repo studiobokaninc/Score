@@ -114,6 +114,29 @@ class TestCsvExport:
         assert resp.status_code == 200
         assert resp.content.decode("cp932").splitlines() == ["ショット,カット,工程,ステータス,担当者"]
 
+    def test_csv_pm_task_and_shotless_rows_stay_shift_jis(self, client, monkeypatch):
+        """管理タスク(SEQ/SHOT とも無し)・SHOT 紐付けなし行の 📋 飾りは CSV から外し、Shift_JIS・BOM 無しで返す。"""
+        tasks = [
+            _task(1, "着弾・被弾FX", "s62", "c020"),
+            _task(2, "管理表", "", None),
+            _task(3, "進行表", "00_prep", None),
+        ]
+        _patch(monkeypatch, tasks)
+        resp = client.get("/project_detail/126/export.csv", headers=_auth_headers())
+        assert resp.status_code == 200
+        assert "charset=shift_jis" in resp.headers["content-type"]
+        raw = resp.content
+        assert not raw.startswith(b"\xef\xbb\xbf")
+        assert raw.startswith("ショット,カット".encode("cp932"))
+        text = raw.decode("cp932")
+        assert "📋" not in text
+        lines = text.splitlines()
+        assert "プロジェクト管理タスク,,管理表,WIP," in lines
+        assert "00_prep,,進行表,WIP," in lines
+        # 画面の表示は変えぬ
+        html = client.get("/project_detail/126", headers=_auth_headers()).text
+        assert "📋 プロジェクト管理タスク" in html
+
     def test_csv_non_cp932_char_falls_back_to_utf8_bom(self, client, monkeypatch):
         """cp932 に無い文字(絵文字)を含む時は BOM 付き UTF-8 で返し、文字を落とさぬ。"""
         _patch(monkeypatch, [_task(1, "仕上げ🔥", "s62", "c020")])

@@ -222,6 +222,11 @@ def _csv_safe(value) -> str:
     return text
 
 
+def _csv_label(value) -> str:
+    """CSV 用に Score が飾りで付ける『📋 』を外す(cp932 に無く、CSV 全体が UTF-8 へ退くため)。画面は変えぬ。"""
+    return str(value or "").replace("📋 ", "")
+
+
 def _encode_csv_for_excel(text: str) -> tuple[bytes, str]:
     """日本語 Windows の Excel でダブルクリックして化けぬ符号化を選ぶ。
 
@@ -265,8 +270,8 @@ def export_project_detail_csv(project_id: int, actor_id: str = Depends(get_actor
             shotless = shot.get("shot_code") == _NO_SHOT_LABEL
             for tk in tasks:
                 writer.writerow([
-                    _csv_safe(sg.get("seq_code")),
-                    "" if shotless else _csv_safe(shot.get("shot_code")),
+                    _csv_safe(_csv_label(sg.get("seq_code"))),
+                    "" if shotless else _csv_safe(_csv_label(shot.get("shot_code"))),
                     _csv_safe(tk.get("name") or tk.get("type")),
                     _csv_safe(tk.get("status_label") or tk.get("status")),
                     _csv_safe(tk.get("assigned_user_name")),
