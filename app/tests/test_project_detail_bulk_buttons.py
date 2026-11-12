@@ -95,8 +95,11 @@ class TestCsvExport:
         assert resp.headers["content-type"].startswith("text/csv")
         assert "attachment" in resp.headers["content-disposition"]
         raw = resp.content
-        assert raw.startswith(b"\xef\xbb\xbf")
-        lines = raw.decode("utf-8-sig").splitlines()
+        # cmd_374: cp932 で表せる内容は Shift_JIS(Excel で化けぬ)。BOM は付かぬ
+        assert "charset=shift_jis" in resp.headers["content-type"]
+        assert not raw.startswith(b"\xef\xbb\xbf")
+        assert raw.startswith("ショット,カット".encode("cp932"))
+        lines = raw.decode("cp932").splitlines()
         assert lines[0] == "ショット,カット,工程,ステータス,担当者"
         assert "s62,c020,着弾・被弾FX,WIP," in lines
         # 式注入対策
@@ -109,4 +112,13 @@ class TestCsvExport:
         _patch(monkeypatch, [])
         resp = client.get("/project_detail/126/export.csv", headers=_auth_headers())
         assert resp.status_code == 200
-        assert resp.content.decode("utf-8-sig").splitlines() == ["ショット,カット,工程,ステータス,担当者"]
+        assert resp.content.decode("cp932").splitlines() == ["ショット,カット,工程,ステータス,担当者"]
+
+    def test_csv_non_cp932_char_falls_back_to_utf8_bom(self, client, monkeypatch):
+        """cp932 に無い文字(絵文字)を含む時は BOM 付き UTF-8 で返し、文字を落とさぬ。"""
+        _patch(monkeypatch, [_task(1, "仕上げ🔥", "s62", "c020")])
+        resp = client.get("/project_detail/126/export.csv", headers=_auth_headers())
+        assert resp.status_code == 200
+        assert "charset=utf-8" in resp.headers["content-type"]
+        assert resp.content.startswith(b"\xef\xbb\xbf")
+        assert "仕上げ🔥" in resp.content.decode("utf-8-sig")

@@ -222,12 +222,24 @@ def _csv_safe(value) -> str:
     return text
 
 
+def _encode_csv_for_excel(text: str) -> tuple[bytes, str]:
+    """日本語 Windows の Excel でダブルクリックして化けぬ符号化を選ぶ。
+
+    BOM 付き UTF-8 は Excel の版・設定によっては無視され化ける(殿の実機 cmd_374)ため、
+    cp932 で表せる内容は cp932(Shift_JIS)で返す。cp932 に無い文字を含む時だけ BOM 付き UTF-8。
+    """
+    try:
+        return text.encode("cp932"), "shift_jis"
+    except UnicodeEncodeError:
+        return ("\ufeff" + text).encode("utf-8"), "utf-8"
+
+
 @router.get("/project_detail/{project_id}/export.csv")
 def export_project_detail_csv(project_id: int, actor_id: str = Depends(get_actor_id)):
     """project_detail の一覧を CSV で返す(画面と同じ取得元・同じ権限)。
 
     列: ショット(SEQ)・カット(SHOT)・工程(task 名)・ステータス・担当者。
-    SHOT 紐付けなしの task は カット列を空欄にする。UTF-8 BOM 付き(Excel で化けぬ)。
+    SHOT 紐付けなしの task は カット列を空欄にする。cp932(Excel で化けぬ)。cp932 に無い文字を含む時のみ UTF-8 BOM 付き。
     """
     client = get_calendar_client()
     try:
@@ -260,9 +272,10 @@ def export_project_detail_csv(project_id: int, actor_id: str = Depends(get_actor
                     _csv_safe(tk.get("assigned_user_name")),
                 ])
     filename = f"project_{project_id}_tasks.csv"
+    body, charset = _encode_csv_for_excel(buf.getvalue())
     return Response(
-        content="\ufeff" + buf.getvalue(),
-        media_type="text/csv; charset=utf-8",
+        content=body,
+        media_type=f"text/csv; charset={charset}",
         headers={"Content-Disposition": f"attachment; filename=\"{filename}\"; filename*=UTF-8''{quote(filename)}"},
     )
 
