@@ -191,6 +191,8 @@ def _build_seq_groups(client, project_id: int, actor_id: str, all_proj_tasks: li
                 "status": t.get("status"),
                 "assigned_to": _assignee,
                 "assigned_user_name": uid_to_name.get(_assignee, "") if _assignee else "",
+                # cmd_376: タスクの進捗 %(shot_detail の進捗スライダーと同じ値。未設定は 0)
+                "progress": t.get("progress") if t.get("progress") is not None else 0,
                 # cmd_075: Calendar が inline 同梱する動的色/ラベル
                 "status_color": t.get("status_color"),
                 "status_label": t.get("status_label"),
@@ -212,6 +214,13 @@ def _build_seq_groups(client, project_id: int, actor_id: str, all_proj_tasks: li
     except Exception:
         seq_groups_list = []
     return seq_groups_list
+
+
+def _overall_progress_pct(all_proj_tasks: list) -> int:
+    """案件全体の進捗 %。画面(get_project_detail)と同じ式: 納品(deliver)件数 ÷ 全タスク件数、小数切り捨て。"""
+    total = len(all_proj_tasks)
+    done = sum(1 for t in all_proj_tasks if t.get("status") in ("deliver",))
+    return int(done / total * 100) if total > 0 else 0
 
 
 def _csv_safe(value) -> str:
@@ -243,7 +252,8 @@ def _encode_csv_for_excel(text: str) -> tuple[bytes, str]:
 def export_project_detail_csv(project_id: int, actor_id: str = Depends(get_actor_id)):
     """project_detail の一覧を CSV で返す(画面と同じ取得元・同じ権限)。
 
-    列: ショット(SEQ)・カット(SHOT)・工程(task 名)・ステータス・担当者。
+    列: ショット(SEQ)・カット(SHOT)・工程(task 名)・ステータス・担当者・進捗(%)。
+    末尾に空行を一つ空け、「案件全体の進捗」の行(進捗(%)列に画面と同じ案件全体の値)を置く。
     SHOT 紐付けなしの task は カット列を空欄にする。cp932(Excel で化けぬ)。cp932 に無い文字を含む時のみ UTF-8 BOM 付き。
     """
     client = get_calendar_client()
@@ -263,7 +273,7 @@ def export_project_detail_csv(project_id: int, actor_id: str = Depends(get_actor
     seq_groups_list = _build_seq_groups(client, project_id, actor_id, all_proj_tasks, uid_to_name)
     buf = io.StringIO(newline="")
     writer = csv.writer(buf, lineterminator="\r\n")
-    writer.writerow(["ショット", "カット", "工程", "ステータス", "担当者"])
+    writer.writerow(["ショット", "カット", "工程", "ステータス", "担当者", "進捗(%)"])
     for sg in seq_groups_list:
         for shot in sg.get("shots", []):
             tasks = attach_status_meta(shot.get("tasks", []), client)
@@ -275,7 +285,11 @@ def export_project_detail_csv(project_id: int, actor_id: str = Depends(get_actor
                     _csv_safe(tk.get("name") or tk.get("type")),
                     _csv_safe(tk.get("status_label") or tk.get("status")),
                     _csv_safe(tk.get("assigned_user_name")),
+                    tk.get("progress") if tk.get("progress") is not None else 0,
                 ])
+    # 表の列を崩さぬよう、空行を空けて末尾に案件全体の進捗を置く(値は進捗(%)列)
+    writer.writerow([])
+    writer.writerow(["案件全体の進捗", "", "", "", "", _overall_progress_pct(all_proj_tasks)])
     filename = f"project_{project_id}_tasks.csv"
     body, charset = _encode_csv_for_excel(buf.getvalue())
     return Response(

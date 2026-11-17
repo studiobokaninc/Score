@@ -34,8 +34,8 @@ def client():
     app.dependency_overrides.clear()
 
 
-def _task(tid, name, seq, shot, status="wip", label="WIP"):
-    return {"id": tid, "name": name, "type": "other", "status": status,
+def _task(tid, name, seq, shot, status="wip", label="WIP", progress=None):
+    return {"progress": progress, "id": tid, "name": name, "type": "other", "status": status,
             "shotID": shot, "seqID": seq, "assigned_to": None,
             "status_color": None, "status_label": label, "status_category": None}
 
@@ -100,19 +100,21 @@ class TestCsvExport:
         assert not raw.startswith(b"\xef\xbb\xbf")
         assert raw.startswith("ショット,カット".encode("cp932"))
         lines = raw.decode("cp932").splitlines()
-        assert lines[0] == "ショット,カット,工程,ステータス,担当者"
-        assert "s62,c020,着弾・被弾FX,WIP," in lines
+        assert lines[0] == "ショット,カット,工程,ステータス,担当者,進捗(%)"
+        assert "s62,c020,着弾・被弾FX,WIP,,0" in lines
         # 式注入対策
-        assert "s62,c030,'=SUM(A1),DELIVER," in lines
+        assert "s62,c030,'=SUM(A1),DELIVER,,0" in lines
         # SHOT 紐付けなし = カット列は空欄
-        assert "00_prep,,管理表,WIP," in lines
-        assert len(lines) == 4
+        assert "00_prep,,管理表,WIP,,0" in lines
+        # 表 3 行 + 空行 + 案件全体の進捗(deliver 1 / 3 件 = 33)
+        assert len(lines) == 6
+        assert lines[4] == "" and lines[5] == "案件全体の進捗,,,,,33"
 
     def test_csv_empty_project_has_header_only(self, client, monkeypatch):
         _patch(monkeypatch, [])
         resp = client.get("/project_detail/126/export.csv", headers=_auth_headers())
         assert resp.status_code == 200
-        assert resp.content.decode("cp932").splitlines() == ["ショット,カット,工程,ステータス,担当者"]
+        assert resp.content.decode("cp932").splitlines() == ["ショット,カット,工程,ステータス,担当者,進捗(%)", "", "案件全体の進捗,,,,,0"]
 
     def test_csv_pm_task_and_shotless_rows_stay_shift_jis(self, client, monkeypatch):
         """管理タスク(SEQ/SHOT とも無し)・SHOT 紐付けなし行の 📋 飾りは CSV から外し、Shift_JIS・BOM 無しで返す。"""
@@ -131,8 +133,8 @@ class TestCsvExport:
         text = raw.decode("cp932")
         assert "📋" not in text
         lines = text.splitlines()
-        assert "プロジェクト管理タスク,,管理表,WIP," in lines
-        assert "00_prep,,進行表,WIP," in lines
+        assert "プロジェクト管理タスク,,管理表,WIP,,0" in lines
+        assert "00_prep,,進行表,WIP,,0" in lines
         # 画面の表示は変えぬ
         html = client.get("/project_detail/126", headers=_auth_headers()).text
         assert "📋 プロジェクト管理タスク" in html
@@ -145,3 +147,53 @@ class TestCsvExport:
         assert "charset=utf-8" in resp.headers["content-type"]
         assert resp.content.startswith(b"\xef\xbb\xbf")
         assert "仕上げ🔥" in resp.content.decode("utf-8-sig")
+
+
+class TestCsvProgress:
+    """cmd_376: CSV にタスクの進捗 % と案件全体の進捗 % を加える。"""
+
+    TASKS = [
+        _task(1, "FX", "s62", "c020", progress=40),
+        _task(2, "合成", "s62", "c020", "deliver", "納品", progress=100),
+        _task(3, "ルック", "s62", "c030", "ap", "承認", progress=None),
+        _task(4, "管理表", "00_prep", None, "wip", "WIP", progress=5),
+    ]
+
+    def test_task_progress_column_appended_last_and_old_columns_unchanged(self, client, monkeypatch):
+        _patch(monkeypatch, self.TASKS)
+        raw = client.get("/project_detail/126/export.csv", headers=_auth_headers()).content
+        lines = raw.decode("cp932").splitlines()
+        # 既存 5 列の名と順は不変、進捗は末尾
+        assert lines[0].split(",") == ["ショット", "カット", "工程", "ステータス", "担当者", "進捗(%)"]
+        assert "s62,c020,FX,WIP,,40" in lines
+        assert "s62,c020,合成,DELIVER,,100" in lines
+        # 未設定(None)は画面のスライダー同様 0
+        assert "s62,c030,ルック,AP,,0" in lines or "s62,c030,ルック,承認,,0" in lines
+        assert "00_prep,,管理表,WIP,,5" in lines
+
+    def test_overall_progress_row_matches_screen_value(self, client, monkeypatch):
+        _patch(monkeypatch, self.TASKS)
+        html = client.get("/project_detail/126", headers=_auth_headers()).text
+        screen = int(re.search(r"(\d+)%</p>", html).group(1))
+        assert screen == 25  # deliver 1 / 全 4 件 = 25
+        lines = client.get("/project_detail/126/export.csv", headers=_auth_headers()).content.decode("cp932").splitlines()
+        # 表の後に空行を一つ空けて、案件全体の進捗の行(進捗(%)列)
+        assert lines[-2] == ""
+        assert lines[-1] == f"案件全体の進捗,,,,,{screen}"
+
+    def test_overall_progress_truncates_like_screen(self, client, monkeypatch):
+        tasks = [_task(i, f"t{i}", "s62", "c01", "deliver" if i == 1 else "wip") for i in range(1, 4)]
+        _patch(monkeypatch, tasks)
+        html = client.get("/project_detail/126", headers=_auth_headers()).text
+        screen = int(re.search(r"(\d+)%</p>", html).group(1))
+        assert screen == 33  # 1/3 = 33.3… を切り捨て
+        lines = client.get("/project_detail/126/export.csv", headers=_auth_headers()).content.decode("cp932").splitlines()
+        assert lines[-1] == "案件全体の進捗,,,,,33"
+
+    def test_progress_additions_stay_cp932(self, client, monkeypatch):
+        _patch(monkeypatch, self.TASKS)
+        resp = client.get("/project_detail/126/export.csv", headers=_auth_headers())
+        assert "charset=shift_jis" in resp.headers["content-type"]
+        assert not resp.content.startswith(b"\xef\xbb\xbf")
+        resp.content.decode("cp932")  # 例外なく読める
+        assert "%".encode("cp932") and "案件全体の進捗".encode("cp932")
