@@ -102,7 +102,7 @@ class TestRetakeViewAssetIdVersionSelection:
     def test_old_version_asset_id_shows_old_meta_not_latest(self, client_fixture, monkeypatch, two_version_metas):
         """指定した版 (asset_id=100・古い版) の Retake を開くと、その版の内容が
         出ること。task 全体の最新 (asset_id=200) へすり替わってはならない。"""
-        monkeypatch.setattr("app.routers.pages_director.get_actor_role", lambda actor_id: "director")
+        monkeypatch.setattr("app.routers.pages_director.get_actor_project_role", lambda *a, **kw: "director")
         mock_inst = self._base_mock()
         with patch("app.routers.pages_director.get_calendar_client", return_value=mock_inst):
             resp = client_fixture.get("/retake_view/7/321?asset_id=100", headers={"Authorization": "Bearer test-token"})
@@ -112,7 +112,7 @@ class TestRetakeViewAssetIdVersionSelection:
 
     def test_new_version_asset_id_shows_new_meta(self, client_fixture, monkeypatch, two_version_metas):
         """正の対照実験: 新しい版 (asset_id=200) を指定すればその内容が出る。"""
-        monkeypatch.setattr("app.routers.pages_director.get_actor_role", lambda actor_id: "director")
+        monkeypatch.setattr("app.routers.pages_director.get_actor_project_role", lambda *a, **kw: "director")
         mock_inst = self._base_mock()
         with patch("app.routers.pages_director.get_calendar_client", return_value=mock_inst):
             resp = client_fixture.get("/retake_view/7/321?asset_id=200", headers={"Authorization": "Bearer test-token"})
@@ -123,7 +123,7 @@ class TestRetakeViewAssetIdVersionSelection:
     def test_no_asset_id_param_keeps_legacy_latest_behavior(self, client_fixture, monkeypatch, two_version_metas):
         """asset_id 未指定 (旧リンク・通知等) は従来通り task 全体で最新の Retake を
         出す — 既存の振る舞いを壊さないことの確認。"""
-        monkeypatch.setattr("app.routers.pages_director.get_actor_role", lambda actor_id: "director")
+        monkeypatch.setattr("app.routers.pages_director.get_actor_project_role", lambda *a, **kw: "director")
         mock_inst = self._base_mock()
         with patch("app.routers.pages_director.get_calendar_client", return_value=mock_inst):
             resp = client_fixture.get("/retake_view/7/321", headers={"Authorization": "Bearer test-token"})
@@ -133,7 +133,7 @@ class TestRetakeViewAssetIdVersionSelection:
     def test_asset_id_with_no_matching_record_shows_honest_message_not_fallback(self, client_fixture, monkeypatch, two_version_metas):
         """指定した版 (asset_id=999) に記録が無い場合、黙って他の版 (最新など) へ
         逃がさず「この版の Retake 記録は残っておりません」と正直に出す。"""
-        monkeypatch.setattr("app.routers.pages_director.get_actor_role", lambda actor_id: "director")
+        monkeypatch.setattr("app.routers.pages_director.get_actor_project_role", lambda *a, **kw: "director")
         mock_inst = self._base_mock()
         with patch("app.routers.pages_director.get_calendar_client", return_value=mock_inst):
             resp = client_fixture.get("/retake_view/7/321?asset_id=999", headers={"Authorization": "Bearer test-token"})
@@ -145,7 +145,7 @@ class TestRetakeViewAssetIdVersionSelection:
     def test_target_asset_resolved_via_meta_asset_id_not_task_latest(self, client_fixture, monkeypatch, two_version_metas):
         """表示する対象 asset は、その下げ戻しの meta.json が持つ asset_id から
         引く。task 全体の最新 asset (created_at 最新) に化けてはならない。"""
-        monkeypatch.setattr("app.routers.pages_director.get_actor_role", lambda actor_id: "director")
+        monkeypatch.setattr("app.routers.pages_director.get_actor_project_role", lambda *a, **kw: "director")
         mock_inst = self._base_mock()
         mock_inst.get_shot_detail.return_value = {
             "asset_list": [
@@ -166,7 +166,7 @@ class TestRetakeViewAssetIdVersionSelection:
         残っておりません」と正直に言う一方で、隣に出す素材が task 全体の最新
         asset (id=200・new_v002.mov) にすり替わってはならない (meta の無い版を
         指しても、その版自身の素材のみを探す。無ければ何も出さない)。"""
-        monkeypatch.setattr("app.routers.pages_director.get_actor_role", lambda actor_id: "director")
+        monkeypatch.setattr("app.routers.pages_director.get_actor_project_role", lambda *a, **kw: "director")
         mock_inst = self._base_mock()
         mock_inst.get_shot_detail.return_value = {
             "asset_list": [

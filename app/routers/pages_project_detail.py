@@ -4,7 +4,7 @@ import os
 from urllib.parse import quote
 from fastapi import APIRouter, Depends, Request, Response
 from fastapi.templating import Jinja2Templates
-from app.deps import get_actor_id, get_actor_role
+from app.deps import get_actor_id, get_actor_project_role
 from app.helpers.project_resolver import resolve_project_name, resolve_project_members
 from app.adapters.calendar_factory import get_calendar_client
 from app.helpers.task_status import attach_status_meta
@@ -16,9 +16,10 @@ _templates = Jinja2Templates(directory="app/templates")
 
 @router.get("/project_detail/{project_id}")
 def get_project_detail(project_id: int, request: Request, actor_id: str = Depends(get_actor_id)):
-    role = get_actor_role(actor_id)
-    project_name = resolve_project_name(project_id, actor_id) or "-"
     client = get_calendar_client()
+    # cmd_378: 役職は「その案件での役職」で解く(URL の project_id 基準)
+    role = get_actor_project_role(actor_id, project_id, client=client)
+    project_name = resolve_project_name(project_id, actor_id) or "-"
 
     # Project 詳細(start_date / end_date / status etc.)
     project_info = {}

@@ -167,7 +167,7 @@ class TestShotDetailPageShotZero:
 
         monkeypatch.setattr("app.routers.pages_shot.resolve_project_name", lambda pid, uid, **kw: "Score検証")
         monkeypatch.setattr("app.routers.pages_shot.resolve_project_members", lambda *a, **kw: [])
-        monkeypatch.setattr("app.routers.pages_shot.get_actor_role", lambda actor_id: "admin")
+        monkeypatch.setattr("app.routers.pages_shot.get_actor_project_role", lambda *a, **kw: "admin")
         monkeypatch.setattr(cc.CalendarClient, "get_users", lambda self, *a, **kw: [])
         monkeypatch.setattr(cc.CalendarClient, "get_tasks_by_project", lambda self, *a, **kw: [])
         monkeypatch.setattr(cc.CalendarClient, "next_version", lambda self, *a, **kw: "v001")
@@ -201,7 +201,7 @@ class TestQcViewerShotZeroResilience:
         """task_id/project_id いずれも無い `/qc/0` 単独アクセス (陳腐化した bookmark 等)
         でも 500 にならず「0 件」の安全な空表示に収束すること (shot=None・
         project_id 解決不能時のガード回帰)。"""
-        monkeypatch.setattr("app.routers.pages_qc.get_actor_role", lambda actor_id: "director")
+        monkeypatch.setattr("app.routers.pages_qc.get_actor_project_role", lambda *a, **kw: "director")
         with patch("app.routers.pages_qc.get_calendar_client") as MockClient:
             mock_inst = MagicMock()
             mock_inst.get_shot.return_value = None
@@ -924,7 +924,7 @@ class TestRetakeViewTargetAssetShotZero:
             "submitted_at": "2026-07-13T10:00:00", "submitted_by": "1",
         }), encoding="utf-8")
         try:
-            monkeypatch.setattr("app.routers.pages_director.get_actor_role", lambda actor_id: "director")
+            monkeypatch.setattr("app.routers.pages_director.get_actor_project_role", lambda *a, **kw: "director")
             with patch("app.routers.pages_director.get_calendar_client") as MockClient:
                 mock_inst = MagicMock()
                 mock_inst.get_me.return_value = None

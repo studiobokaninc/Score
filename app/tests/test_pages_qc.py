@@ -183,7 +183,7 @@ def test_qc_viewer_shot_unlinked_task_fallback_via_task_id(client, monkeypatch):
     回帰確認する。"""
     monkeypatch.setattr("app.routers.pages_qc.resolve_project_name", lambda pid, uid, **kw: "Score 検証")
     monkeypatch.setattr("app.routers.pages_qc.resolve_project_members", lambda *a, **kw: [])
-    monkeypatch.setattr("app.routers.pages_qc.get_actor_role", lambda actor_id: "director")
+    monkeypatch.setattr("app.routers.pages_qc.get_actor_project_role", lambda *a, **kw: "director")
 
     with patch("app.routers.pages_qc.get_calendar_client") as MockClient:
         mock_inst = MagicMock()
@@ -218,7 +218,7 @@ def test_qc_viewer_shot_unlinked_task_fallback_via_project_id_query_param(client
     だが判定待ち task が1件もない』分岐 (= task 選択一覧表示) を狙って踏む。"""
     monkeypatch.setattr("app.routers.pages_qc.resolve_project_name", lambda pid, uid, **kw: "Score 検証")
     monkeypatch.setattr("app.routers.pages_qc.resolve_project_members", lambda *a, **kw: [])
-    monkeypatch.setattr("app.routers.pages_qc.get_actor_role", lambda actor_id: "director")
+    monkeypatch.setattr("app.routers.pages_qc.get_actor_project_role", lambda *a, **kw: "director")
 
     with patch("app.routers.pages_qc.get_calendar_client") as MockClient:
         mock_inst = MagicMock()
@@ -248,7 +248,7 @@ def test_qc_viewer_shot_status_passed_to_context(client, monkeypatch):
     表示されることを回帰確認する。status は敢えて 'planning' にし (cmd_075 の
     _shot_in_review 判定対象は in_progress/approved のみ)、shot 起因の判定活性化と
     混同せず shot.status 表示そのものだけを検証する。"""
-    monkeypatch.setattr("app.routers.pages_qc.get_actor_role", lambda actor_id: "director")
+    monkeypatch.setattr("app.routers.pages_qc.get_actor_project_role", lambda *a, **kw: "director")
     with patch("app.routers.pages_qc.get_calendar_client") as MockClient:
         mock_inst = MagicMock()
         mock_inst.get_shot.return_value = CalendarShot(

@@ -7,7 +7,7 @@ from fastapi.templating import Jinja2Templates
 from jinja2 import Environment, FileSystemLoader
 
 from app.adapters.calendar_factory import get_calendar_client
-from app.deps import get_actor_id, get_actor_role
+from app.deps import get_actor_id, get_actor_project_role
 from app.qc_delegation import is_qc_delegated
 from app.helpers.project_resolver import resolve_project_name, resolve_project_members
 from app.helpers.task_status import attach_status_meta, JUDGE_TARGET_STATUSES
@@ -192,6 +192,11 @@ def get_qc_viewer(
     except Exception:
         project_members = []
 
+    # cmd_378: 画面の役職は「全体の役職」でなく「その案件での役職」で解く(系B)。
+    # 案件は task(Calendar 正本) 優先→shot→クエリ。解けねば get_actor_project_role が
+    # "user" へ倒す(fail-closed)。admin(全体の管理者)のみ案件に依らず "admin"。
+    _role_pid = (getattr(selected_task, "project_id", None) if selected_task else None) or project_id
+    _actual_role = get_actor_project_role(actor_id, _role_pid, client=client)
     return _templates.TemplateResponse(
         request=request,
         name="qc_viewer.html",
@@ -202,9 +207,9 @@ def get_qc_viewer(
             "judge_target_statuses": tuple(JUDGE_TARGET_STATUSES),  # cmd_075: _can_judge 判定対象
             "project_members": project_members,  # 殿御命 2026-06-05: mention 選択用
             # 殿御命 2026-06-05 (B 案): admin role 元 user のみ as_role で別 role preview 可
-            "role": (as_role if (as_role in ('director', 'pm', 'lead', 'user') and get_actor_role(actor_id) == 'admin') else get_actor_role(actor_id)),
-            "actual_role": get_actor_role(actor_id),
-            "preview_role": as_role if (as_role and get_actor_role(actor_id) == 'admin') else None,
+            "role": (as_role if (as_role in ('director', 'pm', 'lead', 'user') and _actual_role == 'admin') else _actual_role),
+            "actual_role": _actual_role,
+            "preview_role": as_role if (as_role and _actual_role == 'admin') else None,
             # 殿御命 2026-06-09 (案A): この依頼で mention された user は委任で Approve/Retake 可
             "can_qc": is_qc_delegated(actor_id, task_id=task_id, shot_id=id),
             "demo_mode": os.getenv("CALENDAR_MOCK", "0") == "1",

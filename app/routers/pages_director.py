@@ -3,7 +3,7 @@ from fastapi import APIRouter, Depends, HTTPException, Request
 from fastapi.templating import Jinja2Templates
 from jinja2 import Environment, FileSystemLoader
 from pathlib import Path
-from app.deps import get_actor_id, get_actor_role, get_actor_project_role
+from app.deps import get_actor_id, get_actor_project_role
 from app.adapters.calendar_factory import get_calendar_client
 from app.qc_delegation import is_qc_delegated
 
@@ -194,7 +194,6 @@ def get_retake_view(
     不具合があった。asset_id (クエリ引数、未指定なら従来通り最新1件) で絞り込める
     ようにし、指定された版に紐づく meta が無い場合は黙って他の版へ逃がさず
     「この版の記録は残っておりません」を表示する。"""
-    role = get_actor_role(actor_id)
     client = get_calendar_client()
     try:
         user = client.get_me(actor_user_id=actor_id)
@@ -220,6 +219,8 @@ def get_retake_view(
             pid = task_info.get("project_id")
         except Exception:
             pass
+    # cmd_378: 役職は「その案件での役職」で解く(pid が解けねば fail-closed で "user")
+    role = get_actor_project_role(actor_id, pid, client=client)
     if not shot_code:
         shot_code = f"SHOT_{shot_id:03d}"
     if pid is not None:

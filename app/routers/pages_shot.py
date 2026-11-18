@@ -7,7 +7,7 @@ from fastapi.templating import Jinja2Templates
 from jinja2 import Environment, FileSystemLoader
 
 from app.adapters.calendar_factory import get_calendar_client
-from app.deps import get_actor_id, get_actor_role
+from app.deps import get_actor_id, get_actor_project_role
 from app.helpers.project_resolver import resolve_project_name, resolve_project_members
 from app.helpers.task_status import attach_status_meta, get_status_meta_map, NEW_TASK_STATUSES
 from app.qc_delegation import is_qc_delegated
@@ -143,7 +143,8 @@ def get_shot_detail(
             "seq_code": seq_code,
             "task_name": task_name,
             "user": user,
-            "role": get_actor_role(actor_id),
+            # cmd_378: 役職は「その案件での役職」で解く(全体の役職ではない)
+            "role": get_actor_project_role(actor_id, project_id, client=client),
             "demo_mode": os.getenv("CALENDAR_MOCK", "0") == "1",
             "isolated_task": False,
             "shot_detail_raw": shot_detail_raw,
@@ -451,7 +452,8 @@ def get_task_detail(
             "task_name": task_name,
             "user": user,
             "user_name_map": user_name_map,
-            "role": get_actor_role(actor_id),
+            # cmd_378: 役職は「その案件での役職」で解く(全体の役職ではない)
+            "role": get_actor_project_role(actor_id, project_id, client=client),
             "can_qc": can_qc,
             "status_meta_map": get_status_meta_map(client),
             "canonical_statuses": list(NEW_TASK_STATUSES_ORDERED),

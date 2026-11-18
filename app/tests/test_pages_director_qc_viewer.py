@@ -9,7 +9,7 @@ _test_app = FastAPI()
 _test_app.include_router(pages_director_qc_viewer.router)
 
 def test_director_qc_viewer_ok(monkeypatch):
-    monkeypatch.setattr("app.routers.pages_director_qc_viewer.get_actor_role", lambda actor_id: "director")
+    monkeypatch.setattr("app.routers.pages_director_qc_viewer.get_actor_project_role", lambda *a, **kw: "director")
     _test_app.dependency_overrides[get_actor_id] = lambda: "test-actor"
     with TestClient(_test_app) as c:
         resp = c.get("/director_qc_viewer")
